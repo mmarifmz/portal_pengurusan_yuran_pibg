@@ -15,6 +15,25 @@
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
+
+                    @if (auth()->user()->isTeacher() || auth()->user()->isPta())
+                        <flux:sidebar.item icon="chart-bar" :href="route('teacher.dashboard')" :current="request()->routeIs('teacher.dashboard')" wire:navigate>
+                            {{ __('Teacher Dashboard') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="banknotes" :href="route('pta.dashboard')" :current="request()->routeIs('pta.dashboard')" wire:navigate>
+                            {{ __('PTA Dashboard') }}
+                        </flux:sidebar.item>
+                    @endif
+
+                    @if (auth()->user()->isParent())
+                        <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
+                            {{ __('Parent Dashboard') }}
+                        </flux:sidebar.item>
+                    @endif
+
+                    <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')">
+                        {{ __('Public Parent Search') }}
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
@@ -33,7 +52,6 @@
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>
 
-        <!-- Mobile User Menu -->
         <flux:header class="lg:hidden">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 

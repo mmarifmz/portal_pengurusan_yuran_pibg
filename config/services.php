@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    'twilio' => [
+        'sid' => env('TWILIO_ACCOUNT_SID'),
+        'token' => env('TWILIO_AUTH_TOKEN'),
+    ],
+
+    'whatsapp' => [
+        'enabled' => env('WHATSAPP_TAC_ENABLED', false),
+        'provider' => env('WHATSAPP_TAC_PROVIDER', 'twilio'),
+        'twilio_from' => env('WHATSAPP_TWILIO_FROM', 'whatsapp:+14155238886'),
+        'debug_show_tac' => env('WHATSAPP_TAC_DEBUG_SHOW', false),
+    ],
+
 ];
