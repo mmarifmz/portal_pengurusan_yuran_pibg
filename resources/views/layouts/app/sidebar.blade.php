@@ -6,12 +6,18 @@
     <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
-                <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200 dark:hover:border-zinc-600" wire:navigate>
+                    <img src="{{ asset('images/sksp-logo.png') }}" alt="SK Sri Petaling crest" class="h-10 w-10 rounded-full border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-700" />
+                    <div class="flex flex-col text-sm font-semibold leading-tight">
+                        <span class="text-zinc-900 dark:text-white">Portal Yuran PIBG</span>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400">Sekolah Kebangsaan Sri Petaling</span>
+                    </div>
+                </a>
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
+                <flux:sidebar.group :heading="__('Platform')" class="grid gap-1">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
@@ -23,6 +29,15 @@
                         <flux:sidebar.item icon="banknotes" :href="route('pta.dashboard')" :current="request()->routeIs('pta.dashboard')" wire:navigate>
                             {{ __('PTA Dashboard') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
+                            {{ __('Student import') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="users" :href="route('students.family.list')" :current="request()->routeIs('students.family.list')" wire:navigate>
+                            {{ __('Family registry') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="list-bullet" :href="route('teacher.records')" :current="request()->routeIs('teacher.records')" wire:navigate>
+                            {{ __('Records') }}
+                        </flux:sidebar.item>
                     @endif
 
                     @if (auth()->user()->isParent())
@@ -31,23 +46,13 @@
                         </flux:sidebar.item>
                     @endif
 
-                    <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')">
+                    <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')" wire:navigate>
                         {{ __('Public Parent Search') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
             <flux:spacer />
-
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>

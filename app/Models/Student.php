@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable([
     'student_no',
     'family_code',
+    'ssp_student_id',
     'full_name',
     'class_name',
     'parent_name',
@@ -16,6 +17,9 @@ use Illuminate\Database\Eloquent\Model;
     'total_fee',
     'paid_amount',
     'status',
+    'billing_year',
+    'annual_fee',
+    'import_raw_line',
 ])]
 class Student extends Model
 {
@@ -27,6 +31,7 @@ class Student extends Model
         return [
             'total_fee' => 'decimal:2',
             'paid_amount' => 'decimal:2',
+            'annual_fee' => 'decimal:2',
         ];
     }
 

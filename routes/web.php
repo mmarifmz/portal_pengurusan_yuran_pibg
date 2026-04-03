@@ -3,10 +3,14 @@
 use App\Http\Controllers\BillingSetupController;
 use App\Http\Controllers\ParentDashboardController;
 use App\Http\Controllers\ParentOtpAuthController;
+use App\Http\Controllers\ParentPaymentController;
 use App\Http\Controllers\PtaDashboardController;
 use App\Http\Controllers\PublicParentSearchController;
+use App\Http\Controllers\StudentFamilyController;
+use App\Http\Controllers\StudentImportController;
 use App\Http\Controllers\TeacherDashboardController;
-use App\Http\Controllers\ParentPaymentController;
+use App\Http\Controllers\TeacherRecordsController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
@@ -22,11 +26,18 @@ Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('dashboard/message', [DashboardController::class, 'submitParentMessage'])
+        ->middleware(['auth', 'role:parent'])
+        ->name('dashboard.parent.message');
 
     Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index'])
         ->middleware('role:teacher,pta')
         ->name('teacher.dashboard');
+
+    Route::get('/teacher/records', [TeacherRecordsController::class, 'index'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.records');
 
     Route::get('/pta/dashboard', [PtaDashboardController::class, 'index'])
         ->middleware('role:pta,teacher')
@@ -35,6 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/parent/dashboard', [ParentDashboardController::class, 'index'])
         ->middleware('role:parent')
         ->name('parent.dashboard');
+
     Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.'], function () {
         Route::get('{familyBilling}/checkout', [ParentPaymentController::class, 'checkout'])->name('checkout');
         Route::post('{familyBilling}/create', [ParentPaymentController::class, 'create'])->name('create');
@@ -43,6 +55,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('summary/return', [ParentPaymentController::class, 'handleReturn'])->name('summary.return');
         Route::post('callback', [ParentPaymentController::class, 'handleCallback'])->name('toyyibpay.callback');
     });
+
+    Route::get('/students/import', [StudentImportController::class, 'create'])
+        ->middleware('role:teacher,pta')
+        ->name('students.import.form');
+
+    Route::get('/students/families', [StudentFamilyController::class, 'index'])
+        ->middleware('role:teacher,pta')
+        ->name('students.family.list');
+
+    Route::post('/students/import', [StudentImportController::class, 'store'])
+        ->middleware('role:teacher,pta')
+        ->name('students.import');
 
     Route::post('/billing/setup/current-year', [BillingSetupController::class, 'setupCurrentYear'])
         ->middleware('role:teacher,pta')

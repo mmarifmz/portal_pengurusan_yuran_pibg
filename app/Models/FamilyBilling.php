@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\FamilyPaymentTransaction;
+use App\Models\Student;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -38,5 +40,10 @@ class FamilyBilling extends Model
     public function paymentTransactions(): HasMany
     {
         return $this->hasMany(FamilyPaymentTransaction::class);
+    }
+
+    public function students(): HasMany
+    {
+        return $this->hasMany(Student::class, 'family_code', 'family_code');
     }
 }
