@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
     'ssp_student_id',
     'full_name',
     'class_name',
+    'is_duplicate',
     'parent_name',
     'parent_phone',
     'parent_email',
@@ -29,6 +30,7 @@ class Student extends Model
     protected function casts(): array
     {
         return [
+            'is_duplicate' => 'boolean',
             'total_fee' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'annual_fee' => 'decimal:2',

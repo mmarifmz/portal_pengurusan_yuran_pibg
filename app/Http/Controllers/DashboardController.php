@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
+use App\Models\SchoolCalendarEvent;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -99,7 +100,7 @@ class DashboardController extends Controller
 
             return [
                 'family_code' => $billing->family_code,
-                'guardian' => $students->pluck('parent_name')->filter()->first() ?? '—',
+                'guardian' => $students->pluck('parent_name')->filter()->first() ?? 'â€”',
                 'children' => $students->count(),
                 'classes' => $students->pluck('class_name')->filter()->unique()->join(', '),
                 'amount_due' => (float) $billing->fee_amount,
@@ -120,10 +121,15 @@ class DashboardController extends Controller
             ->get();
 
         $transactionsForParent = $this->parentTransactions($user);
-        $transactionsByYear = $transactionsForParent->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at?->year ?? now()->year);
+        $transactionsByYear = $transactionsForParent
+            ->filter(fn (FamilyPaymentTransaction $transaction) => $transaction->status === 'success')
+            ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at?->year ?? now()->year);
 
         $accessLogs = $this->recentAccessEntries();
-        $announcements = $this->recentAnnouncements();
+        $calendarEvents = SchoolCalendarEvent::query()
+            ->orderBy('start_date')
+            ->orderBy('sort_order')
+            ->get();
 
         return view('dashboard', [
             'role' => $role,
@@ -148,14 +154,14 @@ class DashboardController extends Controller
             'accessLogs' => $accessLogs,
             'transactions' => $transactionsForParent,
             'transactionsByYear' => $transactionsByYear,
-            'announcements' => $announcements,
+            'calendarEvents' => $calendarEvents,
         ]);
     }
 
     public function submitParentMessage(Request $request): RedirectResponse
     {
         $request->validate([
-            'message' => ['required', 'string', 'max:2000'],
+            'message' => ['required', 'string', 'max:1000'],
         ]);
 
         $user = $request->user();
@@ -169,7 +175,27 @@ class DashboardController extends Controller
 
         File::append(storage_path('logs/parent_messages.log'), $entry);
 
-        return back()->with('parent_message_status', 'Mesej anda telah dihantar kepada bendahari.');
+        $portalUrl = route('home');
+
+        $waText = "Assalamualaikum Bendahari PIBG,
+
+"
+            .$request->input('message')
+            ."
+
+Daripada:
+"
+            .($user?->name ?? 'Guest')
+            .' ('.($user?->email ?? 'anonymous').')'
+            ."
+
+Portal Yuran:
+"
+            .$portalUrl;
+
+        $treasuryPhone = $this->normalizeWaPhone((string) config('services.treasury_whatsapp_phone', '60136454001'));
+
+        return redirect()->away('https://wa.me/'.$treasuryPhone.'?text='.rawurlencode($waText));
     }
 
     private function parentTransactions($user)
@@ -190,7 +216,7 @@ class DashboardController extends Controller
             });
         }
 
-        $transactions = $query->limit(8)->get();
+        $transactions = $query->limit(5)->get();
 
         if ($transactions->isEmpty()) {
             $transactions = FamilyPaymentTransaction::query()
@@ -223,7 +249,7 @@ class DashboardController extends Controller
             $comments[] = 'Awaiting payment';
         }
 
-        return $comments ? implode(', ', array_unique($comments)) : '—';
+        return $comments ? implode(', ', array_unique($comments)) : 'â€”';
     }
 
     private function recentAccessEntries(): array
@@ -239,26 +265,28 @@ class DashboardController extends Controller
         return $lines;
     }
 
-    private function recentAnnouncements(): array
+    private function normalizeWaPhone(string $phone): string
     {
-        $today = now();
+        $digits = preg_replace('/\\D+/', '', $phone) ?? '';
 
-        return [
-            [
-                'title' => 'Mesyuarat PIBG Akhir Tahun',
-                'body' => 'Semua ibu bapa diminta hadir untuk membincangkan perancangan yuran.',
-                'date' => $today->copy()->subDays(2)->format('d M Y'),
-            ],
-            [
-                'title' => 'Pemeriksaan Akaun',
-                'body' => 'Pengesahan transaksi terakhir tersedia dalam portal ini.',
-                'date' => $today->copy()->subDays(5)->format('d M Y'),
-            ],
-            [
-                'title' => 'Penyerahan Resit Fizikal',
-                'body' => 'Resit tahun sebelumnya boleh dimuat turun semula melalui dashboard ini.',
-                'date' => $today->copy()->subDays(12)->format('d M Y'),
-            ],
-        ];
+        if ($digits === '') {
+            return '60136454001';
+        }
+
+        if (str_starts_with($digits, '60')) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return '6'.$digits;
+        }
+
+        if (str_starts_with($digits, '1')) {
+            return '60'.$digits;
+        }
+
+        return $digits;
     }
 }
+
+

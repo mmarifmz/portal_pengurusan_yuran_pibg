@@ -5,19 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
+use App\Services\ParentPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Illuminate\View\View;
 
 class ParentPaymentController extends Controller
 {
-    public function __construct(private readonly ToyyibPayService $toyyibPayService)
-    {
+    public function __construct(
+        private readonly ToyyibPayService $toyyibPayService,
+        private readonly ParentPaymentNotificationService $paymentNotificationService
+    ) {
     }
 
     public function checkout(Request $request, FamilyBilling $familyBilling): View
@@ -29,11 +34,33 @@ class ParentPaymentController extends Controller
             ->orderBy('full_name')
             ->get();
 
+        $isTesterMode = (bool) $request->user()?->isParentTester();
+        $checkoutOutstanding = (float) $familyBilling->outstanding_amount;
+        $checkoutBaseAmount = $isTesterMode ? $this->testerAmount() : $checkoutOutstanding;
+
+        $defaultDonation = 0.0;
+        $fromTransactionId = (int) $request->query('from_transaction', 0);
+        if (! $isTesterMode && $fromTransactionId > 0) {
+            $previousTransaction = FamilyPaymentTransaction::query()
+                ->whereKey($fromTransactionId)
+                ->where('family_billing_id', $familyBilling->id)
+                ->first();
+
+            if ($previousTransaction) {
+                $defaultDonation = max(0, round((float) $previousTransaction->amount - $checkoutOutstanding, 2));
+            }
+        }
+
         return view('parent.checkout', [
             'familyBilling' => $familyBilling,
-            'children' => $children,
+            'familyChildren' => $children,
+            'defaultName' => (string) ($request->user()?->name ?: $children->first()?->parent_name),
             'defaultEmail' => (string) $request->user()?->email,
             'defaultPhone' => (string) $request->user()?->phone,
+            'defaultDonation' => $defaultDonation,
+            'isTesterMode' => $isTesterMode,
+            'testerAmount' => $this->testerAmount(),
+            'checkoutBaseAmount' => $checkoutBaseAmount,
         ]);
     }
 
@@ -42,15 +69,22 @@ class ParentPaymentController extends Controller
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
         $validated = $request->validate([
+            'payer_name' => ['required', 'string', 'max:255'],
             'payer_email' => ['required', 'email', 'max:255'],
             'payer_phone' => ['required', 'string', 'max:25'],
             'donation_preset' => ['nullable', 'numeric', 'min:0'],
             'donation_custom' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $outstanding = $familyBilling->outstanding_amount;
+        $isTesterMode = (bool) $request->user()?->isParentTester();
+        $outstanding = (float) $familyBilling->outstanding_amount;
         $donation = (float) ($validated['donation_custom'] ?: $validated['donation_preset'] ?: 0);
         $totalAmount = round($outstanding + $donation, 2);
+
+        if ($isTesterMode) {
+            $donation = 0.0;
+            $totalAmount = $this->testerAmount();
+        }
 
         if ($totalAmount <= 0) {
             return back()->withErrors([
@@ -65,23 +99,35 @@ class ParentPaymentController extends Controller
 
         $externalOrderId = 'PBG-'.strtoupper((string) Str::ulid());
 
-        $billCode = $this->toyyibPayService->createBill([
-            'billName' => "Yuran PIBG {$familyBilling->billing_year} - {$familyBilling->family_code}",
-            'billDescription' => "Bayaran PIBG keluarga {$familyBilling->family_code}",
-            'billPriceSetting' => 1,
-            'billPayorInfo' => 1,
-            'billAmount' => (int) round($totalAmount * 100),
-            'billReturnUrl' => route('payments.summary.return'),
-            'billCallbackUrl' => route('payments.toyyibpay.callback'),
-            'billExternalReferenceNo' => $externalOrderId,
-            'billTo' => (string) ($children->first()?->parent_name ?? $request->user()?->name),
-            'billEmail' => (string) $validated['payer_email'],
-            'billPhone' => (string) $validated['payer_phone'],
-            'billSplitPayment' => 0,
-            'billSplitPaymentArgs' => '',
-            'billPaymentChannel' => (string) config('services.toyyibpay.payment_channel', '0'),
-            'billChargeToCustomer' => (string) config('services.toyyibpay.charge_to_customer', ''),
-        ]);
+        try {
+            $billCode = $this->toyyibPayService->createBill([
+                'billName' => "Yuran PIBG {$familyBilling->billing_year} - {$familyBilling->family_code}",
+                'billDescription' => "Bayaran PIBG keluarga {$familyBilling->family_code}",
+                'billPriceSetting' => 1,
+                'billPayorInfo' => 1,
+                'billAmount' => (int) round($totalAmount * 100),
+                'billReturnUrl' => route('parent.payments.summary.return'),
+                'billCallbackUrl' => route('parent.payments.toyyibpay.callback'),
+                'billExternalReferenceNo' => $externalOrderId,
+                'billTo' => (string) $validated['payer_name'],
+                'billEmail' => (string) $validated['payer_email'],
+                'billPhone' => (string) $validated['payer_phone'],
+                'billSplitPayment' => 0,
+                'billSplitPaymentArgs' => '',
+                'billPaymentChannel' => (string) config('services.toyyibpay.payment_channel', '0'),
+                'billChargeToCustomer' => (string) config('services.toyyibpay.charge_to_customer', ''),
+            ]);
+        } catch (RuntimeException $exception) {
+            Log::warning('ToyyibPay bill creation failed', [
+                'family_billing_id' => $familyBilling->id,
+                'family_code' => $familyBilling->family_code,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return back()->withErrors([
+                'payment_gateway' => $exception->getMessage(),
+            ])->withInput();
+        }
 
         FamilyPaymentTransaction::query()->create([
             'family_billing_id' => $familyBilling->id,
@@ -90,16 +136,54 @@ class ParentPaymentController extends Controller
             'external_order_id' => $externalOrderId,
             'provider_bill_code' => $billCode,
             'amount' => $totalAmount,
+            'payer_name' => $validated['payer_name'],
             'payer_email' => $validated['payer_email'],
             'payer_phone' => $validated['payer_phone'],
             'status' => 'pending',
+            'return_status' => 'pending completion',
             'raw_return' => [
                 'donation' => $donation,
                 'outstanding_at_checkout' => $outstanding,
+                'tester_mode' => $isTesterMode,
             ],
         ]);
 
         return redirect()->away($this->toyyibPayService->paymentUrl($billCode));
+    }
+
+    public function history(Request $request): View
+    {
+        $filter = (string) $request->query('filter', 'all');
+        if (! in_array($filter, ['all', 'successful', 'pending'], true)) {
+            $filter = 'all';
+        }
+
+        $user = $request->user();
+        $isTesterMode = (bool) $user?->isParentTester();
+
+        $familyCodes = Student::query()
+            ->where('parent_phone', (string) $user?->phone)
+            ->whereNotNull('family_code')
+            ->pluck('family_code')
+            ->unique()
+            ->values();
+
+        $transactions = FamilyPaymentTransaction::query()
+            ->with('familyBilling')
+            ->when(
+                $isTesterMode,
+                fn ($query) => $query->where('user_id', $user?->id),
+                fn ($query) => $query->whereHas('familyBilling', fn ($billingQuery) => $billingQuery->whereIn('family_code', $familyCodes))
+            )
+            ->when($filter === 'successful', fn ($query) => $query->where('status', 'success'))
+            ->when($filter === 'pending', fn ($query) => $query->where('status', 'pending'))
+            ->latest('id')
+            ->paginate(20);
+
+        return view('parent.payment-history', [
+            'transactions' => $transactions,
+            'activeFilter' => $filter,
+        ]);
     }
 
     public function handleReturn(Request $request): RedirectResponse
@@ -121,7 +205,17 @@ class ParentPaymentController extends Controller
 
         $transaction->update([
             'raw_return' => $request->query(),
+            'provider_bill_code' => filled($billCode) ? $billCode : $transaction->provider_bill_code,
             'status' => $statusId === '1' ? 'success' : ($statusId === '3' ? 'failed' : 'pending'),
+            'return_status' => $this->mapReturnStatus(
+                $statusId,
+                (string) ($request->query('reason')
+                    ?? $request->query('msg')
+                    ?? $request->query('status_message')
+                    ?? $request->query('error_desc')
+                    ?? $request->query('error')
+                    ?? '')
+            ),
         ]);
 
         if ($statusId === '1') {
@@ -132,7 +226,7 @@ class ParentPaymentController extends Controller
             ]);
         }
 
-        return redirect()->route('payments.summary.show', $transaction->external_order_id);
+        return redirect()->route('parent.payments.summary', $transaction->external_order_id);
     }
 
     public function handleCallback(Request $request): Response
@@ -159,8 +253,18 @@ class ParentPaymentController extends Controller
 
         $transaction->update([
             'raw_callback' => $request->all(),
+            'provider_bill_code' => filled($billCode) ? $billCode : $transaction->provider_bill_code,
             'provider_ref_no' => $refNo ?: $transaction->provider_ref_no,
             'status' => $status === '1' ? 'success' : ($status === '3' ? 'failed' : 'pending'),
+            'return_status' => $this->mapReturnStatus(
+                $status,
+                (string) ($request->input('reason')
+                    ?? $request->input('msg')
+                    ?? $request->input('status_message')
+                    ?? $request->input('error_desc')
+                    ?? $request->input('error')
+                    ?? '')
+            ),
             'status_reason' => (string) $request->input('reason'),
         ]);
 
@@ -183,9 +287,13 @@ class ParentPaymentController extends Controller
             ->orderBy('full_name')
             ->get();
 
+        $receiptUrl = $this->paymentNotificationService->receiptUrl($transaction);
+
         return view('parent.payment-summary', [
             'transaction' => $transaction,
             'familyChildren' => $familyChildren,
+            'receiptUrl' => $receiptUrl,
+            'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
         ]);
     }
 
@@ -251,6 +359,70 @@ class ParentPaymentController extends Controller
                 'status_reason' => filled($paymentDate) ? "Paid at {$paymentDate}" : $transaction->status_reason,
             ]);
         });
+
+        $transaction->refresh();
+        $this->syncParentProfileFromPaidTransaction($transaction);
+
+        if (! $transaction->receipt_notified_at && filled($transaction->payer_phone)) {
+            $parentName = Student::query()
+                ->where('family_code', $billing->family_code)
+                ->whereNotNull('parent_name')
+                ->value('parent_name');
+
+            try {
+                $this->paymentNotificationService->sendPaymentReceipt(
+                    $transaction,
+                    (string) $transaction->payer_phone,
+                    $parentName ? (string) $parentName : null,
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('Unable to send payment receipt WhatsApp notification.', [
+                    'transaction_id' => $transaction->id,
+                    'payer_phone' => $transaction->payer_phone,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
+    {
+        $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
+
+        $message = implode("\n", [
+            'Assalamualaikum guru,',
+            '',
+            'Saya ingin kongsi resit bayaran PIBG:',
+            'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
+            'Jumlah: RM'.number_format((float) $transaction->amount, 2),
+            'Order ID: '.$transaction->external_order_id,
+            'Resit web: '.$receiptUrl,
+        ]);
+
+        return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
+    }
+
+    private function normalizeWaPhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return '60123103205';
+        }
+
+        if (str_starts_with($digits, '60')) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return '6'.$digits;
+        }
+
+        if (str_starts_with($digits, '1')) {
+            return '60'.$digits;
+        }
+
+        return $digits;
     }
 
     private function normalizeGatewayAmount(mixed $amount): float
@@ -272,6 +444,10 @@ class ParentPaymentController extends Controller
 
     private function authorizeParentFamilyBilling(Request $request, FamilyBilling $familyBilling): void
     {
+        if ($request->user()?->isParentTester()) {
+            return;
+        }
+
         $userPhone = (string) $request->user()?->phone;
 
         $ownedFamilyCodes = Student::query()
@@ -282,5 +458,68 @@ class ParentPaymentController extends Controller
             ->values();
 
         abort_unless($ownedFamilyCodes->contains($familyBilling->family_code), 403, 'Unauthorized family billing access.');
+    }
+
+    private function testerAmount(): float
+    {
+        $configured = (float) config('services.parent_tester_amount', 1);
+
+        return round(max(0.01, $configured), 2);
+    }
+
+    private function syncParentProfileFromPaidTransaction(FamilyPaymentTransaction $transaction): void
+    {
+        $user = $transaction->user()->first();
+
+        if (! $user) {
+            return;
+        }
+
+        $updates = [];
+
+        if (filled($transaction->payer_name) && $transaction->payer_name !== $user->name) {
+            $updates['name'] = $transaction->payer_name;
+        }
+
+        if (filled($transaction->payer_email) && $transaction->payer_email !== $user->email) {
+            $updates['email'] = $transaction->payer_email;
+        }
+
+        if ($updates !== []) {
+            $user->forceFill($updates)->save();
+        }
+    }
+
+    private function mapReturnStatus(?string $statusId, ?string $reason = null): string
+    {
+        $normalizedStatus = trim((string) $statusId);
+
+        if ($normalizedStatus === '1') {
+            return 'successful';
+        }
+
+        if ($normalizedStatus === '' || in_array($normalizedStatus, ['0', '2', '4'], true)) {
+            return 'pending completion';
+        }
+
+        $reasonText = strtolower(trim((string) $reason));
+
+        if ($reasonText !== '') {
+            if (str_contains($reasonText, 'cancel') || str_contains($reasonText, 'batal')) {
+                return 'parent cancel';
+            }
+
+            if (
+                str_contains($reasonText, 'not enough fund')
+                || str_contains($reasonText, 'insufficient fund')
+                || str_contains($reasonText, 'fund not enough')
+                || str_contains($reasonText, 'saldo tidak mencukupi')
+                || str_contains($reasonText, 'duit tidak cukup')
+            ) {
+                return 'not enough fund';
+            }
+        }
+
+        return 'not successful';
     }
 }

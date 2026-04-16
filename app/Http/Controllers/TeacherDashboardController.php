@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\SchoolCalendarEvent;
 use App\Models\Student;
 use Illuminate\View\View;
 
@@ -34,6 +35,11 @@ class TeacherDashboardController extends Controller
             ->take(15)
             ->get();
 
+        $calendarEvents = SchoolCalendarEvent::query()
+            ->orderBy('start_date')
+            ->orderBy('sort_order')
+            ->get();
+
         return view('teacher.dashboard', [
             'billingYear' => $billingYear,
             'totalStudents' => $totalStudents,
@@ -43,6 +49,7 @@ class TeacherDashboardController extends Controller
             'totalOutstanding' => $totalOutstanding,
             'paidFamilies' => $paidFamilies,
             'recentBillings' => $recentBillings,
+            'calendarEvents' => $calendarEvents,
         ]);
     }
 }

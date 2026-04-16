@@ -66,8 +66,7 @@
                             data-guardian="{{ $family['guardian'] }}"
                             data-status="{{ $family['status'] }}"
                             data-comment="{{ $family['comment'] }}"
-                            data-classes="{{ $family['classes'] }}"
-                            data-children="{{ e(json_encode($family['children_list'])) }}">
+                            data-classes="{{ $family['classes'] }}">
                             <td class="px-3 py-3 font-semibold text-zinc-900">{{ $family['family_code'] }}</td>
                             <td class="px-3 py-3">{{ $family['guardian'] }}</td>
                             <td class="px-3 py-3 text-center font-semibold text-zinc-900">{{ $family['children'] }}</td>
@@ -78,6 +77,7 @@
                                 <button type="button" data-details-button class="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
                                     {{ __('Lihat murid') }}
                                 </button>
+                                <script type="application/json" data-family-children>@json($family['children_list'])</script>
                             </td>
                         </tr>
                     @empty
@@ -91,7 +91,7 @@
         </div>
     </div>
 
-    <div id="familyRegistryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div id="familyRegistryModal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/50 px-4 py-6" style="display: none;">
         <div class="w-full max-w-lg rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl">
             <header class="flex items-center justify-between">
                 <div>
@@ -107,11 +107,18 @@
 
     @once
         <script>
-            document.addEventListener('DOMContentLoaded', function () {
+            function initFamilyRegistryModal() {
                 const searchInput = document.getElementById('familyRegistrySearch');
                 const classFilter = document.getElementById('familyRegistryClass');
                 const statusFilter = document.getElementById('familyRegistryStatus');
                 const rows = document.querySelectorAll('[data-family-row]');
+                const modal = document.getElementById('familyRegistryModal');
+
+                if (!modal || modal.dataset.initialized === 'true') {
+                    return;
+                }
+
+                modal.dataset.initialized = 'true';
 
                 function applyFilters() {
                     const search = searchInput?.value.trim().toLowerCase() ?? '';
@@ -136,12 +143,25 @@
                 classFilter?.addEventListener('change', applyFilters);
                 statusFilter?.addEventListener('change', applyFilters);
 
-                const modal = document.getElementById('familyRegistryModal');
                 const modalTitle = document.getElementById('familyRegistryModalTitle');
                 const modalList = document.getElementById('familyRegistryModalList');
                 const modalComment = document.getElementById('familyRegistryModalComment');
                 const closeButton = modal?.querySelector('[data-close-modal]');
                 const detailButtons = document.querySelectorAll('[data-details-button]');
+
+                function showModal() {
+                    if (!modal) return;
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    modal.style.display = 'flex';
+                }
+
+                function hideModal() {
+                    if (!modal) return;
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    modal.style.display = 'none';
+                }
 
                 function openModal(title, comment, children) {
                     if (!modal) return;
@@ -169,22 +189,33 @@
                         if (!row) return;
                         const familyCode = row.dataset.familyCode;
                         const comment = row.dataset.comment;
-                        const children = JSON.parse(row.dataset.children || '[]');
+                        let children = [];
+                        const childrenPayload = row.querySelector('[data-family-children]');
+
+                        try {
+                            children = JSON.parse(childrenPayload?.textContent || '[]');
+                        } catch (error) {
+                            console.error('Unable to parse family children payload.', error);
+                        }
+
                         openModal(familyCode, comment, children);
-                        modal?.classList.remove('hidden');
+                        showModal();
                     });
                 });
 
                 closeButton?.addEventListener('click', () => {
-                    modal?.classList.add('hidden');
+                    hideModal();
                 });
 
                 modal?.addEventListener('click', (event) => {
                     if (event.target === modal) {
-                        modal.classList.add('hidden');
+                        hideModal();
                     }
                 });
-            });
+            }
+
+            document.addEventListener('DOMContentLoaded', initFamilyRegistryModal);
+            document.addEventListener('livewire:navigated', initFamilyRegistryModal);
         </script>
     @endonce
 </x-layouts::app>

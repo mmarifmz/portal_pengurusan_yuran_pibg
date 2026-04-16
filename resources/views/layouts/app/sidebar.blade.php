@@ -1,16 +1,57 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
+
+        <style>
+            :root {
+                --portal-forest: #174a34;
+                --portal-green: #2f7a55;
+                --portal-gold: #e5b338;
+                --portal-ink: #1f2a24;
+                --portal-soft: #f3f8f3;
+            }
+
+            .portal-shell {
+                background:
+                    radial-gradient(70rem 34rem at 0% 0%, rgba(47, 122, 85, 0.10), transparent 58%),
+                    radial-gradient(70rem 34rem at 100% 0%, rgba(229, 179, 56, 0.12), transparent 55%),
+                    linear-gradient(160deg, #f5faf6 0%, #ffffff 40%, #fff8e8 100%);
+            }
+
+            .portal-sidebar {
+                color: #2b3a32;
+            }
+
+            .portal-sidebar :where([data-flux-sidebar-group-heading]) {
+                color: #53645a !important;
+                font-weight: 700;
+            }
+
+            .portal-sidebar :where([data-flux-sidebar-item]) {
+                color: #2f3d35 !important;
+            }
+
+            .portal-sidebar :where([data-flux-sidebar-item]:hover) {
+                color: var(--portal-forest) !important;
+                background: var(--portal-soft);
+            }
+
+            .portal-sidebar :where([data-current='true']) {
+                color: var(--portal-forest) !important;
+                background: rgba(47, 122, 85, 0.12) !important;
+                box-shadow: inset 0 0 0 1px rgba(47, 122, 85, 0.12);
+            }
+        </style>
     </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+    <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
+        <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200 dark:hover:border-zinc-600" wire:navigate>
-                    <img src="{{ asset('images/sksp-logo.png') }}" alt="SK Sri Petaling crest" class="h-10 w-10 rounded-full border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-700" />
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200/80 hover:bg-[color:var(--portal-soft)]" wire:navigate>
+                    <img src="{{ asset('images/sksp-logo.png') }}" alt="SK Sri Petaling crest" class="h-10 w-10 rounded-full border border-zinc-200 bg-white p-1 shadow-sm" />
                     <div class="flex flex-col text-sm font-semibold leading-tight">
-                        <span class="text-zinc-900 dark:text-white">Portal Yuran PIBG</span>
-                        <span class="text-xs text-zinc-500 dark:text-zinc-400">Sekolah Kebangsaan Sri Petaling</span>
+                        <span class="text-[color:var(--portal-forest)]">Portal Yuran PIBG</span>
+                        <span class="text-xs text-zinc-500">Sekolah Kebangsaan Sri Petaling</span>
                     </div>
                 </a>
                 <flux:sidebar.collapse class="lg:hidden" />
@@ -44,11 +85,16 @@
                         <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
                             {{ __('Parent Dashboard') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="clock" :href="route('parent.payments.history')" :current="request()->routeIs('parent.payments.history')" wire:navigate>
+                            {{ __('Payment History') }}
+                        </flux:sidebar.item>
                     @endif
 
-                    <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')" wire:navigate>
-                        {{ __('Public Parent Search') }}
-                    </flux:sidebar.item>
+                    @if (! auth()->user()->isParent())
+                        <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')" wire:navigate>
+                            {{ __('Public Parent Search') }}
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
@@ -57,7 +103,7 @@
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>
 
-        <flux:header class="lg:hidden">
+        <flux:header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm lg:hidden">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <flux:spacer />
@@ -112,7 +158,7 @@
         </flux:header>
 
         {{ $slot }}
-
+        @stack('scripts')
         @fluxScripts
     </body>
 </html>

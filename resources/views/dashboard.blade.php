@@ -1,4 +1,4 @@
-<x-layouts::app :title="__('Dashboard')" class="space-y-6">
+﻿<x-layouts::app :title="__('Dashboard')" class="space-y-6">
     @if ($role !== 'parent')
         <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
             <x-kpi-card title="Total Students" :value="number_format($totalStudents)" icon="user-group" />
@@ -131,7 +131,7 @@
                     <div class="mt-4 space-y-3">
                         <a href="{{ route('students.import.form') }}" class="flex items-center justify-between rounded-2xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-900 hover:border-emerald-500 hover:text-emerald-600">
                             <span>Tambah murid baharu</span>
-                            <span>↗</span>
+                            <span>â†—</span>
                         </a>
                         <form method="POST" action="{{ route('billing.setup.current-year') }}">
                             @csrf
@@ -141,7 +141,7 @@
                         </form>
                         <a href="{{ route('students.family.list') }}" class="flex items-center justify-between rounded-2xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-900 hover:border-emerald-500 hover:text-emerald-600">
                             <span>Eksport laporan</span>
-                            <span>⬇</span>
+                            <span>â¬‡</span>
                         </a>
                     </div>
                 </div>
@@ -154,9 +154,9 @@
                             <article class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-3 text-sm text-zinc-700">
                                 <div class="flex items-center justify-between">
                                     <span class="font-semibold text-zinc-900">RM {{ number_format($activity->amount, 2) }}</span>
-                                    <span class="text-xs text-zinc-500">{{ $activity->paid_at?->format('d M Y') ?? '—' }}</span>
+                                    <span class="text-xs text-zinc-500">{{ $activity->paid_at?->format('d M Y') ?? 'â€”' }}</span>
                                 </div>
-                                <p class="text-xs text-zinc-500 mt-1">{{ $activity->familyBilling?->family_code ?? '—' }}</p>
+                                <p class="text-xs text-zinc-500 mt-1">{{ $activity->familyBilling?->family_code ?? 'â€”' }}</p>
                                 <div class="mt-2 flex items-center justify-between text-xs">
                                     <span>{{ ucfirst($activity->status) }}</span>
                                     <a href="{{ route('parent.payments.receipt', $activity->external_order_id) }}" class="text-emerald-600 underline">Resit</a>
@@ -182,7 +182,7 @@
             </div>
         </div>
 
-        <div id="familyChildrenModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4 py-6">
+        <div id="familyChildrenModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 px-4 py-6">
             <div class="w-full max-w-xl rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl">
                 <header class="flex items-center justify-between">
                     <div>
@@ -196,37 +196,27 @@
             </div>
         </div>
     @elseif ($role === 'parent')
-        <div class="grid gap-6 lg:grid-cols-3">
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm lg:col-span-2">
-                <p class="text-xs uppercase tracking-wide text-emerald-500">Announcements</p>
-                <h3 class="text-lg font-semibold text-zinc-900">Latest updates</h3>
-                <div class="mt-4 space-y-4">
-                    @foreach ($announcements as $announcement)
-                        <article class="rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4">
-                            <header class="flex items-center justify-between">
-                                <h4 class="text-sm font-semibold text-zinc-900">{{ $announcement['title'] }}</h4>
-                                <span class="text-xs text-zinc-500">{{ $announcement['date'] }}</span>
-                            </header>
-                            <p class="mt-2 text-sm text-zinc-600">{{ $announcement['body'] }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </div>
+        <div class="grid gap-5 lg:grid-cols-3">
+            @include('partials.parent-calendar', ['calendarEvents' => $calendarEvents])
 
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wide text-emerald-500">Recent payments</p>
-                <h3 class="text-lg font-semibold text-zinc-900">Status terkini</h3>
-                <div class="mt-4 space-y-3">
+            <div class="rounded-3xl border border-zinc-200 bg-white px-5 pt-10 pb-5 shadow-sm">
+                <p class="mt-1 text-xs uppercase tracking-wide text-emerald-500">Recent payments</p>
+                <h3 class="text-lg font-semibold text-zinc-900">5 Recent Payment Activity</h3>
+                <div class="mt-3 space-y-2.5">
                     @forelse ($transactions as $transaction)
-                        <article class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-3 text-sm text-zinc-700">
+                        <article class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-2.5 text-sm text-zinc-700">
                             <div class="flex items-center justify-between">
                                 <span class="font-semibold text-zinc-900">RM {{ number_format($transaction->amount, 2) }}</span>
-                                <span class="text-xs text-zinc-500">{{ $transaction->paid_at?->format('d M Y') ?? '—' }}</span>
+                                <span class="text-xs text-zinc-500">{{ $transaction->paid_at?->format('d M Y') ?? '-' }}</span>
                             </div>
-                            <p class="text-xs text-zinc-500 mt-1">{{ $transaction->familyBilling?->family_code ?? '—' }}</p>
+                            <p class="text-xs text-zinc-500 mt-1">{{ $transaction->familyBilling?->family_code ?? '-' }}</p>
                             <div class="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-600">
-                                <span class="uppercase">{{ $transaction->status }}</span>
-                                <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="text-emerald-600 underline">Muat turun resit</a>
+                                <span class="uppercase">{{ $transaction->status === 'superseded' ? 'dibatalkan' : $transaction->status }}</span>
+                                @if ($transaction->status === 'success')
+                                    <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="text-emerald-600 underline">Muat turun resit</a>
+                                @else
+                                    <span class="text-zinc-400">Resit tersedia selepas berjaya</span>
+                                @endif
                             </div>
                         </article>
                     @empty
@@ -236,13 +226,13 @@
             </div>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-3">
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm lg:col-span-2">
+        <div class="mt-4 grid gap-5 lg:grid-cols-3">
+            <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm lg:col-span-2">
                 <p class="text-xs uppercase tracking-wide text-emerald-500">Receipts</p>
                 <h3 class="text-lg font-semibold text-zinc-900">Muat turun resit terdahulu</h3>
-                <div class="mt-4 space-y-3">
-                    @foreach ($transactionsByYear->sortKeysDesc() as $year => $yearTransactions)
-                        <div class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-3">
+                <div class="mt-3 space-y-2.5">
+                    @forelse ($transactionsByYear->sortKeysDesc() as $year => $yearTransactions)
+                        <div class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-2.5">
                             <header class="flex items-center justify-between">
                                 <span class="font-semibold text-zinc-900">{{ $year }}</span>
                                 <span class="text-xs text-zinc-500">{{ $year === now()->year ? 'Tahun semasa' : 'Historikal' }}</span>
@@ -256,24 +246,27 @@
                                 @endforeach
                             </div>
                         </div>
-                    @endforeach
+                    @empty
+                        <p class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-3 text-xs text-zinc-500">Tiada resit berjaya untuk dipaparkan.</p>
+                    @endforelse
                 </div>
             </div>
 
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wide text-emerald-500">Message treasury</p>
+            <div class="rounded-3xl border border-zinc-200 bg-white px-5 pt-10 pb-5 shadow-sm">
+                <p class="mt-1 text-xs uppercase tracking-wide text-emerald-500">Message treasury</p>
                 <h3 class="text-lg font-semibold text-zinc-900">Ada isu pembayaran?</h3>
                 @if (session('parent_message_status'))
                     <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
                         {{ session('parent_message_status') }}
                     </div>
                 @endif
-                <form method="POST" action="{{ route('dashboard.parent.message') }}" class="mt-4 space-y-3">
+                <form method="POST" action="{{ route('dashboard.parent.message') }}" class="mt-3 space-y-3">
                     @csrf
                     <label class="block text-xs font-semibold text-zinc-600">Ceritakan isu anda</label>
-                    <textarea name="message" rows="4" class="block w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">{{ old('message') }}</textarea>
+                    <textarea id="parentMessageInput" name="message" rows="4" maxlength="1000" class="block w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">{{ old('message') }}</textarea>
+                    <p id="parentMessageCounter" class="text-xs text-zinc-500">1000 aksara lagi (had WhatsApp)</p>
                     <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">
-                        Hantar kepada bendahari
+                        Hantar melalui WhatsApp bendahari
                     </button>
                 </form>
             </div>
@@ -414,7 +407,7 @@
                         children.forEach((child) => {
                             const item = document.createElement('div');
                             item.className = 'rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-700';
-                            item.innerHTML = `<p class="font-semibold text-zinc-900">${child.full_name}</p><p class="text-xs text-zinc-500">${child.class_name} · ${child.status}</p>`;
+                            item.innerHTML = `<p class="font-semibold text-zinc-900">${child.full_name}</p><p class="text-xs text-zinc-500">${child.class_name} Â· ${child.status}</p>`;
                             modalChildrenList.append(item);
                         });
                     }
@@ -442,7 +435,25 @@
                         modal.classList.add('hidden');
                     }
                 });
+
+
+                const parentMessageInput = document.getElementById('parentMessageInput');
+                const parentMessageCounter = document.getElementById('parentMessageCounter');
+
+                if (parentMessageInput && parentMessageCounter) {
+                    const maxLength = Number(parentMessageInput.getAttribute('maxlength') || 1000);
+                    const updateParentMessageCounter = () => {
+                        const used = parentMessageInput.value.length;
+                        const left = Math.max(0, maxLength - used);
+                        parentMessageCounter.textContent = `${left} aksara lagi (had WhatsApp)`;
+                        parentMessageCounter.classList.toggle('text-rose-600', left <= 50);
+                    };
+
+                    parentMessageInput.addEventListener('input', updateParentMessageCounter);
+                    updateParentMessageCounter();
+                }
             });
         </script>
     @endonce
 </x-layouts::app>
+

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\SchoolCalendarEvent;
 use Illuminate\View\View;
 
 class PtaDashboardController extends Controller
@@ -16,6 +17,11 @@ class PtaDashboardController extends Controller
             ->orderBy('family_code')
             ->get();
 
+        $calendarEvents = SchoolCalendarEvent::query()
+            ->orderBy('start_date')
+            ->orderBy('sort_order')
+            ->get();
+
         return view('pta.dashboard', [
             'billingYear' => $billingYear,
             'billings' => $billings,
@@ -23,6 +29,7 @@ class PtaDashboardController extends Controller
             'totalBilled' => (float) $billings->sum('fee_amount'),
             'totalCollected' => (float) $billings->sum('paid_amount'),
             'totalOutstanding' => (float) $billings->sum(fn (FamilyBilling $billing): float => $billing->outstanding_amount),
+            'calendarEvents' => $calendarEvents,
         ]);
     }
 }

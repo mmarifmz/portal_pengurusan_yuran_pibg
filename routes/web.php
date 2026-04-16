@@ -4,6 +4,8 @@ use App\Http\Controllers\BillingSetupController;
 use App\Http\Controllers\ParentDashboardController;
 use App\Http\Controllers\ParentOtpAuthController;
 use App\Http\Controllers\ParentPaymentController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\SchoolCalendarEventController;
 use App\Http\Controllers\PtaDashboardController;
 use App\Http\Controllers\PublicParentSearchController;
 use App\Http\Controllers\StudentFamilyController;
@@ -17,6 +19,7 @@ Route::view('/', 'welcome')->name('home');
 
 Route::get('/parent/search', [PublicParentSearchController::class, 'index'])
     ->name('parent.search');
+Route::get('/receipts/{receiptUuid}', [ReceiptController::class, 'show'])->name('receipts.show');
 
 Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group(function () {
     Route::get('/', [ParentOtpAuthController::class, 'showRequestForm'])->name('form');
@@ -25,11 +28,31 @@ Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group
     Route::post('/verify', [ParentOtpAuthController::class, 'verifyTac'])->name('verify.submit');
 });
 
+// ToyyibPay return/callback must stay public (gateway/browser call outside auth middleware).
+Route::get('/parent/payments/summary/return', [ParentPaymentController::class, 'handleReturn'])
+    ->name('parent.payments.summary.return');
+Route::post('/parent/payments/callback', [ParentPaymentController::class, 'handleCallback'])
+    ->name('parent.payments.toyyibpay.callback');
+
+// Legacy aliases for older bill configurations.
+Route::get('/payment-return', [ParentPaymentController::class, 'handleReturn']);
+Route::post('/payment-webhook', [ParentPaymentController::class, 'handleCallback']);
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('dashboard/message', [DashboardController::class, 'submitParentMessage'])
         ->middleware(['auth', 'role:parent'])
         ->name('dashboard.parent.message');
+
+    Route::post('/calendar-events', [SchoolCalendarEventController::class, 'store'])
+        ->middleware('role:teacher,pta')
+        ->name('calendar-events.store');
+    Route::patch('/calendar-events/{schoolCalendarEvent}', [SchoolCalendarEventController::class, 'update'])
+        ->middleware('role:teacher,pta')
+        ->name('calendar-events.update');
+    Route::delete('/calendar-events/{schoolCalendarEvent}', [SchoolCalendarEventController::class, 'destroy'])
+        ->middleware('role:teacher,pta')
+        ->name('calendar-events.destroy');
 
     Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index'])
         ->middleware('role:teacher,pta')
@@ -38,6 +61,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/teacher/records', [TeacherRecordsController::class, 'index'])
         ->middleware('role:teacher,pta')
         ->name('teacher.records');
+    Route::get('/teacher/records/duplicates/{student}/review', [TeacherRecordsController::class, 'reviewDuplicate'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.records.duplicates.review');
+    Route::delete('/teacher/records/duplicates/{student}', [TeacherRecordsController::class, 'destroyDuplicate'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.records.duplicates.destroy');
 
     Route::get('/pta/dashboard', [PtaDashboardController::class, 'index'])
         ->middleware('role:pta,teacher')
@@ -48,12 +77,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('parent.dashboard');
 
     Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.'], function () {
+        Route::get('history', [ParentPaymentController::class, 'history'])->name('history');
         Route::get('{familyBilling}/checkout', [ParentPaymentController::class, 'checkout'])->name('checkout');
         Route::post('{familyBilling}/create', [ParentPaymentController::class, 'create'])->name('create');
         Route::get('summary/{externalOrderId}', [ParentPaymentController::class, 'summary'])->name('summary');
         Route::get('receipt/{externalOrderId}', [ParentPaymentController::class, 'receiptPdf'])->name('receipt');
-        Route::get('summary/return', [ParentPaymentController::class, 'handleReturn'])->name('summary.return');
-        Route::post('callback', [ParentPaymentController::class, 'handleCallback'])->name('toyyibpay.callback');
     });
 
     Route::get('/students/import', [StudentImportController::class, 'create'])

@@ -68,5 +68,7 @@
                 </tbody>
             </table>
         </div>
+
+        @include('partials.calendar-manager', ['calendarEvents' => $calendarEvents])
     </div>
 </x-layouts::app>

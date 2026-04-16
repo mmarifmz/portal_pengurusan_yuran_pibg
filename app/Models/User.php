@@ -58,4 +58,46 @@ class User extends Authenticatable
     {
         return $this->role === 'pta';
     }
+
+    public function isParentTester(): bool
+    {
+        if (! $this->isParent()) {
+            return false;
+        }
+
+        $testerPhones = collect((array) config('services.parent_tester_phones', []))
+            ->map(fn ($phone) => self::normalizePhoneForMatch((string) $phone))
+            ->filter()
+            ->values();
+
+        if ($testerPhones->isEmpty()) {
+            return false;
+        }
+
+        return $testerPhones->contains(self::normalizePhoneForMatch((string) $this->phone));
+    }
+
+    private static function normalizePhoneForMatch(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return '';
+        }
+
+        if (str_starts_with($digits, '60')) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return '6'.$digits;
+        }
+
+        if (str_starts_with($digits, '1')) {
+            return '60'.$digits;
+        }
+
+        return $digits;
+    }
 }
+

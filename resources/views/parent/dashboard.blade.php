@@ -2,94 +2,244 @@
     @php
         $nextOutstandingBilling = $familyBillings->firstWhere(fn ($billing) => $billing->outstanding_amount > 0);
     @endphp
-    <div class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-3">
-            <div class="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                <p class="text-sm text-zinc-500">Total Children Linked</p>
-                <p class="mt-2 text-3xl font-semibold">{{ $children->count() }}</p>
-            </div>
-            <div class="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                <p class="text-sm text-zinc-500">Family Billings ({{ $billingYear }})</p>
-                <p class="mt-2 text-3xl font-semibold">{{ $familyBillings->count() }}</p>
-            </div>
-            <div class="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-                <p class="text-sm text-zinc-500">Outstanding Family Total (RM)</p>
-                <p class="mt-2 text-3xl font-semibold {{ $totalOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600' }}">{{ number_format($totalOutstanding, 2) }}</p>
-                @if ($nextOutstandingBilling)
-                    <div class="mt-4">
-                        <a href="{{ route('parent.payments.checkout', $nextOutstandingBilling) }}"
-                        class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-emerald-700">
-                            {{ __('Bayar Keluarga') }} {{ $nextOutstandingBilling->family_code }}
+
+    <style>
+        :root {
+            --portal-forest: #174a34;
+            --portal-green: #2f7a55;
+            --portal-gold: #e5b338;
+            --portal-ink: #1f2a24;
+            --portal-soft: #f3f8f3;
+        }
+
+        .portal-card {
+            border: 1px solid #e5e7eb;
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 1rem;
+            box-shadow: 0 8px 24px rgba(30, 41, 59, 0.07);
+        }
+
+        .portal-hero {
+            background: linear-gradient(135deg, rgba(43, 125, 86, 0.14), rgba(229, 179, 56, 0.16));
+        }
+
+        .portal-heading {
+            color: var(--portal-forest);
+        }
+
+        .portal-kicker {
+            color: var(--portal-forest);
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: inset 0 0 0 1px rgba(229, 179, 56, 0.45);
+        }
+
+        .portal-primary-btn {
+            background: var(--portal-green);
+            color: #fff;
+            box-shadow: 0 12px 24px rgba(47, 122, 85, 0.18);
+        }
+
+        .portal-primary-btn:hover {
+            background: var(--portal-forest);
+        }
+
+        .portal-outline-btn {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .portal-outline-btn:hover {
+            background: #f9fafb;
+        }
+
+        .portal-positive {
+            color: #047857;
+        }
+
+        .portal-negative {
+            color: #e11d48;
+        }
+
+        .portal-table-title {
+            color: var(--portal-forest);
+        }
+    </style>
+
+    <div class="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <section class="portal-card portal-hero p-6 sm:p-8">
+            <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+                <div>
+                    <p class="portal-kicker inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] sm:text-xs">
+                        Parent Dashboard
+                    </p>
+                    <h1 class="portal-heading mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+                        Keluarga Anda Dalam
+                        <span style="color: var(--portal-green);">Portal PIBG</span>
+                    </h1>
+                    <p class="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-700 sm:text-base">
+                        Semak jumlah anak yang dipautkan, status bil keluarga, dan teruskan bayaran jika masih ada baki tertunggak.
+                    </p>
+
+                    @if (! empty($isTesterMode))
+                        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                            Mod Tester Treasury aktif. Semua transaksi bayaran akan dihantar sebagai RM1.00.
+                        </div>
+                    @endif
+                </div>
+
+                <div class="portal-card bg-white/90 p-5">
+                    <h2 class="portal-heading text-base font-bold sm:text-lg">Tindakan Cepat</h2>
+                    <div class="mt-4 grid gap-3">
+                        @if ($nextOutstandingBilling)
+                            <a
+                                href="{{ route('parent.payments.checkout', $nextOutstandingBilling) }}"
+                                class="portal-primary-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                            >
+                                {{ __('Bayar Keluarga') }} {{ $nextOutstandingBilling->family_code }}
+                            </a>
+                        @else
+                            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                                Semua bil keluarga telah selesai dibayar.
+                            </div>
+                        @endif
+
+                        <a
+                            href="{{ route('parent.search') }}"
+                            class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                        >
+                            Carian Nama Murid
+                        </a>
+                        <a
+                            href="{{ route('parent.payments.history') }}"
+                            class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                        >
+                            Sejarah Pembayaran
                         </a>
                     </div>
-                @endif
+                </div>
             </div>
-        </div>
+        </section>
 
-        <div class="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-            <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-                <thead class="bg-zinc-50 dark:bg-zinc-800">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                        <th class="px-6 py-3">Family Code</th>
-                        <th class="px-6 py-3 text-right">Fee (RM)</th>
-                        <th class="px-6 py-3 text-right">Paid (RM)</th>
-                        <th class="px-6 py-3 text-right">Outstanding (RM)</th>
-                        <th class="px-6 py-3">Status</th>
-                        <th class="px-6 py-3">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-200 text-sm dark:divide-zinc-700">
+        <section class="grid gap-4 sm:grid-cols-3">
+            <article class="portal-card p-6">
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Total Children Linked</p>
+                <p class="portal-heading mt-3 text-4xl font-extrabold">{{ $children->count() }}</p>
+                <p class="mt-2 text-sm text-zinc-600">Bilangan anak yang dipautkan pada nombor parent ini.</p>
+            </article>
+
+            <article class="portal-card p-6">
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Family Billings ({{ $billingYear }})</p>
+                <p class="portal-heading mt-3 text-4xl font-extrabold">{{ $familyBillings->count() }}</p>
+                <p class="mt-2 text-sm text-zinc-600">Jumlah bil keluarga yang tersedia untuk tahun semasa.</p>
+            </article>
+
+            <article class="portal-card p-6">
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Outstanding Family Total (RM)</p>
+                <p class="mt-3 text-4xl font-extrabold {{ $totalOutstanding > 0 ? 'portal-negative' : 'portal-positive' }}">
+                    {{ number_format($totalOutstanding, 2) }}
+                </p>
+                <p class="mt-2 text-sm text-zinc-600">
+                    {{ $totalOutstanding > 0 ? 'Baki tertunggak yang masih perlu dijelaskan.' : 'Tiada baki tertunggak untuk keluarga anda.' }}
+                </p>
+            </article>
+        </section>
+
+        <section class="portal-card overflow-hidden">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
+                <h2 class="portal-table-title text-lg font-bold">Status Bil Keluarga</h2>
+                <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran mengikut kod keluarga.</p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-white">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <th class="px-6 py-4">Family Code</th>
+                            <th class="px-6 py-4 text-right">Fee (RM)</th>
+                            <th class="px-6 py-4 text-right">Paid (RM)</th>
+                            <th class="px-6 py-4 text-right">Outstanding (RM)</th>
+                            <th class="px-6 py-4">Status</th>
+                            <th class="px-6 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
                         @forelse ($familyBillings as $billing)
                             <tr>
-                                <td class="px-6 py-4 font-medium">{{ $billing->family_code }}</td>
-                                <td class="px-6 py-4 text-right">{{ number_format($billing->fee_amount, 2) }}</td>
-                                <td class="px-6 py-4 text-right">{{ number_format($billing->paid_amount, 2) }}</td>
-                                <td class="px-6 py-4 text-right {{ $billing->outstanding_amount > 0 ? 'text-rose-600' : 'text-emerald-600' }}">{{ number_format($billing->outstanding_amount, 2) }}</td>
-                                <td class="px-6 py-4">{{ ucfirst($billing->status) }}</td>
-                                <td class="px-6 py-4 text-right">
-                                    @if($billing->outstanding_amount > 0)
-                                        <a href="{{ route('parent.payments.checkout', $billing) }}" class="rounded-lg bg-[color:var(--brand-green, #2f7a55)] px-3 py-1 text-xs font-semibold text-white hover:opacity-90">Bayar</a>
+                                <td class="portal-heading px-6 py-5 font-semibold">{{ $billing->family_code }}</td>
+                                <td class="px-6 py-5 text-right">{{ number_format($billing->fee_amount, 2) }}</td>
+                                <td class="px-6 py-5 text-right">{{ number_format($billing->paid_amount, 2) }}</td>
+                                <td class="px-6 py-5 text-right font-semibold {{ $billing->outstanding_amount > 0 ? 'portal-negative' : 'portal-positive' }}">
+                                    {{ number_format($billing->outstanding_amount, 2) }}
+                                </td>
+                                <td class="px-6 py-5">
+                                    @if ($billing->outstanding_amount > 0)
+                                        <span class="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                                            {{ ucfirst($billing->status) }}
+                                        </span>
                                     @else
-                                        <span class="text-xs text-zinc-500">Lengkap</span>
+                                        <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                            {{ ucfirst($billing->status) }}
+                                        </span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    @if ($billing->outstanding_amount > 0)
+                                        <a
+                                            href="{{ route('parent.payments.checkout', $billing) }}"
+                                            class="portal-primary-btn inline-flex items-center rounded-xl px-4 py-2 text-xs font-semibold transition"
+                                        >
+                                            Bayar
+                                        </a>
+                                    @else
+                                        <span class="text-xs font-medium text-zinc-500">Lengkap</span>
                                     @endif
                                 </td>
                             </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="px-6 py-8 text-center text-zinc-500">
-                                No family billing found yet. Please contact school admin.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-6 py-10 text-center text-zinc-500">
+                                    No family billing found yet. Please contact school admin.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-        <div class="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-            <table class="min-w-full divide-y divide-zinc-200 dark:divide-zinc-700">
-                <thead class="bg-zinc-50 dark:bg-zinc-800">
-                    <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                        <th class="px-6 py-3">Student No</th>
-                        <th class="px-6 py-3">Family Code</th>
-                        <th class="px-6 py-3">Name</th>
-                        <th class="px-6 py-3">Class</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-zinc-200 text-sm dark:divide-zinc-700">
-                    @forelse ($children as $student)
-                        <tr>
-                            <td class="px-6 py-4 font-medium">{{ $student->student_no }}</td>
-                            <td class="px-6 py-4">{{ $student->family_code ?? '-' }}</td>
-                            <td class="px-6 py-4">{{ $student->full_name }}</td>
-                            <td class="px-6 py-4">{{ $student->class_name ?? '-' }}</td>
+        <section class="portal-card overflow-hidden">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
+                <h2 class="portal-table-title text-lg font-bold">Rekod Anak Dipautkan</h2>
+                <p class="mt-1 text-sm text-zinc-600">Senarai anak yang berkaitan dengan nombor parent semasa.</p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-white">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <th class="px-6 py-4">Student No</th>
+                            <th class="px-6 py-4">Family Code</th>
+                            <th class="px-6 py-4">Name</th>
+                            <th class="px-6 py-4">Class</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-zinc-500">No children linked to your phone yet.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                        @forelse ($children as $student)
+                            <tr>
+                                <td class="portal-heading px-6 py-5 font-semibold">{{ $student->student_no }}</td>
+                                <td class="px-6 py-5">{{ $student->family_code ?? '-' }}</td>
+                                <td class="px-6 py-5 font-medium">{{ $student->full_name }}</td>
+                                <td class="px-6 py-5">{{ $student->class_name ?? '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-6 py-10 text-center text-zinc-500">No children linked to your phone yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
 </x-layouts::app>

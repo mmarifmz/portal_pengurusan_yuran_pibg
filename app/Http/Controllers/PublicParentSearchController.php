@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FamilyBilling;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -11,9 +12,12 @@ class PublicParentSearchController extends Controller
 {
     public function index(Request $request): View
     {
-        /** @var Collection<int, Student> $students */
-        $students = collect();
+        /** @var Collection<int, array<string, mixed>> $familyResults */
+        $familyResults = collect();
+        $searchBillings = collect();
         $hasSearched = false;
+        $totalFamilyResults = 0;
+        $visibleLimit = max(20, min((int) $request->integer('visible_limit', 20), 200));
 
         if ($request->filled('student_keyword') || $request->filled('contact')) {
             $validated = $request->validate([
@@ -23,23 +27,123 @@ class PublicParentSearchController extends Controller
 
             $hasSearched = true;
 
+            /** @var Collection<int, Student> $students */
+            $normalizedContact = isset($validated['contact']) ? preg_replace('/\D+/', '', (string) $validated['contact']) : null;
+
             $students = Student::query()
                 ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
                     $query->where(function ($nested) use ($keyword) {
                         $nested->where('full_name', 'like', "%{$keyword}%")
-                            ->orWhere('student_no', 'like', "%{$keyword}%")
                             ->orWhere('class_name', 'like', "%{$keyword}%");
                     });
                 })
-                ->when($validated['contact'] ?? null, fn ($query, $contact) => $query->where('parent_phone', 'like', "%{$contact}%"))
+                ->orderByRaw('CASE WHEN family_code IS NULL OR family_code = "" THEN 1 ELSE 0 END')
+                ->orderBy('family_code')
                 ->orderBy('full_name')
-                ->take(50)
+                ->take(300)
                 ->get();
+
+            if ($normalizedContact) {
+                $students = $students
+                    ->filter(function (Student $student) use ($normalizedContact): bool {
+                        $studentPhone = preg_replace('/\D+/', '', (string) $student->parent_phone) ?? '';
+
+                        return $studentPhone !== '' && $studentPhone === $normalizedContact;
+                    })
+                    ->values();
+            }
+
+            $searchBillings = FamilyBilling::query()
+                ->whereIn('family_code', $students->pluck('family_code')->filter()->unique())
+                ->orderByDesc('billing_year')
+                ->orderByDesc('id')
+                ->get()
+                ->unique('family_code')
+                ->keyBy('family_code');
+
+            $familyResults = $students
+                ->groupBy(fn (Student $student) => $student->family_code ?: 'NO_FAMILY::'.$student->id)
+                ->map(function (Collection $group, string $groupKey) use ($searchBillings): array {
+                    /** @var Student $primaryStudent */
+                    $primaryStudent = $group->first();
+                    $familyCode = $groupKey !== '' && ! str_starts_with($groupKey, 'NO_FAMILY::') ? $groupKey : null;
+                    $billing = $familyCode ? ($searchBillings[$familyCode] ?? null) : null;
+
+                    return [
+                        'group_key' => $groupKey,
+                        'family_code' => $familyCode,
+                        'billing' => $billing,
+                        'parent_phone' => $group->pluck('parent_phone')->filter()->first(),
+                        'masked_parent_phone' => $this->maskParentPhonePrefix(
+                            $group->pluck('parent_phone')->filter()->first()
+                        ),
+                        'has_registered_phone' => $group->pluck('parent_phone')->filter()->isNotEmpty(),
+                        'student_count' => $group->count(),
+                        'classes' => $group->pluck('class_name')->filter()->unique()->values(),
+                        'students' => $group
+                            ->sortBy('full_name')
+                            ->values()
+                            ->map(function (Student $student): array {
+                                return [
+                                    'student_no' => $student->student_no,
+                                    'full_name' => $student->full_name,
+                                    'masked_name' => $this->maskStudentName($student->full_name),
+                                    'class_name' => $student->class_name,
+                                ];
+                            }),
+                        'sort_name' => strtolower((string) $primaryStudent->full_name),
+                    ];
+                })
+                ->sortBy([
+                    ['family_code', 'asc'],
+                    ['sort_name', 'asc'],
+                ])
+                ->values();
+
+            $totalFamilyResults = $familyResults->count();
+            $familyResults = $familyResults->take($visibleLimit)->values();
         }
 
         return view('parent.search', [
-            'students' => $students,
+            'familyResults' => $familyResults,
+            'searchBillings' => $searchBillings,
             'hasSearched' => $hasSearched,
+            'totalFamilyResults' => $totalFamilyResults,
+            'visibleLimit' => $visibleLimit,
         ]);
+    }
+
+    private function maskStudentName(string $fullName): string
+    {
+        $trimmed = trim($fullName);
+
+        if ($trimmed === '') {
+            return '-';
+        }
+
+        $length = mb_strlen($trimmed);
+        $visibleLength = max(3, (int) ceil($length * 0.6));
+        $maskedLength = max(1, $length - $visibleLength);
+
+        return mb_substr($trimmed, 0, $visibleLength).str_repeat('#', $maskedLength);
+    }
+
+    private function maskParentPhonePrefix(?string $phone): ?string
+    {
+        if (! is_string($phone) || trim($phone) === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) <= 4) {
+            return str_repeat('#', strlen($digits));
+        }
+
+        return substr($digits, 0, max(0, strlen($digits) - 4)).'####';
     }
 }

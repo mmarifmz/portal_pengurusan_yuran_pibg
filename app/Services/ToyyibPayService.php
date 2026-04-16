@@ -9,11 +9,18 @@ class ToyyibPayService
 {
     public function createBill(array $payload): string
     {
+        $userSecretKey = (string) config('services.toyyibpay.user_secret_key');
+        $categoryCode = (string) config('services.toyyibpay.category_code');
+
+        if (blank($userSecretKey) || blank($categoryCode)) {
+            throw new RuntimeException('ToyyibPay configuration is missing. Please set TOYYIBPAY_USER_SECRET_KEY and TOYYIBPAY_CATEGORY_CODE.');
+        }
+
         $response = Http::asForm()
             ->timeout(20)
             ->post($this->endpoint('/index.php/api/createBill'), array_merge([
-                'userSecretKey' => (string) config('services.toyyibpay.user_secret_key'),
-                'categoryCode' => (string) config('services.toyyibpay.category_code'),
+                'userSecretKey' => $userSecretKey,
+                'categoryCode' => $categoryCode,
             ], $payload));
 
         if (! $response->successful()) {
@@ -21,10 +28,20 @@ class ToyyibPayService
         }
 
         $data = $response->json();
-        $billCode = $data[0]['BillCode'] ?? null;
+        $billCode = $data[0]['BillCode']
+            ?? $data[0]['billCode']
+            ?? $data['BillCode']
+            ?? $data['billCode']
+            ?? null;
 
         if (! is_string($billCode) || blank($billCode)) {
-            throw new RuntimeException('ToyyibPay did not return BillCode.');
+            $message = $data[0]['msg']
+                ?? $data[0]['message']
+                ?? $data['msg']
+                ?? $data['message']
+                ?? 'ToyyibPay did not return BillCode.';
+
+            throw new RuntimeException('ToyyibPay bill creation failed: '.(string) $message);
         }
 
         return $billCode;

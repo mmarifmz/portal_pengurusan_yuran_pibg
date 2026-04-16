@@ -26,7 +26,7 @@ class StudentFamilyController extends Controller
                     'full_name' => $student->full_name,
                     'class_name' => $student->class_name,
                     'status' => $student->status,
-                ]);
+                ])->values()->all();
 
                 $guardianName = $group->pluck('parent_name')->filter()->first() ?? '—';
                 $classNames = $group->pluck('class_name')->filter()->unique()->sort()->values()->join(', ');

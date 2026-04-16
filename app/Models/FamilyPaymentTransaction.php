@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class FamilyPaymentTransaction extends Model
 {
@@ -12,17 +13,22 @@ class FamilyPaymentTransaction extends Model
         'user_id',
         'payment_provider',
         'external_order_id',
+        'receipt_uuid',
         'provider_bill_code',
         'provider_ref_no',
         'provider_invoice_no',
+        'receipt_message_id',
         'amount',
         'fee_amount_paid',
         'donation_amount',
+        'payer_name',
         'payer_email',
         'payer_phone',
         'status',
+        'return_status',
         'status_reason',
         'paid_at',
+        'receipt_notified_at',
         'raw_return',
         'raw_callback',
     ];
@@ -37,9 +43,30 @@ class FamilyPaymentTransaction extends Model
             'fee_amount_paid' => 'decimal:2',
             'donation_amount' => 'decimal:2',
             'paid_at' => 'datetime',
+            'receipt_notified_at' => 'datetime',
             'raw_return' => 'array',
             'raw_callback' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $transaction): void {
+            if (! $transaction->receipt_uuid) {
+                $transaction->receipt_uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    public function ensureReceiptUuid(): void
+    {
+        if ($this->receipt_uuid) {
+            return;
+        }
+
+        $this->forceFill([
+            'receipt_uuid' => (string) Str::uuid(),
+        ])->save();
     }
 
     public function familyBilling(): BelongsTo

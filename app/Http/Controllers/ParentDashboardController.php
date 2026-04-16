@@ -11,13 +11,17 @@ class ParentDashboardController extends Controller
 {
     public function index(Request $request): View
     {
-        $parentPhone = $request->user()?->phone;
+        $parentUser = $request->user();
+        $parentPhone = $parentUser?->phone;
         $billingYear = now()->year;
+        $isTesterMode = (bool) $parentUser?->isParentTester();
 
-        $children = Student::query()
-            ->when($parentPhone, fn ($query) => $query->where('parent_phone', $parentPhone))
-            ->orderBy('full_name')
-            ->get();
+        $children = $isTesterMode
+            ? collect()
+            : Student::query()
+                ->when($parentPhone, fn ($query) => $query->where('parent_phone', $parentPhone))
+                ->orderBy('full_name')
+                ->get();
 
         $familyCodes = $children
             ->pluck('family_code')
@@ -27,7 +31,7 @@ class ParentDashboardController extends Controller
 
         $familyBillings = FamilyBilling::query()
             ->where('billing_year', $billingYear)
-            ->whereIn('family_code', $familyCodes)
+            ->when(! $isTesterMode, fn ($query) => $query->whereIn('family_code', $familyCodes))
             ->orderBy('family_code')
             ->get();
 
@@ -35,6 +39,7 @@ class ParentDashboardController extends Controller
             'children' => $children,
             'familyBillings' => $familyBillings,
             'billingYear' => $billingYear,
+            'isTesterMode' => $isTesterMode,
             'totalOutstanding' => (float) $familyBillings->sum(fn (FamilyBilling $billing): float => $billing->outstanding_amount),
         ]);
     }

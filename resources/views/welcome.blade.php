@@ -45,6 +45,32 @@
             font-size: clamp(1.9rem, 3vw + 0.9rem, 3.7rem);
             line-height: 1.06;
         }
+
+        .search-input {
+            border: 0;
+            background: linear-gradient(180deg, rgba(244, 247, 244, 0.98), rgba(255, 255, 255, 0.96));
+            box-shadow:
+                inset 0 2px 8px rgba(15, 23, 42, 0.08),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+            padding: 0;
+            min-height: 3.5rem;
+            height: 3.5rem;
+            line-height: 3.5rem;
+            text-indent: 1rem;
+        }
+
+        .search-input:focus {
+            border: 0;
+            outline: none;
+            box-shadow:
+                inset 0 2px 10px rgba(23, 74, 52, 0.12),
+                0 0 0 2px rgba(47, 122, 85, 0.12);
+        }
+
+        .search-input::placeholder {
+            color: #9ca3af;
+            line-height: 3.5rem;
+        }
     </style>
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
@@ -59,8 +85,8 @@
             </div>
 
             <div class="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:gap-2">
-                <a href="{{ route('parent.login.form') }}" class="rounded-lg border border-[color:var(--brand-green)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--brand-green)] transition hover:bg-[color:var(--brand-green)] hover:text-white sm:text-sm">Login Parent (TAC)</a>
-                <a href="{{ route('login') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Teacher / PTA</a>
+                <a href="{{ route('parent.login.form') }}" class="rounded-lg border border-[color:var(--brand-green)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--brand-green)] transition hover:bg-[color:var(--brand-green)] hover:text-white sm:text-sm">Log Masuk Penjaga</a>
+                <a href="{{ route('login') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Guru / Admin</a>
             </div>
         </div>
     </header>
@@ -81,23 +107,20 @@
                         Kadar asas ialah <strong>RM100 setahun bagi setiap keluarga</strong> berdasarkan kod keluarga.
                     </p>
                     <div class="mt-5 grid gap-2 sm:flex sm:flex-wrap">
-                        <a href="{{ route('parent.search') }}" class="rounded-xl bg-[color:var(--brand-green)] px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--brand-forest)]">Semak Nama Anak</a>
-                        <a href="{{ route('parent.login.form') }}" class="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-center text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50">Semak Status Keluarga</a>
+                        <a href="{{ route('parent.search') }}" class="rounded-xl bg-[color:var(--brand-green)] px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--brand-forest)]">Semak Nama Murid</a>
                     </div>
                 </div>
 
                 <div class="box p-4 sm:p-5">
                     <h2 class="section-title text-base font-bold text-[color:var(--brand-forest)] sm:text-lg">Ringkasan Portal</h2>
-                    <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                        <div class="rounded-lg border border-zinc-200 bg-white p-3">
-                            <p class="text-[11px] font-semibold uppercase text-zinc-500">Kadar</p>
-                            <p class="mt-1 text-lg font-bold text-[color:var(--brand-forest)]">RM100</p>
-                            <p class="text-xs text-zinc-600">Per keluarga / tahun</p>
-                        </div>
-                        <div class="rounded-lg border border-zinc-200 bg-white p-3">
-                            <p class="text-[11px] font-semibold uppercase text-zinc-500">Akses Parent</p>
-                            <p class="mt-1 text-lg font-bold text-[color:var(--brand-forest)]">TAC OTP</p>
-                            <p class="text-xs text-zinc-600">Tanpa simpan password</p>
+                    <div class="mt-3 rounded-xl border border-zinc-200 bg-white p-4">
+                        <p class="text-base font-semibold text-[color:var(--brand-forest)]">Kemudahan untuk Ibu Bapa</p>
+                        <p class="mt-2 text-sm text-zinc-700">Nikmati akses mudah kepada:</p>
+                        <div class="mt-3 space-y-2 text-sm text-zinc-700">
+                            <p>📅 Takwim sekolah untuk perancangan aktiviti anak</p>
+                            <p>🧾 Rekod dan resit pembayaran bermula 2025</p>
+                            <p>💳 Pembayaran yuran terkini secara online</p>
+                            <p>🔐 Akses selamat tanpa kata laluan (TAC OTP)</p>
                         </div>
                     </div>
                 </div>
@@ -135,11 +158,11 @@
                 <form action="{{ route('parent.search') }}" method="GET" class="mt-4 grid gap-3 sm:grid-cols-2">
                     <div class="sm:col-span-2">
                         <label for="student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Nama / No Murid / Kelas</label>
-                        <input id="student_keyword" name="student_keyword" type="text" class="w-full rounded-lg border-zinc-300 text-sm focus:border-[color:var(--brand-green)] focus:ring-[color:var(--brand-green)]" placeholder="Contoh: Adam / 4A-0001 / 4 ALAMANDA">
+                        <input id="student_keyword" name="student_keyword" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh: Adam / 4A-0001 / 4 ALAMANDA">
                     </div>
                     <div class="sm:col-span-2">
                         <label for="contact" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">No Telefon Penjaga</label>
-                        <input id="contact" name="contact" type="text" class="w-full rounded-lg border-zinc-300 text-sm focus:border-[color:var(--brand-green)] focus:ring-[color:var(--brand-green)]" placeholder="Contoh: 0123">
+                        <input id="contact" name="contact" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh: 0123">
                     </div>
                     <div class="sm:col-span-2">
                         <button type="submit" class="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700">Cari Sekarang</button>
@@ -152,12 +175,7 @@
 
                 <div class="mt-4 space-y-3">
                     <div class="rounded-lg border border-zinc-200 bg-[color:var(--brand-soft)] p-3">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Dasar Yuran</p>
-                        <p class="mt-1 text-sm text-zinc-700">Satu kod keluarga = satu bil RM100 setahun.</p>
-                    </div>
-                    <div class="rounded-lg border border-zinc-200 bg-[color:var(--brand-soft)] p-3">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Parent Access</p>
-                        <p class="mt-1 text-sm text-zinc-700">Sistem TAC OTP digunakan. Tiada keperluan ingat kata laluan.</p>
+                        <p class="text-sm text-zinc-700">Sumbangan RM100 setahun bagi setiap keluarga amat membantu PIBG dalam menjayakan pelbagai inisiatif untuk kebaikan anak-anak kita.</p>
                     </div>
                 </div>
 

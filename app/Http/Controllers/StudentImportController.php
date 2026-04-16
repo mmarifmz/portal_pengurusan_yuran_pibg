@@ -55,6 +55,7 @@ class StudentImportController extends Controller
             $familyCode = $this->normalizeFamilyCode($schoolCode, $familyRaw);
             $className = $this->normalizeClassName($className);
             $fullName = $this->normalizeFullName($fullName);
+            $isDuplicate = $this->hasDuplicateNameAndClass($fullName, $className);
 
             $status = 'active';
             $existing = $this->findExistingStudent($familyCode, $fullName);
@@ -71,6 +72,7 @@ class StudentImportController extends Controller
                 'family_code' => $familyCode,
                 'class_name' => $className,
                 'full_name' => $fullName,
+                'is_duplicate' => $isDuplicate,
                 'status' => $status,
                 'total_fee' => 0,
                 'paid_amount' => 0,
@@ -82,6 +84,10 @@ class StudentImportController extends Controller
                 'ssp_student_id' => $studentNo,
                 'import_raw_line' => $trimmed,
             ]);
+
+            if ($isDuplicate) {
+                $this->markDuplicates($fullName, $className);
+            }
 
             $report['created']++;
         }
@@ -166,5 +172,21 @@ class StudentImportController extends Controller
         }
 
         return $candidate;
+    }
+
+    private function hasDuplicateNameAndClass(string $fullName, string $className): bool
+    {
+        return Student::query()
+            ->whereRaw('LOWER(full_name) = ?', [strtolower($fullName)])
+            ->whereRaw('LOWER(COALESCE(class_name, "")) = ?', [strtolower($className)])
+            ->exists();
+    }
+
+    private function markDuplicates(string $fullName, string $className): void
+    {
+        Student::query()
+            ->whereRaw('LOWER(full_name) = ?', [strtolower($fullName)])
+            ->whereRaw('LOWER(COALESCE(class_name, "")) = ?', [strtolower($className)])
+            ->update(['is_duplicate' => true]);
     }
 }

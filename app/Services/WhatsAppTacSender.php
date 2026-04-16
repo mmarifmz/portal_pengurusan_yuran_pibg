@@ -3,31 +3,48 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Arr;
 use RuntimeException;
 
 class WhatsAppTacSender
 {
-    public function sendTac(string $phone, string $code): void
+    public function sendTac(string $phone, string $code): array
     {
-        if (! config('services.whatsapp.enabled')) {
-            return;
-        }
-
-        // Keep feature tests deterministic.
-        if (app()->environment('testing')) {
-            return;
-        }
-
-        $provider = (string) config('services.whatsapp.provider', 'twilio');
-
-        if ($provider !== 'twilio') {
-            throw new RuntimeException('Unsupported WhatsApp provider configured.');
-        }
-
-        $this->sendViaTwilio($phone, $code);
+        return $this->sendMessage(
+            $phone,
+            "SSP PIBG portal TAC : {$code}\nKod ini sah selama 5 minit."
+        );
     }
 
-    private function sendViaTwilio(string $phone, string $code): void
+    public function sendMessage(string $phone, string $message): array
+    {
+        if (! config('services.whatsapp.enabled')) {
+            return [
+                'provider' => 'wasender',
+                'enabled' => false,
+                'status' => 'skipped',
+                'message' => 'WhatsApp notifications are disabled.',
+            ];
+        }
+
+        if (app()->environment('testing')) {
+            return [
+                'provider' => 'wasender',
+                'enabled' => true,
+                'status' => 'testing',
+            ];
+        }
+
+        $provider = (string) config('services.whatsapp.provider', 'wasender');
+
+        return match ($provider) {
+            'twilio' => $this->sendViaTwilio($phone, $message),
+            'wasender' => $this->sendViaWasender($phone, $message),
+            default => throw new RuntimeException('Unsupported WhatsApp provider configured.'),
+        };
+    }
+
+    private function sendViaTwilio(string $phone, string $message): array
     {
         $sid = (string) config('services.twilio.sid');
         $token = (string) config('services.twilio.token');
@@ -44,12 +61,54 @@ class WhatsAppTacSender
             ->post("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json", [
                 'From' => $from,
                 'To' => 'whatsapp:'.$toPhone,
-                'Body' => "TAC PIBG anda: {$code}. Kod ini sah selama 5 minit.",
+                'Body' => $message,
             ]);
 
         if (! $response->successful()) {
             throw new RuntimeException('Twilio WhatsApp send failed: '.$response->body());
         }
+
+        return [
+            'provider' => 'twilio',
+            'enabled' => true,
+            'status' => $response->json('status'),
+            'message_id' => $response->json('sid'),
+            'response' => $response->json(),
+        ];
+    }
+
+    private function sendViaWasender(string $phone, string $message): array
+    {
+        $apiKey = (string) config('services.wasender.api_key');
+        $baseUrl = (string) config('services.wasender.base_url', 'https://www.wasenderapi.com/api');
+
+        if (blank($apiKey)) {
+            throw new RuntimeException('Missing Wasender API configuration.');
+        }
+
+        $response = Http::asJson()
+            ->acceptJson()
+            ->withToken($apiKey)
+            ->baseUrl($baseUrl)
+            ->post('/send-message', [
+                'to' => $this->normalizePhoneToE164($phone),
+                'text' => $message,
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Wasender WhatsApp send failed: '.$response->body());
+        }
+
+        $data = $response->json();
+
+        return [
+            'provider' => 'wasender',
+            'enabled' => true,
+            'status' => Arr::get($data, 'data.status', 'queued'),
+            'message_id' => Arr::get($data, 'data.msgId'),
+            'jid' => Arr::get($data, 'data.jid'),
+            'response' => $data,
+        ];
     }
 
     private function normalizePhoneToE164(string $phone): string
