@@ -8,11 +8,17 @@ use RuntimeException;
 
 class WhatsAppTacSender
 {
-    public function sendTac(string $phone, string $code): array
+    public function sendTac(string $phone, string $code, ?string $familyCode = null): array
     {
+        $familyCodeText = filled($familyCode) ? $familyCode : 'SSP-XXXX';
+
         return $this->sendMessage(
             $phone,
-            "SSP PIBG portal TAC : {$code}\nKod ini sah selama 5 minit."
+            "SSP PIBG portal TAC : {$code}\n"
+            ."Requested for family code {$familyCodeText}\n"
+            ."-----\n"
+            ."Kod ini sah selama 5 minit.\n"
+            ."Source : https://yuranpibg.sripetaling.edu.my/"
         );
     }
 

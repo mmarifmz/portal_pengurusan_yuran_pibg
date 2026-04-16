@@ -64,20 +64,8 @@
                     </flux:sidebar.item>
 
                     @if (auth()->user()->isTeacher() || auth()->user()->isPta())
-                        <flux:sidebar.item icon="chart-bar" :href="route('teacher.dashboard')" :current="request()->routeIs('teacher.dashboard')" wire:navigate>
-                            {{ __('Teacher Dashboard') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="banknotes" :href="route('pta.dashboard')" :current="request()->routeIs('pta.dashboard')" wire:navigate>
-                            {{ __('PTA Dashboard') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
-                            {{ __('Student import') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="users" :href="route('students.family.list')" :current="request()->routeIs('students.family.list')" wire:navigate>
-                            {{ __('Family registry') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="list-bullet" :href="route('teacher.records')" :current="request()->routeIs('teacher.records')" wire:navigate>
-                            {{ __('Records') }}
+                        <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
+                            {{ __('Student & Family Lists') }}
                         </flux:sidebar.item>
                     @endif
 
@@ -94,6 +82,16 @@
                         <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')" wire:navigate>
                             {{ __('Public Parent Search') }}
                         </flux:sidebar.item>
+
+                        @if (auth()->user()->isTeacher() || auth()->user()->isPta())
+                            <div class="my-2 border-t border-zinc-200/80"></div>
+                            <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
+                                {{ __('Student import') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
+                                {{ __('Year Reconcile & Backup') }}
+                            </flux:sidebar.item>
+                        @endif
                     @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>

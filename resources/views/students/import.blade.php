@@ -5,7 +5,7 @@
                 <h2 class="font-semibold text-xl text-gray-800">Student import</h2>
                 <p class="text-sm text-gray-500">Paste your kod keluarga, kelas, dan nama murid per baris (CSV style). Use comma or pipe delimiter straight from the spreadsheet export.</p>
             </div>
-            <a href="{{ route('teacher.dashboard') }}" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100">
+            <a href="{{ route('teacher.records') }}" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100">
                 &larr; Back to dashboard
             </a>
         </div>

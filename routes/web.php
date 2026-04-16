@@ -10,7 +10,7 @@ use App\Http\Controllers\PtaDashboardController;
 use App\Http\Controllers\PublicParentSearchController;
 use App\Http\Controllers\StudentFamilyController;
 use App\Http\Controllers\StudentImportController;
-use App\Http\Controllers\TeacherDashboardController;
+use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
@@ -54,13 +54,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:teacher,pta')
         ->name('calendar-events.destroy');
 
-    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index'])
-        ->middleware('role:teacher,pta')
-        ->name('teacher.dashboard');
-
     Route::get('/teacher/records', [TeacherRecordsController::class, 'index'])
         ->middleware('role:teacher,pta')
         ->name('teacher.records');
+    Route::get('/teacher/records/family/{familyCode}', [TeacherRecordsController::class, 'familyDetail'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.records.family');
+    Route::get('/teacher/records/family/{familyCode}/payments/export', [TeacherRecordsController::class, 'exportFamilyPayments'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.records.family.payments.export');
     Route::get('/teacher/records/duplicates/{student}/review', [TeacherRecordsController::class, 'reviewDuplicate'])
         ->middleware('role:teacher,pta')
         ->name('teacher.records.duplicates.review');
@@ -95,6 +97,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/students/import', [StudentImportController::class, 'store'])
         ->middleware('role:teacher,pta')
         ->name('students.import');
+
+    Route::get('/teacher/reconcile', [TeacherReconciliationController::class, 'index'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.index');
+    Route::post('/teacher/reconcile/preview', [TeacherReconciliationController::class, 'preview'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.preview');
+    Route::post('/teacher/reconcile/apply', [TeacherReconciliationController::class, 'apply'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.apply');
+    Route::post('/teacher/reconcile/backup', [TeacherReconciliationController::class, 'createBackup'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.backup.create');
+    Route::get('/teacher/reconcile/backup/{fileName}', [TeacherReconciliationController::class, 'downloadBackup'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.backup.download');
+    Route::delete('/teacher/reconcile/backup/{fileName}', [TeacherReconciliationController::class, 'deleteBackup'])
+        ->middleware('role:teacher,pta')
+        ->name('teacher.reconcile.backup.delete');
 
     Route::post('/billing/setup/current-year', [BillingSetupController::class, 'setupCurrentYear'])
         ->middleware('role:teacher,pta')

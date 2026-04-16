@@ -1,4 +1,9 @@
 @php
+    $calendarBlockLabel = $calendarBlockLabel ?? 'Takwim sekolah';
+    $calendarBlockTitle = $calendarBlockTitle ?? 'Aktiviti & program semasa';
+    $calendarBlockDescription = $calendarBlockDescription ?? 'Paparan bulan semasa. Klik pada aktiviti untuk melihat butiran penuh.';
+    $paidCountByDate = $paidCountByDate ?? [];
+
     $calendarEventsPayload = $calendarEvents->map(function ($event) {
         return [
             'id' => $event->id,
@@ -51,6 +56,27 @@
         min-height: 6.5rem;
     }
 
+    #parentFullCalendar .fc-daygrid-day-top {
+        position: relative;
+    }
+
+    #parentFullCalendar .calendar-paid-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #047857;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 2px 6px;
+        margin-left: auto;
+        margin-right: 2px;
+        margin-top: 2px;
+    }
+
     #parentFullCalendar .fc-col-header-cell-cushion,
     #parentFullCalendar .fc-daygrid-day-number {
         color: #334155;
@@ -88,9 +114,9 @@
 <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm lg:col-span-2">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-            <p class="text-xs uppercase tracking-wide text-emerald-500">Takwim sekolah</p>
-            <h3 class="text-lg font-semibold text-zinc-900">Aktiviti & program semasa</h3>
-            <p class="mt-1 text-sm text-zinc-500">Paparan bulan semasa. Klik pada aktiviti untuk melihat butiran penuh.</p>
+            <p class="text-xs uppercase tracking-wide text-emerald-500">{{ $calendarBlockLabel }}</p>
+            <h3 class="text-lg font-semibold text-zinc-900">{{ $calendarBlockTitle }}</h3>
+            <p class="mt-1 text-sm text-zinc-500">{{ $calendarBlockDescription }}</p>
         </div>
     </div>
 
@@ -124,6 +150,7 @@
         const modalNotes = document.getElementById('calendarModalNotes');
         const modalClose = document.getElementById('calendarModalClose');
         const events = @json($calendarEventsPayload);
+        const paidCountByDate = @json($paidCountByDate);
 
         if (!calendarEl || calendarEl.dataset.calendarReady === '1' || typeof FullCalendar === 'undefined') {
             return;
@@ -179,6 +206,26 @@
             firstDay: 1,
             navLinks: false,
             events: events,
+            dayCellDidMount(info) {
+                const year = info.date.getFullYear();
+                const month = String(info.date.getMonth() + 1).padStart(2, '0');
+                const day = String(info.date.getDate()).padStart(2, '0');
+                const key = `${year}-${month}-${day}`;
+                const paidCount = Number(paidCountByDate[key] || 0);
+                if (!paidCount) {
+                    return;
+                }
+
+                const dayTop = info.el.querySelector('.fc-daygrid-day-top');
+                if (!dayTop) {
+                    return;
+                }
+
+                const badge = document.createElement('span');
+                badge.className = 'calendar-paid-pill';
+                badge.textContent = `${paidCount} paid`;
+                dayTop.appendChild(badge);
+            },
             eventClick(info) {
                 info.jsEvent.preventDefault();
                 openModal(info.event);

@@ -64,9 +64,17 @@
                     <p class="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-700 sm:text-base">
                         {{ __('Masukkan nombor telefon anda untuk menerima kod TAC melalui WhatsApp.') }}
                     </p>
-                    <p class="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 sm:text-base">
-                        {{ __('Nota tambahan: Sila hubungi Sokongan Teknikal (+60 11-1105 5569) jika memerlukan bantuan.') }}
-                    </p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-zinc-600 sm:text-base">
+                        <span>{{ __('Nota tambahan: Perlukan bantuan TAC?') }}</span>
+                        <a
+                            href="https://wa.me/601111055569?text={{ rawurlencode('Assalamualaikum, saya perlukan bantuan log masuk TAC Parent Access PIBG.') }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 sm:text-sm"
+                        >
+                            WhatsApp Sokongan Teknikal
+                        </a>
+                    </div>
 
                     @if ($selectedBilling)
                         <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">

@@ -1,198 +1,105 @@
 ﻿<x-layouts::app :title="__('Dashboard')" class="space-y-6">
     @if ($role !== 'parent')
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <x-kpi-card title="Total Students" :value="number_format($totalStudents)" icon="user-group" />
-            <x-kpi-card title="Families tracked" :value="number_format($totalFamilies)" icon="building-office" />
-            <x-kpi-card title="Collected (RM)" :value="number_format($totalCollected, 2)" icon="banknotes" />
-            <x-kpi-card title="Payment completion" :value="$paymentCompletion . '%'" icon="chart-pie" />
+        <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <form method="GET" action="{{ route('dashboard') }}" class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-zinc-500">Dashboard filter</p>
+                    <h3 class="text-lg font-semibold text-zinc-900">Data year selector</h3>
+                </div>
+                <div class="flex items-end gap-2">
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Tahun data
+                        <select name="dashboard_year" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            @foreach ($dashboardYearOptions as $yearOption)
+                                <option value="{{ $yearOption }}" @selected((int) $yearOption === (int) $selectedDashboardYear)>{{ $yearOption }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+            </form>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="grid gap-4">
+            @include('partials.parent-calendar', [
+                'calendarEvents' => $calendarEvents,
+                'paidCountByDate' => $calendarPaidCountByDate,
+                'calendarBlockLabel' => 'Takwim sekolah',
+                'calendarBlockTitle' => "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})",
+                'calendarBlockDescription' => 'Angka hijau dalam hari menunjukkan jumlah keluarga yang sudah bayar pada tarikh tersebut.',
+            ])
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan yuran</p>
+                <h3 class="mt-2 text-3xl font-bold text-emerald-700">RM {{ number_format(min($totalCollected, $totalBilled), 2) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">Tahun {{ $selectedDashboardYear }}</p>
+            </article>
+            <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan sumbangan</p>
+                <h3 class="mt-2 text-3xl font-bold text-amber-600">RM {{ number_format(max(0, $totalCollected - ($totalBilled ?: 0)), 2) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">Tahun {{ $selectedDashboardYear }}</p>
+            </article>
+            <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah kutipan</p>
+                <h3 class="mt-2 text-3xl font-bold text-zinc-900">RM {{ number_format($totalCollected, 2) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">{{ $useLegacyKpiSource ? 'Sumber sejarah 2025' : 'Sumber transaksi portal' }}</p>
+            </article>
+            <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Keluarga berdaftar</p>
+                <h3 class="mt-2 text-3xl font-bold text-zinc-900">{{ number_format($totalFamilies) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">Pelajar {{ number_format($totalStudents) }}</p>
+            </article>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
             <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-xs uppercase tracking-wide text-zinc-500">Collection by class</p>
-                        <h3 class="text-lg font-semibold text-zinc-900">Kod keluarga paling aktif</h3>
+                        <h3 class="text-lg font-semibold text-zinc-900">Kutipan mengikut kelas (RM)</h3>
                     </div>
-                    <span class="text-xs text-emerald-500">RM {{ number_format($totalCollected, 2) }} collected</span>
+                    <span class="text-xs text-emerald-600">{{ $selectedDashboardYear }} · RM {{ number_format($totalCollected, 2) }}</span>
                 </div>
-                <div class="mt-4 h-52">
+                <div class="mt-4 h-64">
                     <canvas id="collectionByClassChart" class="h-full w-full"></canvas>
                 </div>
             </div>
 
             <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-xs uppercase tracking-wide text-zinc-500">Family status</p>
                         <h3 class="text-lg font-semibold text-zinc-900">Paid vs unpaid families</h3>
                     </div>
-                    <span class="text-xs text-zinc-500">{{ $totalFamilies }} families</span>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="text-xs font-semibold text-zinc-600">
+                            Class
+                            <select id="familyStatusClassFilter" class="mt-1 rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                @foreach ($statusFilterClasses as $classOption)
+                                    <option value="{{ $classOption }}">{{ $classOption }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </div>
                 </div>
-                <div class="mt-5 h-48">
+                <p id="familyStatusSummary" class="mt-2 text-xs text-zinc-500"></p>
+                <div class="mt-4 h-56">
                     <canvas id="familyStatusPieChart" class="h-full w-full"></canvas>
                 </div>
             </div>
-
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-xs uppercase tracking-wide text-zinc-500">Daily collection trend</p>
-                        <h3 class="text-lg font-semibold text-zinc-900">14-day rhythm</h3>
-                    </div>
-                    <span class="text-xs text-zinc-500">Last {{ count($dailyTrendLabels) }} days</span>
-                </div>
-                <div class="mt-5 h-48">
-                    <canvas id="dailyCollectionChart" class="h-full w-full"></canvas>
-                </div>
-            </div>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-                <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                    <header class="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-wide text-zinc-500">Family contributions</p>
-                            <h2 class="text-xl font-semibold text-zinc-900">Kod keluarga & status pembayaran</h2>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            <label class="text-xs font-semibold text-zinc-600">
-                                Carian
-                                <input id="familySearchInput" type="search" placeholder="Cari kod atau penjaga" class="mt-1 w-full rounded-2xl border border-zinc-200 px-3 py-1 text-xs focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
-                            </label>
-                            <label class="text-xs font-semibold text-zinc-600">
-                                Kelas
-                                <select id="familyClassFilter" class="mt-1 rounded-2xl border border-zinc-200 bg-white px-3 py-1 text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <option value="All">Semua kelas</option>
-                                    @foreach (collect($classChartLabels)->unique()->values() as $classOption)
-                                        @if ($classOption)
-                                            <option value="{{ $classOption }}">{{ $classOption }}</option>
-                                        @endif
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="text-xs font-semibold text-zinc-600">
-                                Status
-                                <select id="familyStatusFilter" class="mt-1 rounded-2xl border border-zinc-200 bg-white px-3 py-1 text-xs outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                                    <option value="All">Semua status</option>
-                                    @foreach (collect($familyContribution)->pluck('status')->unique() as $statusOption)
-                                        <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                        </div>
-                    </header>
-                    <div class="mt-4 overflow-x-auto">
-                        <table class="w-full text-left text-sm text-zinc-700">
-                            <thead class="text-xs uppercase tracking-wider text-zinc-500">
-                                <tr>
-                                    <th class="px-3 py-2">Kod keluarga</th>
-                                    <th class="px-3 py-2">Penjaga</th>
-                                    <th class="px-3 py-2 text-center">Bilangan anak</th>
-                                    <th class="px-3 py-2 text-right">Jumlah perlu bayar (RM)</th>
-                                    <th class="px-3 py-2">Status</th>
-                                    <th class="px-3 py-2 hidden md:table-cell">Komen</th>
-                                    <th class="px-3 py-2 text-center">Tindakan</th>
-                                </tr>
-                            </thead>
-                            <tbody id="familyContributionBody">
-                                @forelse ($familyContribution as $family)
-                                    <tr class="border-t border-zinc-100" data-family-row data-family-code="{{ $family['family_code'] }}" data-guardian="{{ $family['guardian'] }}" data-status="{{ $family['status'] }}" data-comment="{{ $family['comment'] }}" data-classes="{{ $family['classes'] }}" data-children="{{ e(json_encode($family['children_list'])) }}">
-                                        <td class="px-3 py-3 font-semibold text-zinc-900">{{ $family['family_code'] }}</td>
-                                        <td class="px-3 py-3">{{ $family['guardian'] }}</td>
-                                        <td class="px-3 py-3 text-center font-semibold text-zinc-900">{{ $family['children'] }}</td>
-                                        <td class="px-3 py-3 text-right font-semibold text-emerald-600">RM {{ number_format($family['amount_due'], 2) }}</td>
-                                        <td class="px-3 py-3">{{ $family['status'] }}</td>
-                                        <td class="px-3 py-3 hidden md:table-cell text-zinc-500">{{ $family['comment'] }}</td>
-                                        <td class="px-3 py-3 text-center">
-                                            <button type="button" data-details-button class="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Senarai anak</button>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="7" class="px-3 py-6 text-center text-xs text-zinc-500">Tiada rekod keluarga buat masa ini.</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
+        <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-zinc-500">Collection trend</p>
+                    <h3 class="text-lg font-semibold text-zinc-900">Trend kutipan bulanan</h3>
                 </div>
+                <span class="text-xs text-zinc-500">{{ $selectedDashboardYear }} (Jan-Dis)</span>
             </div>
-
-            <div class="space-y-4">
-                <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                    <header class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs uppercase tracking-wide text-zinc-500">Quick actions</p>
-                            <h3 class="text-lg font-semibold text-zinc-900">Accelerate collection</h3>
-                        </div>
-                    </header>
-                    <div class="mt-4 space-y-3">
-                        <a href="{{ route('students.import.form') }}" class="flex items-center justify-between rounded-2xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-900 hover:border-emerald-500 hover:text-emerald-600">
-                            <span>Tambah murid baharu</span>
-                            <span>â†—</span>
-                        </a>
-                        <form method="POST" action="{{ route('billing.setup.current-year') }}">
-                            @csrf
-                            <button type="submit" class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500">
-                                Jana bil keluarga ({{ now()->year }})
-                            </button>
-                        </form>
-                        <a href="{{ route('students.family.list') }}" class="flex items-center justify-between rounded-2xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-900 hover:border-emerald-500 hover:text-emerald-600">
-                            <span>Eksport laporan</span>
-                            <span>â¬‡</span>
-                        </a>
-                    </div>
-                </div>
-
-                <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-zinc-500">Recent activity</p>
-                    <h3 class="text-lg font-semibold text-zinc-900">Transaksi terkini</h3>
-                    <div class="mt-4 space-y-3">
-                        @forelse ($recentActivities as $activity)
-                            <article class="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-3 text-sm text-zinc-700">
-                                <div class="flex items-center justify-between">
-                                    <span class="font-semibold text-zinc-900">RM {{ number_format($activity->amount, 2) }}</span>
-                                    <span class="text-xs text-zinc-500">{{ $activity->paid_at?->format('d M Y') ?? 'â€”' }}</span>
-                                </div>
-                                <p class="text-xs text-zinc-500 mt-1">{{ $activity->familyBilling?->family_code ?? 'â€”' }}</p>
-                                <div class="mt-2 flex items-center justify-between text-xs">
-                                    <span>{{ ucfirst($activity->status) }}</span>
-                                    <a href="{{ route('parent.payments.receipt', $activity->external_order_id) }}" class="text-emerald-600 underline">Resit</a>
-                                </div>
-                            </article>
-                        @empty
-                            <p class="text-xs text-zinc-500">Belum ada aktiviti.</p>
-                        @endforelse
-                    </div>
-                </div>
-
-                <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                    <p class="text-xs uppercase tracking-wide text-zinc-500">Access logs</p>
-                    <h3 class="text-lg font-semibold text-zinc-900">Audit ringkas</h3>
-                    <div class="mt-3 space-y-2 text-xs text-zinc-600">
-                        @forelse ($accessLogs as $log)
-                            <p class="rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2">{{ $log }}</p>
-                        @empty
-                            <p class="rounded-2xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-emerald-500">Tiada log terbaru.</p>
-                        @endforelse
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="familyChildrenModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 px-4 py-6">
-            <div class="w-full max-w-xl rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl">
-                <header class="flex items-center justify-between">
-                    <div>
-                        <p class="text-xs uppercase tracking-wide text-zinc-500">Senarai anak</p>
-                        <h3 class="text-lg font-semibold text-zinc-900" id="familyModalTitle"></h3>
-                    </div>
-                    <button type="button" data-close-modal class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900">Tutup</button>
-                </header>
-                <p class="mt-2 text-sm text-zinc-500" id="familyModalComment"></p>
-                <div class="mt-4 space-y-3" id="familyModalChildrenList"></div>
+            <div class="mt-5 h-64">
+                <canvas id="dailyCollectionChart" class="h-full w-full"></canvas>
             </div>
         </div>
     @elseif ($role === 'parent')
@@ -288,17 +195,10 @@
                         data: {
                             labels: @json($classChartLabels),
                             datasets: [{
-                                label: 'Outstanding (RM)',
-                                data: @json($classChartOutstanding),
-                                backgroundColor: 'rgba(16, 185, 129, 0.65)',
-                                borderColor: 'rgba(16, 185, 129, 1)',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                            }, {
                                 label: 'Collected (RM)',
                                 data: @json($classChartCollected),
-                                backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(16, 185, 129, 0.65)',
+                                borderColor: 'rgba(16, 185, 129, 1)',
                                 borderWidth: 1,
                                 borderRadius: 6,
                             }],
@@ -316,12 +216,17 @@
 
                 const pieCanvas = document.getElementById('familyStatusPieChart');
                 if (pieCanvas) {
-                    new Chart(pieCanvas, {
+                    const familyStatusClassFilter = document.getElementById('familyStatusClassFilter');
+                    const familyStatusSummary = document.getElementById('familyStatusSummary');
+                    const familyStatusByYearClass = @json($familyStatusByYearClass);
+                    const selectedStatusFilterYear = @json($selectedStatusFilterYear);
+
+                    const pieChart = new Chart(pieCanvas, {
                         type: 'doughnut',
                         data: {
-                            labels: @json($pieChartLabels),
+                            labels: ['Paid', 'Unpaid'],
                             datasets: [{
-                                data: @json($pieChartValues),
+                                data: [0, 0],
                                 backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(244, 114, 182, 0.8)'],
                             }],
                         },
@@ -331,6 +236,28 @@
                             plugins: { legend: { position: 'bottom' } },
                         },
                     });
+
+                    const updateFamilyStatusPie = () => {
+                        const selectedYear = selectedStatusFilterYear || '';
+                        const selectedClass = familyStatusClassFilter?.value || 'All';
+                        const yearData = familyStatusByYearClass[selectedYear] || {};
+                        const classData = yearData[selectedClass] || { paid: 0, unpaid: 0 };
+                        const paid = Number(classData.paid || 0);
+                        const unpaid = Number(classData.unpaid || 0);
+                        const total = paid + unpaid;
+
+                        pieChart.data.datasets[0].data = [paid, unpaid];
+                        pieChart.update();
+
+                        if (familyStatusSummary) {
+                            familyStatusSummary.textContent = total > 0
+                                ? `${selectedYear} · ${selectedClass} · ${paid} paid / ${unpaid} unpaid families`
+                                : `${selectedYear} · ${selectedClass} · Tiada rekod keluarga`;
+                        }
+                    };
+
+                    familyStatusClassFilter?.addEventListener('change', updateFamilyStatusPie);
+                    updateFamilyStatusPie();
                 }
 
                 const lineCanvas = document.getElementById('dailyCollectionChart');
@@ -359,84 +286,6 @@
                     });
                 }
 
-                const searchInput = document.getElementById('familySearchInput');
-                const classFilter = document.getElementById('familyClassFilter');
-                const statusFilter = document.getElementById('familyStatusFilter');
-                const rows = document.querySelectorAll('[data-family-row]');
-
-                function applyFamilyFilters() {
-                    const search = searchInput?.value.trim().toLowerCase() ?? '';
-                    const selectedClass = classFilter?.value;
-                    const selectedStatus = statusFilter?.value;
-
-                    rows.forEach((row) => {
-                        const code = row.dataset.familyCode?.toLowerCase() ?? '';
-                        const guardian = row.dataset.guardian?.toLowerCase() ?? '';
-                        const comment = row.dataset.comment?.toLowerCase() ?? '';
-                        const classes = row.dataset.classes ? row.dataset.classes.split(',').map((value) => value.trim()) : [];
-
-                        const matchesSearch = !search || code.includes(search) || guardian.includes(search) || comment.includes(search);
-                        const matchesClass = !selectedClass || selectedClass === 'All' || classes.includes(selectedClass);
-                        const matchesStatus = !selectedStatus || selectedStatus === 'All' || row.dataset.status === selectedStatus;
-
-                        row.style.display = matchesSearch && matchesClass && matchesStatus ? '' : 'none';
-                    });
-                }
-
-                if (searchInput) searchInput.addEventListener('input', applyFamilyFilters);
-                if (classFilter) classFilter.addEventListener('change', applyFamilyFilters);
-                if (statusFilter) statusFilter.addEventListener('change', applyFamilyFilters);
-
-                const modal = document.getElementById('familyChildrenModal');
-                const modalTitle = document.getElementById('familyModalTitle');
-                const modalChildrenList = document.getElementById('familyModalChildrenList');
-                const modalComment = document.getElementById('familyModalComment');
-                const closeButton = modal?.querySelector('[data-close-modal]');
-                const detailButtons = document.querySelectorAll('[data-details-button]');
-
-                function openModal(familyCode, comment, children) {
-                    if (!modal) return;
-
-                    modalTitle.textContent = familyCode;
-                    modalComment.textContent = comment || 'Tiada komen tambahan.';
-                    modalChildrenList.innerHTML = '';
-
-                    if (!children.length) {
-                        modalChildrenList.innerHTML = '<p class="text-sm text-zinc-500">Tiada murid didaftarkan.</p>';
-                    } else {
-                        children.forEach((child) => {
-                            const item = document.createElement('div');
-                            item.className = 'rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-700';
-                            item.innerHTML = `<p class="font-semibold text-zinc-900">${child.full_name}</p><p class="text-xs text-zinc-500">${child.class_name} Â· ${child.status}</p>`;
-                            modalChildrenList.append(item);
-                        });
-                    }
-
-                    modal.classList.remove('hidden');
-                }
-
-                detailButtons.forEach((button) => {
-                    button.addEventListener('click', () => {
-                        const row = button.closest('[data-family-row]');
-                        if (!row) return;
-                        const familyCode = row.dataset.familyCode;
-                        const comment = row.dataset.comment;
-                        const children = JSON.parse(row.dataset.children || '[]');
-                        openModal(familyCode, comment, children);
-                    });
-                });
-
-                closeButton?.addEventListener('click', () => {
-                    modal?.classList.add('hidden');
-                });
-
-                modal?.addEventListener('click', (event) => {
-                    if (event.target === modal) {
-                        modal.classList.add('hidden');
-                    }
-                });
-
-
                 const parentMessageInput = document.getElementById('parentMessageInput');
                 const parentMessageCounter = document.getElementById('parentMessageCounter');
 
@@ -456,4 +305,3 @@
         </script>
     @endonce
 </x-layouts::app>
-

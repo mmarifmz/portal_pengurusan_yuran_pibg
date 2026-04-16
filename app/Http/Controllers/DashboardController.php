@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\LegacyStudentPayment;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\SchoolCalendarEvent;
 use App\Models\Student;
@@ -10,7 +11,6 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -21,111 +21,268 @@ class DashboardController extends Controller
         $role = $user?->isParent() ? 'parent' : 'staff';
         $billingYear = now()->year;
 
+        $yearOptions = collect()
+            ->merge(FamilyBilling::query()->distinct()->pluck('billing_year'))
+            ->merge(LegacyStudentPayment::query()->distinct()->pluck('source_year'))
+            ->merge([now()->year])
+            ->filter(fn ($year) => is_numeric($year))
+            ->map(fn ($year) => (int) $year)
+            ->unique()
+            ->sortDesc()
+            ->values();
+
+        if ($yearOptions->isEmpty()) {
+            $yearOptions = collect([now()->year]);
+        }
+
+        $selectedDashboardYear = (int) $request->integer('dashboard_year', (int) $yearOptions->first());
+        if (! $yearOptions->contains($selectedDashboardYear)) {
+            $selectedDashboardYear = (int) $yearOptions->first();
+        }
+
         $familyBillings = FamilyBilling::with('students')
-            ->where('billing_year', $billingYear)
+            ->where('billing_year', $selectedDashboardYear)
             ->orderBy('family_code')
             ->get();
 
-        $students = Student::where('billing_year', $billingYear)
+        $students = Student::where('billing_year', $selectedDashboardYear)
             ->orderBy('family_code')
             ->orderBy('class_name')
             ->orderBy('full_name')
             ->get();
 
+        $legacyPayments = LegacyStudentPayment::query()
+            ->where('source_year', $selectedDashboardYear)
+            ->where('payment_status', 'paid')
+            ->get();
+
+        $useLegacyKpiSource = $familyBillings->isEmpty() && $legacyPayments->isNotEmpty();
+        $legacyPaymentTransactions = collect();
+        if ($legacyPayments->isNotEmpty()) {
+            $legacyPaymentTransactions = $legacyPayments
+                ->groupBy(function (LegacyStudentPayment $payment): string {
+                    $reference = trim((string) $payment->payment_reference);
+                    if ($reference !== '') {
+                        return $reference;
+                    }
+
+                    return sprintf(
+                        'FAM:%s|PAID:%s|PAIDAMT:%0.2f',
+                        (string) $payment->family_code,
+                        optional($payment->paid_at)->format('Y-m-d H:i:s') ?? '-',
+                        (float) $payment->amount_paid
+                    );
+                })
+                ->map(function ($group) {
+                    /** @var \Illuminate\Support\Collection<int, \App\Models\LegacyStudentPayment> $group */
+                    $first = $group->first();
+                    $className = (string) ($group->pluck('class_name')
+                        ->filter()
+                        ->countBy()
+                        ->sortDesc()
+                        ->keys()
+                        ->first() ?? ($first?->class_name ?: 'Unassigned'));
+                    return [
+                        'paid_at' => $group->pluck('paid_at')->filter()->sort()->first() ?? $first?->paid_at,
+                        'amount_paid' => (float) $group->max('amount_paid'),
+                        'amount_due' => (float) $group->max('amount_due'),
+                        'donation_amount' => (float) $group->max('donation_amount'),
+                        'family_code' => (string) ($first?->family_code ?? ''),
+                        'class_name' => $className !== '' ? $className : 'Unassigned',
+                    ];
+                })
+                ->values();
+        }
+
         $totalFamilies = $familyBillings->count();
         $totalStudents = $students->count();
-        $totalCollected = (float) $familyBillings->sum('paid_amount');
-        $totalOutstanding = (float) $familyBillings->sum(fn (FamilyBilling $billing) => $billing->outstanding_amount);
-        $totalBilled = (float) $familyBillings->sum('fee_amount');
+        $totalCollected = $useLegacyKpiSource
+            ? (float) $legacyPaymentTransactions->sum('amount_paid')
+            : (float) $familyBillings->sum('paid_amount');
+        $totalBilled = $useLegacyKpiSource
+            ? (float) $legacyPaymentTransactions->sum('amount_due')
+            : (float) $familyBillings->sum('fee_amount');
+        $totalOutstanding = $useLegacyKpiSource
+            ? max(0, $totalBilled - $totalCollected)
+            : (float) $familyBillings->sum(fn (FamilyBilling $billing) => $billing->outstanding_amount);
+
+        if ($useLegacyKpiSource) {
+            $totalFamilies = (int) $legacyPaymentTransactions->pluck('family_code')->filter()->unique()->count();
+            $totalStudents = (int) $legacyPayments->pluck('student_name')->filter()->unique()->count();
+        }
+
         $fullyPaid = $familyBillings->filter(fn (FamilyBilling $billing) => $billing->outstanding_amount <= 0)->count();
         $paymentCompletion = $totalFamilies > 0 ? (int) round(($fullyPaid / $totalFamilies) * 100) : 0;
 
-        $classStats = $students->groupBy(fn (Student $student) => $student->class_name ?: 'Unassigned')
-            ->map(fn ($group, string $className) => [
-                'class_name' => $className,
-                'students' => $group->count(),
-                'outstanding' => $group->sum(fn (Student $student) => $student->total_fee - $student->paid_amount),
-                'total_fee' => $group->sum('total_fee'),
-            ])
-            ->sortByDesc('students')
-            ->values()
-            ->toArray();
-
-        $classChartLabels = collect($classStats)->pluck('class_name')->map(fn ($label) => (string) $label)->toArray();
-        $classChartOutstanding = collect($classStats)->pluck('outstanding')->map(fn ($value) => round($value, 2))->toArray();
-        $classChartCollected = collect($classStats)->map(fn ($item) => round(max(0, $item['total_fee'] - $item['outstanding']), 2))->toArray();
-
-        $monthlyTotals = FamilyPaymentTransaction::query()
-            ->whereYear('paid_at', $billingYear)
-            ->whereNotNull('paid_at')
-            ->get()
-            ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('M'))
-            ->map(fn ($group) => $group->sum('amount'));
-
-        $monthlyLabels = [];
-        $monthlyValues = [];
-        for ($month = 1; $month <= 12; $month++) {
-            $label = Carbon::create($billingYear, $month, 1)->format('M');
-            $monthlyLabels[] = $label;
-            $monthlyValues[] = round($monthlyTotals->get($label, 0), 2);
+        if ($useLegacyKpiSource) {
+            $classCollection = $legacyPaymentTransactions
+                ->groupBy(fn (array $payment) => (string) ($payment['class_name'] ?? 'Unassigned'))
+                ->map(fn ($group, string $className) => [
+                    'class_name' => $className,
+                    'collected' => round((float) $group->sum('amount_paid'), 2),
+                ])
+                ->sortByDesc('collected')
+                ->values();
+        } else {
+            $classCollection = $students->groupBy(fn (Student $student) => $student->class_name ?: 'Unassigned')
+                ->map(fn ($group, string $className) => [
+                    'class_name' => $className,
+                    'collected' => round((float) $group->sum('paid_amount'), 2),
+                ])
+                ->sortByDesc('collected')
+                ->values();
         }
 
-        $dailyWindowStart = now()->subDays(13)->startOfDay();
-        $dailyWindowLabels = collect(range(0, 13))->mapWithKeys(function (int $offset) use ($dailyWindowStart) {
-            $date = $dailyWindowStart->copy()->addDays($offset);
-            return [$date->format('Y-m-d') => $date->format('d M')];
-        });
+        $classChartLabels = $classCollection->pluck('class_name')->map(fn ($label) => (string) $label)->toArray();
+        $classChartCollected = $classCollection->pluck('collected')->toArray();
 
-        $dailyThen = FamilyPaymentTransaction::query()
-            ->whereBetween('paid_at', [$dailyWindowStart, now()->endOfDay()])
-            ->whereNotNull('paid_at')
-            ->get()
-            ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
-            ->map(fn ($group) => $group->sum('amount'));
+        $trendMonthLabels = collect(range(1, 12))
+            ->map(fn (int $month): string => Carbon::create($selectedDashboardYear, $month, 1)->format('M'))
+            ->values();
 
-        $dailyTrendLabels = $dailyWindowLabels->values()->toArray();
-        $dailyTrendValues = $dailyWindowLabels->keys()
-            ->map(fn (string $key) => round($dailyThen->get($key, 0), 2))
+        if ($useLegacyKpiSource) {
+            $monthlyPaid = $legacyPaymentTransactions
+                ->filter(fn (array $payment) => ($payment['paid_at'] ?? null) !== null)
+                ->groupBy(fn (array $payment) => $payment['paid_at']->format('n'))
+                ->map(fn ($group) => (float) $group->sum('amount_paid'));
+
+            $calendarPaidCountByDate = $legacyPaymentTransactions
+                ->filter(fn (array $payment) => ($payment['paid_at'] ?? null) !== null)
+                ->groupBy(fn (array $payment) => $payment['paid_at']->format('Y-m-d'))
+                ->map(fn ($group) => $group->count())
+                ->toArray();
+        } else {
+            $selectedYearTransactions = FamilyPaymentTransaction::query()
+                ->where('status', 'success')
+                ->whereYear('paid_at', $selectedDashboardYear)
+                ->whereNotNull('paid_at')
+                ->get();
+
+            $monthlyPaid = $selectedYearTransactions
+                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('n'))
+                ->map(fn ($group) => (float) $group->sum('amount'));
+
+            $calendarPaidCountByDate = $selectedYearTransactions
+                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
+                ->map(fn ($group) => $group->count())
+                ->toArray();
+        }
+
+        $dailyTrendLabels = $trendMonthLabels->toArray();
+        $dailyTrendValues = collect(range(1, 12))
+            ->map(fn (int $month): float => round((float) $monthlyPaid->get((string) $month, $monthlyPaid->get($month, 0)), 2))
             ->values()
             ->toArray();
 
-        $paidFamilies = $fullyPaid;
-        $pieData = [
-            'Paid' => $paidFamilies,
-            'Unpaid' => max(0, $familyBillings->count() - $paidFamilies),
-        ];
-
-        $familyContribution = $familyBillings->map(function (FamilyBilling $billing) {
-            $students = $billing->students;
-
-            return [
-                'family_code' => $billing->family_code,
-                'guardian' => $students->pluck('parent_name')->filter()->first() ?? 'â€”',
-                'children' => $students->count(),
-                'classes' => $students->pluck('class_name')->filter()->unique()->join(', '),
-                'amount_due' => (float) $billing->fee_amount,
-                'status' => Str::title($billing->status),
-                'comment' => $this->familyComment($billing),
-                'children_list' => $students->map(fn (Student $student) => [
-                    'full_name' => $student->full_name,
-                    'class_name' => $student->class_name,
-                    'status' => $student->status,
-                ])->values()->toArray(),
-            ];
-        })->values();
-
-        $recentActivities = FamilyPaymentTransaction::query()
-            ->with('familyBilling')
-            ->latest('paid_at')
-            ->limit(5)
+        $familyBillingsAllYears = FamilyBilling::query()
+            ->with('students')
+            ->orderByDesc('billing_year')
             ->get();
+
+        $familyStatusByYearClass = [];
+        foreach ($familyBillingsAllYears as $billing) {
+            $yearKey = (string) $billing->billing_year;
+            $isPaid = (float) $billing->outstanding_amount <= 0;
+            $statusKey = $isPaid ? 'paid' : 'unpaid';
+
+            $familyClasses = $billing->students
+                ->pluck('class_name')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($familyClasses->isEmpty()) {
+                $familyClasses = collect(['Unassigned']);
+            }
+
+            if (! isset($familyStatusByYearClass[$yearKey]['All'])) {
+                $familyStatusByYearClass[$yearKey]['All'] = ['paid' => 0, 'unpaid' => 0];
+            }
+            $familyStatusByYearClass[$yearKey]['All'][$statusKey]++;
+
+            foreach ($familyClasses as $className) {
+                $classKey = (string) $className;
+                if (! isset($familyStatusByYearClass[$yearKey][$classKey])) {
+                    $familyStatusByYearClass[$yearKey][$classKey] = ['paid' => 0, 'unpaid' => 0];
+                }
+                $familyStatusByYearClass[$yearKey][$classKey][$statusKey]++;
+            }
+        }
+
+        $statusFilterYears = collect($familyBillingsAllYears->pluck('billing_year'))
+            ->map(fn ($year) => (string) $year)
+            ->unique()
+            ->sortDesc()
+            ->values()
+            ->toArray();
+
+        if (empty($statusFilterYears)) {
+            $statusFilterYears = [(string) $billingYear];
+        }
+
+        $legacyStatusByClassByYear = [];
+        $legacyStatusYears = $legacyPayments->pluck('source_year')->map(fn ($year) => (string) $year)->unique()->values()->toArray();
+
+        foreach ($legacyStatusYears as $legacyYear) {
+            $rows = LegacyStudentPayment::query()
+                ->where('source_year', (int) $legacyYear)
+                ->where('payment_status', 'paid')
+                ->get();
+
+            if ($rows->isEmpty()) {
+                continue;
+            }
+
+            $allFamilies = $rows->pluck('family_code')->filter()->unique()->count();
+            $legacyStatusByClassByYear[$legacyYear]['All'] = ['paid' => (int) $allFamilies, 'unpaid' => 0];
+
+            $rowsByClass = $rows->groupBy(fn (LegacyStudentPayment $row) => (string) ($row->class_name ?: 'Unassigned'));
+            foreach ($rowsByClass as $className => $classRows) {
+                $legacyStatusByClassByYear[$legacyYear][$className] = [
+                    'paid' => (int) $classRows->pluck('family_code')->filter()->unique()->count(),
+                    'unpaid' => 0,
+                ];
+            }
+        }
+
+        foreach ($legacyStatusByClassByYear as $yearKey => $legacyClassStatus) {
+            if (! isset($familyStatusByYearClass[$yearKey])) {
+                $familyStatusByYearClass[$yearKey] = $legacyClassStatus;
+            }
+        }
+
+        $statusFilterClasses = Student::query()
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->pluck('class_name')
+            ->merge(
+                LegacyStudentPayment::query()
+                    ->whereNotNull('class_name')
+                    ->where('class_name', '!=', '')
+                    ->pluck('class_name')
+            )
+            ->map(fn ($class) => (string) $class)
+            ->unique()
+            ->sort()
+            ->values()
+            ->prepend('All')
+            ->toArray();
+
+        $defaultStatusFilterYear = in_array((string) $billingYear, $statusFilterYears, true)
+            ? (string) $billingYear
+            : $statusFilterYears[0];
+
+        $selectedStatusFilterYear = (string) $selectedDashboardYear;
+        if (! in_array($selectedStatusFilterYear, $statusFilterYears, true)) {
+            $statusFilterYears[] = $selectedStatusFilterYear;
+            rsort($statusFilterYears);
+        }
 
         $transactionsForParent = $this->parentTransactions($user);
         $transactionsByYear = $transactionsForParent
             ->filter(fn (FamilyPaymentTransaction $transaction) => $transaction->status === 'success')
             ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at?->year ?? now()->year);
 
-        $accessLogs = $this->recentAccessEntries();
         $calendarEvents = SchoolCalendarEvent::query()
             ->orderBy('start_date')
             ->orderBy('sort_order')
@@ -133,25 +290,25 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'role' => $role,
+            'dashboardYearOptions' => $yearOptions->toArray(),
+            'selectedDashboardYear' => $selectedDashboardYear,
+            'useLegacyKpiSource' => $useLegacyKpiSource,
             'totalFamilies' => $totalFamilies,
             'totalStudents' => $totalStudents,
             'totalCollected' => $totalCollected,
             'totalOutstanding' => $totalOutstanding,
             'totalBilled' => $totalBilled,
             'paymentCompletion' => $paymentCompletion,
-            'classStats' => $classStats,
             'classChartLabels' => $classChartLabels,
-            'classChartOutstanding' => $classChartOutstanding,
             'classChartCollected' => $classChartCollected,
-            'monthlyLabels' => $monthlyLabels,
-            'monthlyValues' => $monthlyValues,
             'dailyTrendLabels' => $dailyTrendLabels,
             'dailyTrendValues' => $dailyTrendValues,
-            'pieChartLabels' => array_keys($pieData),
-            'pieChartValues' => array_values($pieData),
-            'familyContribution' => $familyContribution,
-            'recentActivities' => $recentActivities,
-            'accessLogs' => $accessLogs,
+            'calendarPaidCountByDate' => $calendarPaidCountByDate,
+            'familyStatusByYearClass' => $familyStatusByYearClass,
+            'statusFilterYears' => $statusFilterYears,
+            'statusFilterClasses' => $statusFilterClasses,
+            'defaultStatusFilterYear' => $defaultStatusFilterYear,
+            'selectedStatusFilterYear' => $selectedStatusFilterYear,
             'transactions' => $transactionsForParent,
             'transactionsByYear' => $transactionsByYear,
             'calendarEvents' => $calendarEvents,
@@ -229,42 +386,6 @@ Portal Yuran:
         return $transactions;
     }
 
-    private function familyComment(FamilyBilling $billing): string
-    {
-        $comments = [];
-
-        if ($billing->notes) {
-            $comments[] = Str::headline($billing->notes);
-        }
-
-        if ($billing->students->contains(fn (Student $student) => blank($student->parent_phone) && blank($student->parent_email))) {
-            $comments[] = 'Missing parent contact';
-        }
-
-        if ($billing->outstanding_amount > 0 && $billing->paid_amount > 0) {
-            $comments[] = 'Partial payment';
-        }
-
-        if ($billing->status === 'unpaid') {
-            $comments[] = 'Awaiting payment';
-        }
-
-        return $comments ? implode(', ', array_unique($comments)) : 'â€”';
-    }
-
-    private function recentAccessEntries(): array
-    {
-        $path = storage_path('logs/laravel.log');
-
-        if (! File::exists($path)) {
-            return [];
-        }
-
-        $lines = array_filter(array_map('trim', array_slice(array_reverse(file($path)), 0, 5)));
-
-        return $lines;
-    }
-
     private function normalizeWaPhone(string $phone): string
     {
         $digits = preg_replace('/\\D+/', '', $phone) ?? '';
@@ -288,5 +409,3 @@ Portal Yuran:
         return $digits;
     }
 }
-
-

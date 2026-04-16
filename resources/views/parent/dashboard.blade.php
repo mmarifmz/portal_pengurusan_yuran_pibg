@@ -241,5 +241,50 @@
                 </table>
             </div>
         </section>
+
+        <section class="portal-card overflow-hidden">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
+                <h2 class="portal-table-title text-lg font-bold">Sejarah Bayaran Tahun Lepas (Imported)</h2>
+                <p class="mt-1 text-sm text-zinc-600">Rujukan bayaran berstatus paid dari portal tahun lepas.</p>
+                <p class="mt-2 text-xs font-semibold text-zinc-700">
+                    Total paid: RM {{ number_format($legacyPaidTotal ?? 0, 2) }}
+                    <span class="mx-2">|</span>
+                    Total sumbangan: RM {{ number_format($legacyDonationTotal ?? 0, 2) }}
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-white">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <th class="px-6 py-4">Tarikh Bayar</th>
+                            <th class="px-6 py-4">Rujukan</th>
+                            <th class="px-6 py-4">Anak</th>
+                            <th class="px-6 py-4">Kelas</th>
+                            <th class="px-6 py-4 text-right">Jumlah (RM)</th>
+                            <th class="px-6 py-4 text-right">Sumbangan (RM)</th>
+                            <th class="px-6 py-4">Tahun</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                        @forelse (($legacyPayments ?? collect()) as $legacyPayment)
+                            <tr>
+                                <td class="px-6 py-5">{{ $legacyPayment->paid_at?->format('d M Y H:i') ?: '-' }}</td>
+                                <td class="px-6 py-5 font-mono text-xs">{{ $legacyPayment->payment_reference ?: '-' }}</td>
+                                <td class="px-6 py-5 font-medium">{{ $legacyPayment->student_name }}</td>
+                                <td class="px-6 py-5">{{ $legacyPayment->class_name ?: '-' }}</td>
+                                <td class="px-6 py-5 text-right">{{ number_format((float) $legacyPayment->amount_paid, 2) }}</td>
+                                <td class="px-6 py-5 text-right">{{ number_format((float) $legacyPayment->donation_amount, 2) }}</td>
+                                <td class="px-6 py-5">{{ $legacyPayment->source_year }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-6 py-10 text-center text-zinc-500">Tiada data bayaran tahun lepas yang diimport lagi.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
 </x-layouts::app>

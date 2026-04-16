@@ -34,9 +34,8 @@ class ParentOtpAuthController extends Controller
         return view('parent.auth.request-pin', [
             'prefillPhone' => (string) $request->query('phone', ''),
             'selectedBilling' => $selectedBilling,
-            'showPaidFamilyPhoneReset' => $selectedBilling
-                && $request->session()->get('offer_paid_family_phone_reset') === true
-                && (int) $request->session()->get('paid_family_phone_reset_billing_id') === (int) $selectedBilling->id,
+            // Temporarily hidden while we redesign tukar nombor telefon flow.
+            'showPaidFamilyPhoneReset' => false,
             'paidFamilyResetPhone' => (string) $request->session()->get('paid_family_phone_reset_phone', ''),
         ]);
     }
@@ -70,21 +69,11 @@ class ParentOtpAuthController extends Controller
             if ($confirmPhoneReset && $this->familyBillingAllowsPhoneReset($selectedBilling)) {
                 $parent = $this->resetPaidFamilyPhone($phone, $selectedBilling);
             } else {
-                $response = back()->withErrors([
+                return back()->withErrors([
                     'phone' => $this->familyBillingAllowsPhoneReset($selectedBilling)
-                        ? 'This phone number does not match the paid family record yet. If this is the correct new number, use the reset button below.'
+                        ? 'Phone number does not match this family billing record yet. Please contact admin for phone update.'
                         : 'Phone number does not match this family billing record.',
                 ])->withInput();
-
-                if ($this->familyBillingAllowsPhoneReset($selectedBilling)) {
-                    $response->with([
-                        'offer_paid_family_phone_reset' => true,
-                        'paid_family_phone_reset_phone' => $phone,
-                        'paid_family_phone_reset_billing_id' => $selectedBilling->id,
-                    ]);
-                }
-
-                return $response;
             }
         }
 
@@ -124,7 +113,7 @@ class ParentOtpAuthController extends Controller
         ]);
 
         try {
-            $this->dispatchTac($parent, $code);
+            $this->dispatchTac($parent, $code, $selectedBilling);
         } catch (\Throwable $exception) {
             $otp->update(['used_at' => now()]);
 
@@ -240,9 +229,17 @@ class ParentOtpAuthController extends Controller
         return redirect()->route('parent.dashboard');
     }
 
-    private function dispatchTac(User $parent, string $code): void
+    private function dispatchTac(User $parent, string $code, ?FamilyBilling $selectedBilling = null): void
     {
-        $this->whatsAppTacSender->sendTac((string) $parent->phone, $code);
+        $familyCode = $selectedBilling?->family_code
+            ?? Student::query()
+                ->where('parent_phone', (string) $parent->phone)
+                ->whereNotNull('family_code')
+                ->where('family_code', '!=', '')
+                ->orderBy('family_code')
+                ->value('family_code');
+
+        $this->whatsAppTacSender->sendTac((string) $parent->phone, $code, $familyCode);
 
         if (blank($parent->email)) {
             return;
@@ -422,4 +419,3 @@ class ParentOtpAuthController extends Controller
         ]);
     }
 }
-

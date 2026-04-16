@@ -4,47 +4,60 @@
         $duplicateRecordsUrl = route('teacher.records', array_filter([
             'record_filter' => 'duplicates',
             'class_name' => $selectedClass ?: null,
+            'family_code' => $familyCodeQuery ?: null,
+            'student_name' => $studentNameQuery ?: null,
         ]));
-        $withoutFamilyUrl = route('teacher.records', array_filter([
-            'record_filter' => 'without-family',
+        $registeredParentUrl = route('teacher.records', array_filter([
+            'record_filter' => 'registered-parent',
             'class_name' => $selectedClass ?: null,
+            'family_code' => $familyCodeQuery ?: null,
+            'student_name' => $studentNameQuery ?: null,
         ]));
         $allClassesUrl = route('teacher.records', array_filter([
             'record_filter' => $recordFilter ?: null,
+            'family_code' => $familyCodeQuery ?: null,
+            'student_name' => $studentNameQuery ?: null,
         ]));
     @endphp
 
     <div class="space-y-8">
         <div class="flex flex-col gap-1">
-            <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Billing Intelligence</p>
             <h1 class="text-2xl font-bold text-gray-900">Student &amp; Family Lists {{ $billingYear }}</h1>
             <p class="text-sm text-gray-500">A combined view of every student record and the families currently tracked for {{ $billingYear }}.</p>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm text-zinc-500">Yuran Collection</p>
-                <p class="mt-2 text-3xl font-semibold text-emerald-600">RM {{ number_format($yuranCollection, 2) }}</p>
-                <p class="mt-1 text-xs text-zinc-500">Jumlah kutipan yuran berjaya direkodkan.</p>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-sm text-zinc-500">Total Students</p>
+                <p class="mt-2 text-3xl font-semibold">{{ number_format($studentCount) }}</p>
             </div>
-
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm text-zinc-500">Sumbangan Collection</p>
-                <p class="mt-2 text-3xl font-semibold text-sky-600">RM {{ number_format($sumbanganCollection, 2) }}</p>
-                <p class="mt-1 text-xs text-zinc-500">Jumlah sumbangan tambahan daripada transaksi berjaya.</p>
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-sm text-zinc-500">Total Families</p>
+                <p class="mt-2 text-3xl font-semibold">{{ number_format($familiesCount) }}</p>
             </div>
-
-            <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-sm text-zinc-500">Registered Parent</p>
-                <p class="mt-2 text-3xl font-semibold text-zinc-900">{{ number_format($registeredParentCount) }}</p>
-                <p class="mt-1 text-xs text-zinc-500">Bilangan parent yang berjaya log masuk menggunakan TAC.</p>
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-sm text-zinc-500">Billed (RM)</p>
+                <p class="mt-2 text-3xl font-semibold">{{ number_format($totalBilled, 2) }}</p>
             </div>
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-sm text-zinc-500">Collected (RM)</p>
+                <p class="mt-2 text-3xl font-semibold text-emerald-600">{{ number_format($totalCollected, 2) }}</p>
+            </div>
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-sm text-zinc-500">Outstanding (RM)</p>
+                <p class="mt-2 text-3xl font-semibold text-rose-600">{{ number_format($totalOutstanding, 2) }}</p>
+            </div>
+        </div>
 
-            <a href="{{ $duplicateRecordsUrl }}" class="block rounded-2xl border {{ $recordFilter === 'duplicates' ? 'border-amber-300 ring-2 ring-amber-100' : 'border-amber-200' }} bg-amber-50 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:col-span-2 lg:col-span-3">
-                <p class="text-sm text-amber-700">Duplicate candidates</p>
-                <p class="mt-2 text-3xl font-semibold text-amber-800">{{ number_format($duplicateCount) }}</p>
-                <p class="mt-1 text-xs text-amber-700">Review before deleting any duplicate record</p>
-            </a>
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <p class="text-sm text-zinc-600">Billing year: <span class="font-semibold">{{ $billingYear }}</span> | Paid families: <span class="font-semibold">{{ $familiesPaid }}</span> | Duplicate candidates: <span class="font-semibold">{{ number_format($duplicateCount) }}</span></p>
+            <form method="POST" action="{{ route('billing.setup.current-year') }}">
+                @csrf
+                <input type="hidden" name="billing_year" value="{{ $billingYear }}">
+                <button type="submit" class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                    Setup/Sync RM100 Family Billing
+                </button>
+            </form>
         </div>
 
         <section class="space-y-4">
@@ -57,6 +70,56 @@
             </div>
 
             <div class="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <form method="GET" action="{{ route('teacher.records') }}" class="grid gap-3 md:grid-cols-2">
+                    @if ($recordFilter !== '')
+                        <input type="hidden" name="record_filter" value="{{ $recordFilter }}">
+                    @endif
+                    @if ($selectedClass !== '')
+                        <input type="hidden" name="class_name" value="{{ $selectedClass }}">
+                    @endif
+
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Search family code
+                        <input
+                            type="search"
+                            name="family_code"
+                            value="{{ $familyCodeQuery }}"
+                            placeholder="Contoh: SSP-0001"
+                            class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Search student full name
+                        <input
+                            type="search"
+                            name="student_name"
+                            value="{{ $studentNameQuery }}"
+                            placeholder="Contoh: NUR AISHA"
+                            class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        @if ($studentNameTooShort)
+                            <span class="mt-1 block text-[11px] font-medium text-amber-700">Masukkan sekurang-kurangnya 3 aksara untuk carian nama.</span>
+                        @else
+                            <span class="mt-1 block text-[11px] font-medium text-zinc-500">Minimum 3 aksara untuk carian nama.</span>
+                        @endif
+                    </label>
+
+                    <div class="md:col-span-2 flex items-center gap-2">
+                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                            Search
+                        </button>
+                        @if ($familyCodeQuery !== '' || $studentNameQuery !== '')
+                            <a href="{{ route('teacher.records', array_filter([
+                                'record_filter' => $recordFilter ?: null,
+                                'class_name' => $selectedClass ?: null,
+                            ])) }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
+                                Clear search
+                            </a>
+                        @endif
+                    </div>
+                </form>
+
                 <div class="flex flex-wrap items-center gap-2">
                     <a
                         href="{{ $allRecordsUrl }}"
@@ -71,10 +134,10 @@
                         Duplicate only
                     </a>
                     <a
-                        href="{{ $withoutFamilyUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'without-family' ? 'border-rose-600 bg-rose-600 text-white' : 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' }}"
+                        href="{{ $registeredParentUrl }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'registered-parent' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50' }}"
                     >
-                        Missing family code
+                        Parent is registered
                     </a>
                     @if ($filtersActive)
                         <a
@@ -99,6 +162,8 @@
                             href="{{ route('teacher.records', array_filter([
                                 'record_filter' => $recordFilter ?: null,
                                 'class_name' => $className,
+                                'family_code' => $familyCodeQuery ?: null,
+                                'student_name' => $studentNameQuery ?: null,
                             ])) }}"
                             class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedClass === $className ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' }}"
                         >
@@ -127,7 +192,15 @@
                             @forelse ($students as $student)
                                 <tr>
                                     <td class="px-5 py-4 font-mono text-xs font-semibold text-zinc-900">{{ $student->student_no }}</td>
-                                    <td class="px-5 py-4 text-sm text-zinc-600">{{ $student->family_code ?: '-' }}</td>
+                                    <td class="px-5 py-4 text-sm text-zinc-600">
+                                        @if ($student->family_code)
+                                            <a href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}" class="font-semibold text-emerald-700 underline decoration-transparent transition hover:decoration-current">
+                                                {{ $student->family_code }}
+                                            </a>
+                                        @else
+                                            -
+                                        @endif
+                                    </td>
                                     <td class="px-5 py-4 font-semibold text-zinc-900">{{ $student->full_name }}</td>
                                     <td class="px-5 py-4 text-sm text-zinc-700">{{ $student->class_name ?: '-' }}</td>
                                     <td class="px-5 py-4 text-sm text-zinc-600">
