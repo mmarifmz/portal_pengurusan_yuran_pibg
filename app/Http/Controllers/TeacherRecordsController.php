@@ -333,13 +333,73 @@ class TeacherRecordsController extends Controller
         $totalPaid = (float) $familyBillings->sum('paid_amount');
         $totalBilled = (float) $familyBillings->sum('fee_amount');
         $totalOutstanding = max(0, $totalBilled - $totalPaid);
-        $legacyPayments = LegacyStudentPayment::query()
-            ->where('family_code', $familyCode)
+        $studentIds = $students->pluck('id')->filter()->values();
+        $studentNames = $students
+            ->pluck('full_name')
+            ->map(fn ($name) => $this->normalizeNameForLegacyMatch((string) $name))
+            ->filter()
+            ->unique();
+
+        $legacyPaymentCandidates = LegacyStudentPayment::query()
+            ->where(function ($query) use ($familyCode, $studentIds) {
+                $query->where('family_code', $familyCode);
+
+                if ($studentIds->isNotEmpty()) {
+                    $query->orWhereIn('student_id', $studentIds->all());
+                }
+            })
+            ->where('payment_status', 'paid')
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->get();
-        $legacyPaidTotal = (float) $legacyPayments->sum('amount_paid');
-        $legacyDonationTotal = (float) $legacyPayments->sum('donation_amount');
+
+        $legacyPayments = $legacyPaymentCandidates
+            ->filter(function (LegacyStudentPayment $payment) use ($familyCode, $studentIds, $studentNames): bool {
+                if ($payment->student_id !== null && $studentIds->contains((int) $payment->student_id)) {
+                    return true;
+                }
+
+                if ((string) $payment->family_code !== $familyCode) {
+                    return false;
+                }
+
+                $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+                return $legacyName !== '' && $studentNames->contains($legacyName);
+            })
+            ->values();
+
+        $legacyPayments = $legacyPayments
+            ->groupBy(function (LegacyStudentPayment $payment): string {
+                $reference = trim((string) $payment->payment_reference);
+                if ($reference !== '') {
+                    return $reference;
+                }
+
+                return sprintf(
+                    'NOREF:%s:%s:%0.2f:%d',
+                    (string) $payment->family_code,
+                    optional($payment->paid_at)->format('Y-m-d H:i:s') ?? '-',
+                    (float) $payment->amount_paid,
+                    (int) $payment->id
+                );
+            })
+            ->map(function (Collection $group): object {
+                /** @var LegacyStudentPayment $first */
+                $first = $group->first();
+
+                return (object) [
+                    'paid_at' => $group->pluck('paid_at')->filter()->sort()->first() ?? $first->paid_at,
+                    'payment_reference' => $first->payment_reference,
+                    'amount_paid' => (float) $group->max('amount_paid'),
+                    'donation_amount' => (float) $group->max('donation_amount'),
+                    'source_year' => (int) ($first->source_year ?? now()->year),
+                ];
+            })
+            ->sortByDesc(fn (object $row) => $row->paid_at ? $row->paid_at->timestamp : 0)
+            ->values();
+
+        $legacyPaidTotal = (float) $legacyPayments->sum(fn (object $row): float => (float) $row->amount_paid);
+        $legacyDonationTotal = (float) $legacyPayments->sum(fn (object $row): float => (float) $row->donation_amount);
 
         return view('teacher.family-profile', [
             'familyCode' => $familyCode,
@@ -514,5 +574,13 @@ class TeacherRecordsController extends Controller
 
         return in_array($status, ['failed', 'cancelled', 'canceled', 'superseded'], true)
             || in_array($returnStatus, ['parent cancel', 'not enough fund', 'not successful', 'cancelled'], true);
+    }
+
+    private function normalizeNameForLegacyMatch(string $name): string
+    {
+        $value = mb_strtoupper(trim($name));
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim((string) $value);
     }
 }

@@ -587,6 +587,7 @@ class TeacherReconciliationController extends Controller
             $targetFamilyCode = strtoupper(trim((string) ($pastRow['family_code'] ?? '')));
             $targetName = $this->normalizeName((string) ($pastRow['full_name'] ?? ''));
             $targetClass = (string) ($pastRow['class_name'] ?? '');
+            $sourceYear = (int) ($pastRow['source_year'] ?? $this->inferSourceYear((string) ($pastRow['paid_at'] ?? '')));
 
             if (is_array($matchedCurrentRow)) {
                 $currentStudentNo = strtoupper(trim((string) ($matchedCurrentRow['student_no'] ?? '')));
@@ -611,6 +612,10 @@ class TeacherReconciliationController extends Controller
                 }
             }
 
+            if (! $student) {
+                $targetFamilyCode = $this->toLegacyFamilyBucketCode($targetFamilyCode, $sourceYear);
+            }
+
             if ($targetFamilyCode === '' || $targetName === '') {
                 $skipped++;
                 continue;
@@ -620,7 +625,6 @@ class TeacherReconciliationController extends Controller
             $amountDue = (float) ($pastRow['amount_due'] ?? 0);
             $donation = max(0, $amountPaid - $amountDue);
 
-            $sourceYear = (int) ($pastRow['source_year'] ?? $this->inferSourceYear((string) ($pastRow['paid_at'] ?? '')));
             $paymentReference = trim((string) ($pastRow['payment_reference'] ?? ''));
             if ($paymentReference === '') {
                 // Keep historical row unique even when gateway reference is missing.
@@ -679,6 +683,19 @@ class TeacherReconciliationController extends Controller
     private function isValidBackupFileName(string $fileName): bool
     {
         return preg_match('/^pibg-backup-\d{8}-\d{6}\.sql(\.gz)?$/', $fileName) === 1;
+    }
+
+    private function toLegacyFamilyBucketCode(string $familyCode, int $sourceYear): string
+    {
+        $clean = strtoupper(trim($familyCode));
+        $clean = preg_replace('/[^A-Z0-9-]+/', '-', $clean) ?? '';
+        $clean = trim($clean, '-');
+
+        if ($clean === '') {
+            $clean = 'UNKNOWN';
+        }
+
+        return sprintf('LEGACY-%d-%s', $sourceYear, $clean);
     }
 
     private function generateStudentNo(string $schoolCode, string $className): string

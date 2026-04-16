@@ -195,8 +195,6 @@
                     <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                         <tr>
                             <th class="px-4 py-3">Paid At</th>
-                            <th class="px-4 py-3">Student</th>
-                            <th class="px-4 py-3">Class</th>
                             <th class="px-4 py-3">Ref</th>
                             <th class="px-4 py-3 text-right">Amount (RM)</th>
                             <th class="px-4 py-3 text-right">Sumbangan (RM)</th>
@@ -207,8 +205,6 @@
                         @forelse ($legacyPayments as $legacy)
                             <tr>
                                 <td class="px-4 py-3 text-zinc-700">{{ $legacy->paid_at?->format('d M Y H:i') ?: '-' }}</td>
-                                <td class="px-4 py-3 font-semibold text-zinc-900">{{ $legacy->student_name }}</td>
-                                <td class="px-4 py-3 text-zinc-700">{{ $legacy->class_name ?: '-' }}</td>
                                 <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $legacy->payment_reference ?: '-' }}</td>
                                 <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((float) $legacy->amount_paid, 2) }}</td>
                                 <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((float) $legacy->donation_amount, 2) }}</td>
@@ -216,7 +212,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-4 text-center text-zinc-500">No historical paid record imported yet.</td>
+                                <td colspan="5" class="px-4 py-4 text-center text-zinc-500">No historical paid record imported yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

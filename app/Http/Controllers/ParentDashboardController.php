@@ -29,6 +29,13 @@ class ParentDashboardController extends Controller
             ->filter(fn ($code) => filled($code))
             ->unique()
             ->values();
+        $studentIds = $children->pluck('id')->filter()->values();
+        $childNames = $children
+            ->pluck('full_name')
+            ->map(fn ($name) => $this->normalizeNameForLegacyMatch((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
 
         $familyBillings = FamilyBilling::query()
             ->where('billing_year', $billingYear)
@@ -37,12 +44,34 @@ class ParentDashboardController extends Controller
             ->get();
 
         $legacyPayments = LegacyStudentPayment::query()
-            ->when(! $isTesterMode, fn ($query) => $query->whereIn('family_code', $familyCodes))
+            ->when(! $isTesterMode, function ($query) use ($familyCodes, $studentIds) {
+                $query->where(function ($nested) use ($familyCodes, $studentIds) {
+                    $nested->whereIn('family_code', $familyCodes);
+
+                    if ($studentIds->isNotEmpty()) {
+                        $nested->orWhereIn('student_id', $studentIds->all());
+                    }
+                });
+            })
             ->where('payment_status', 'paid')
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->limit(200)
-            ->get();
+            ->get()
+            ->when(! $isTesterMode, function ($collection) use ($familyCodes, $studentIds, $childNames) {
+                return $collection->filter(function (LegacyStudentPayment $payment) use ($familyCodes, $studentIds, $childNames): bool {
+                    if ($payment->student_id !== null && $studentIds->contains((int) $payment->student_id)) {
+                        return true;
+                    }
+
+                    if (! $familyCodes->contains((string) $payment->family_code)) {
+                        return false;
+                    }
+
+                    $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+                    return $legacyName !== '' && $childNames->contains($legacyName);
+                })->values();
+            });
 
         return view('parent.dashboard', [
             'children' => $children,
@@ -54,5 +83,13 @@ class ParentDashboardController extends Controller
             'legacyPaidTotal' => (float) $legacyPayments->sum('amount_paid'),
             'legacyDonationTotal' => (float) $legacyPayments->sum('donation_amount'),
         ]);
+    }
+
+    private function normalizeNameForLegacyMatch(string $name): string
+    {
+        $value = mb_strtoupper(trim($name));
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim((string) $value);
     }
 }
