@@ -183,6 +183,8 @@ class ParentOtpAuthController extends Controller
 
         $preview = (array) $request->session()->get('parent_otp_preview', []);
 
+        $otpReturnUrl = (string) $request->session()->get('parent_otp_return_url', route('parent.search'));
+
         return view('parent.auth.verify-pin', [
             'phone' => $phone,
             'debugCode' => app()->environment('testing') || config('services.whatsapp.debug_show_tac')
@@ -191,7 +193,11 @@ class ParentOtpAuthController extends Controller
             'otpExpiresAtIso' => $expiresAtTimestamp > 0
                 ? now()->setTimestamp($expiresAtTimestamp)->toIso8601String()
                 : null,
-            'otpReturnUrl' => (string) $request->session()->get('parent_otp_return_url', route('parent.search')),
+            'otpReturnUrl' => $otpReturnUrl,
+            'otpLoginUrl' => route('parent.login.form', [
+                'phone' => $phone,
+                'return' => $otpReturnUrl,
+            ]),
             'maskedStudentName' => (string) ($preview['masked_student_name'] ?? ''),
             'maskedFamilyCode' => (string) ($preview['masked_family_code'] ?? ''),
         ]);
@@ -536,3 +542,4 @@ class ParentOtpAuthController extends Controller
         return $request->getSchemeAndHttpHost().$path.$query;
     }
 }
+

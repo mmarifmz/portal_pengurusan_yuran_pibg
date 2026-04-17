@@ -123,21 +123,32 @@
     <script>
         (function () {
             const expiresAtIso = @json($otpExpiresAtIso);
-            const returnUrl = @json($otpReturnUrl);
+            const loginUrl = @json($otpLoginUrl);
             const timerElement = document.getElementById('otp-timer');
 
-            if (!expiresAtIso || !timerElement || !returnUrl) {
+            if (!expiresAtIso || !timerElement || !loginUrl) {
                 return;
             }
 
             const expiresAtMs = new Date(expiresAtIso).getTime();
+            let isExpired = false;
+
+            const expireSession = () => {
+                if (isExpired) {
+                    return;
+                }
+
+                isExpired = true;
+                timerElement.textContent = '00:00';
+                window.alert('Sesi TAC telah tamat. Anda akan dibawa semula ke halaman nombor telefon untuk minta TAC baru.');
+                window.location.href = loginUrl;
+            };
 
             const updateTimer = () => {
                 const remainingMs = expiresAtMs - Date.now();
 
                 if (remainingMs <= 0) {
-                    timerElement.textContent = '00:00';
-                    window.location.href = returnUrl;
+                    expireSession();
                     return;
                 }
 
@@ -151,7 +162,7 @@
             updateTimer();
             const intervalId = window.setInterval(() => {
                 updateTimer();
-                if (timerElement.textContent === '00:00') {
+                if (isExpired) {
                     window.clearInterval(intervalId);
                 }
             }, 1000);
@@ -161,3 +172,4 @@
     @fluxScripts
 </body>
 </html>
+
