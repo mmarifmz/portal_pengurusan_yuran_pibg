@@ -62,7 +62,7 @@ class ReceiptController extends Controller
                 ? $this->maskMiddle((string) ($transaction->provider_invoice_no ?: 'Belum dijana'), 3, 2)
                 : ($transaction->provider_invoice_no ?: 'Belum dijana'),
             'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
-            'schoolLogoUrl' => $this->schoolLogoUrl(),
+            'schoolLogoUrl' => SiteSetting::schoolLogoUrl(),
         ]);
     }
 
