@@ -72,5 +72,6 @@ return [
     'teacher_whatsapp_phone' => env('TEACHER_WHATSAPP_PHONE', '60123103205'),
 
     'treasury_whatsapp_phone' => env('TREASURY_WHATSAPP_PHONE', '60136454001'),
-];
 
+    'system_installer_secret' => env('SYSTEM_INSTALLER_SECRET'),
+];

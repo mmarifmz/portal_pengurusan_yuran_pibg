@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'role'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -49,6 +49,21 @@ class User extends Authenticatable
         return $this->role === 'teacher';
     }
 
+    public function isSuperTeacher(): bool
+    {
+        return $this->role === 'super_teacher';
+    }
+
+    public function isSystemAdmin(): bool
+    {
+        return $this->role === 'system_admin';
+    }
+
+    public function isSystemInstaller(): bool
+    {
+        return $this->role === 'system_installer';
+    }
+
     public function isParent(): bool
     {
         return $this->role === 'parent';
@@ -57,6 +72,21 @@ class User extends Authenticatable
     public function isPta(): bool
     {
         return $this->role === 'pta';
+    }
+
+    public function isStaff(): bool
+    {
+        return in_array($this->role, ['teacher', 'super_teacher', 'system_admin', 'pta'], true);
+    }
+
+    public function canAccessTeacherRecords(): bool
+    {
+        return in_array($this->role, ['teacher', 'super_teacher', 'system_admin', 'pta'], true);
+    }
+
+    public function canManageTeacherUsers(): bool
+    {
+        return in_array($this->role, ['super_teacher', 'system_admin'], true);
     }
 
     public function isParentTester(): bool
@@ -100,4 +130,3 @@ class User extends Authenticatable
         return $digits;
     }
 }
-

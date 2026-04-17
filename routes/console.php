@@ -1,8 +1,11 @@
 <?php
 
 use App\Services\LegacyFamilyBillingImporter;
+use App\Models\AdminProvisionAudit;
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -68,3 +71,132 @@ Artisan::command('billing:import-legacy-families {path : Full path to the legacy
         $this->comment('Dry run only: no database rows were written.');
     }
 })->purpose('Import last-year family billing history by matching against the current-year student dataset.');
+
+Artisan::command('system:admin:provision
+    {--name= : Name for the admin account}
+    {--email= : Email for the admin account}
+    {--password= : Password for the admin account}
+    {--approver-email= : Existing system_admin/system_installer email}
+    {--approver-password= : Existing system_admin/system_installer password}
+    {--installer-secret= : Bootstrap secret when no privileged user exists}', function () {
+    $name = trim((string) ($this->option('name') ?? ''));
+    $email = mb_strtolower(trim((string) ($this->option('email') ?? '')));
+    $password = (string) ($this->option('password') ?? '');
+    $approverEmail = mb_strtolower(trim((string) ($this->option('approver-email') ?? '')));
+    $approverPassword = (string) ($this->option('approver-password') ?? '');
+    $installerSecretInput = (string) ($this->option('installer-secret') ?? '');
+
+    if ($name === '') {
+        $name = trim((string) $this->ask('New admin name'));
+    }
+
+    if ($email === '') {
+        $email = mb_strtolower(trim((string) $this->ask('New admin email')));
+    }
+
+    if ($password === '') {
+        $password = (string) $this->secret('New admin password (min 8 chars)');
+    }
+
+    if ($name === '' || $email === '' || $password === '') {
+        $this->error('Name, email, and password are required.');
+        return self::FAILURE;
+    }
+
+    if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $this->error('Invalid email format.');
+        return self::FAILURE;
+    }
+
+    if (mb_strlen($password) < 8) {
+        $this->error('Password must be at least 8 characters.');
+        return self::FAILURE;
+    }
+
+    $privilegedRoles = ['system_admin', 'system_installer'];
+    $privilegedExists = User::query()->whereIn('role', $privilegedRoles)->exists();
+    $approver = null;
+    $approvalMethod = 'installer_secret';
+
+    if ($privilegedExists) {
+        if ($approverEmail === '') {
+            $approverEmail = mb_strtolower(trim((string) $this->ask('Approver email (system_admin/system_installer)')));
+        }
+
+        if ($approverPassword === '') {
+            $approverPassword = (string) $this->secret('Approver password');
+        }
+
+        $approver = User::query()
+            ->whereIn('role', $privilegedRoles)
+            ->whereRaw('LOWER(email) = ?', [$approverEmail])
+            ->first();
+
+        if (! $approver || ! Hash::check($approverPassword, (string) $approver->password)) {
+            $this->error('Authorization failed. Approver credentials are invalid.');
+            return self::FAILURE;
+        }
+
+        $approvalMethod = 'privileged_credentials';
+    } else {
+        $configuredInstallerSecret = (string) config('services.system_installer_secret', '');
+        if ($configuredInstallerSecret === '') {
+            $this->error('SYSTEM_INSTALLER_SECRET is not configured. Bootstrap not allowed.');
+            return self::FAILURE;
+        }
+
+        if ($installerSecretInput === '') {
+            $installerSecretInput = (string) $this->secret('Installer secret');
+        }
+
+        if (! hash_equals($configuredInstallerSecret, $installerSecretInput)) {
+            $this->error('Installer secret is invalid.');
+            return self::FAILURE;
+        }
+    }
+
+    $target = User::query()
+        ->whereRaw('LOWER(email) = ?', [$email])
+        ->first();
+
+    $previousRole = $target?->role;
+    $isCreate = $target === null;
+    if (! $target) {
+        $target = new User();
+    }
+
+    $target->name = $name;
+    $target->email = $email;
+    $target->role = 'system_admin';
+    $target->class_name = null;
+    $target->password = $password;
+    $target->email_verified_at ??= now();
+    $target->save();
+
+    $provisionAction = $isCreate
+        ? 'created_system_admin'
+        : ($previousRole === 'system_admin'
+            ? 'updated_system_admin'
+            : 'promoted_to_system_admin');
+
+    AdminProvisionAudit::create([
+        'approver_user_id' => $approver?->id,
+        'approver_email' => $approver?->email,
+        'approval_method' => $approvalMethod,
+        'target_user_id' => $target->id,
+        'target_email' => $target->email,
+        'target_name' => $target->name,
+        'provision_action' => $provisionAction,
+        'metadata' => [
+            'previous_role' => $previousRole,
+            'new_role' => 'system_admin',
+            'executed_via' => 'artisan',
+        ],
+    ]);
+
+    $this->info($isCreate
+        ? "System admin created: {$target->email}"
+        : "User promoted/updated as system_admin: {$target->email}");
+
+    return self::SUCCESS;
+})->purpose('Provision or promote a system_admin account via CLI with privileged authorization.');

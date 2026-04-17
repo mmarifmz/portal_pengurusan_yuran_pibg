@@ -12,15 +12,29 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
-                        {{ __('Teacher') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('students.import.form')" :active="request()->routeIs('students.import.form')">
-                        {{ __('Student Import') }}
-                    </x-nav-link>
-                    <x-nav-link :href="route('parent.dashboard')" :active="request()->routeIs('parent.dashboard')">
-                        {{ __('Parent') }}
-                    </x-nav-link>
+                    @if (Auth::user()->canAccessTeacherRecords())
+                        <x-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
+                            {{ __('Teacher') }}
+                        </x-nav-link>
+                    @endif
+                    @if (Auth::user()->isSystemAdmin())
+                        <x-nav-link :href="route('students.import.form')" :active="request()->routeIs('students.import.form')">
+                            {{ __('Student Import') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('teacher.reconcile.index')" :active="request()->routeIs('teacher.reconcile.*')">
+                            {{ __('Year Reconcile & Backup') }}
+                        </x-nav-link>
+                    @endif
+                    @if (Auth::user()->canManageTeacherUsers())
+                        <x-nav-link :href="route('super-teacher.teachers.index')" :active="request()->routeIs('super-teacher.teachers.*')">
+                            {{ __('Teacher Users') }}
+                        </x-nav-link>
+                    @endif
+                    @if (Auth::user()->isParent())
+                        <x-nav-link :href="route('parent.dashboard')" :active="request()->routeIs('parent.dashboard')">
+                            {{ __('Parent') }}
+                        </x-nav-link>
+                    @endif
                     <x-nav-link :href="route('parent.search')" :active="request()->routeIs('parent.search')">
                         {{ __('Public Search') }}
                     </x-nav-link>
@@ -73,22 +87,36 @@
         </div>
     </div>
 
-    <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
-        <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
-                {{ __('Teacher') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('students.import.form')" :active="request()->routeIs('students.import.form')">
-                {{ __('Student Import') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('parent.dashboard')" :active="request()->routeIs('parent.dashboard')">
-                {{ __('Parent') }}
-            </x-responsive-nav-link>
+        <!-- Responsive Navigation Menu -->
+        <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
+            <div class="pt-2 pb-3 space-y-1">
+            @if (Auth::user()->canAccessTeacherRecords())
+                <x-responsive-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
+                    {{ __('Teacher') }}
+                </x-responsive-nav-link>
+            @endif
+            @if (Auth::user()->isSystemAdmin())
+                <x-responsive-nav-link :href="route('students.import.form')" :active="request()->routeIs('students.import.form')">
+                    {{ __('Student Import') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('teacher.reconcile.index')" :active="request()->routeIs('teacher.reconcile.*')">
+                    {{ __('Year Reconcile & Backup') }}
+                </x-responsive-nav-link>
+            @endif
+            @if (Auth::user()->canManageTeacherUsers())
+                <x-responsive-nav-link :href="route('super-teacher.teachers.index')" :active="request()->routeIs('super-teacher.teachers.*')">
+                    {{ __('Teacher Users') }}
+                </x-responsive-nav-link>
+            @endif
+            @if (Auth::user()->isParent())
+                <x-responsive-nav-link :href="route('parent.dashboard')" :active="request()->routeIs('parent.dashboard')">
+                    {{ __('Parent') }}
+                </x-responsive-nav-link>
+            @endif
             <x-responsive-nav-link :href="route('parent.search')" :active="request()->routeIs('parent.search')">
                 {{ __('Public Search') }}
             </x-responsive-nav-link>
-        </div>
+            </div>
 
         <!-- Responsive Settings Options -->
         <div class="pt-4 pb-1 border-t border-gray-200">

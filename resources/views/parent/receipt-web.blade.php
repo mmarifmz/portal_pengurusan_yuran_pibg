@@ -48,7 +48,7 @@
                     <p class="brand-sub">Yuran &amp; Sumbangan PIBG SK Sri Petaling</p>
                 </div>
             </a>
-            <a href="{{ $portalUrl ?? route('home') }}" class="back-link">Back to portal</a>
+            <a href="{{ $backUrl ?? ($portalUrl ?? route('home')) }}" class="back-link">{{ $backLabel ?? 'Back to portal' }}</a>
         </div>
     </header>
 
@@ -61,9 +61,11 @@
             </div>
 
             <div class="grid">
-                <div class="actions">
-                    <a href="{{ $teacherShareUrl }}" target="_blank" rel="noopener" class="wa-btn">Share with Teacher (WhatsApp)</a>
-                </div>
+                @unless ($isPublicReceipt ?? true)
+                    <div class="actions">
+                        <a href="{{ $teacherShareUrl }}" target="_blank" rel="noopener" class="wa-btn">Share with Teacher (WhatsApp)</a>
+                    </div>
+                @endunless
                 <div class="cols">
                     <div>
                         <p class="label">Kod keluarga</p>
@@ -75,7 +77,7 @@
                     </div>
                     <div>
                         <p class="label">Order ID</p>
-                        <p class="value">{{ $transaction->external_order_id }}</p>
+                        <p class="value">{{ $displayOrderId ?? $transaction->external_order_id }}</p>
                     </div>
                     <div>
                         <p class="label">Status</p>
@@ -83,12 +85,12 @@
                     </div>
                     <div>
                         <p class="label">Maklumat pembayar</p>
-                        <p class="muted">{{ $transaction->payer_email ?: '-' }}</p>
-                        <p class="muted">{{ $transaction->payer_phone ?: '-' }}</p>
+                        <p class="muted">{{ $displayPayerEmail ?? ($transaction->payer_email ?: '-') }}</p>
+                        <p class="muted">{{ $displayPayerPhone ?? ($transaction->payer_phone ?: '-') }}</p>
                     </div>
                     <div>
                         <p class="label">Invoice dan masa bayar</p>
-                        <p class="muted">Invoice: {{ $transaction->provider_invoice_no ?: 'Belum dijana' }}</p>
+                        <p class="muted">Invoice: {{ $displayInvoiceNo ?? ($transaction->provider_invoice_no ?: 'Belum dijana') }}</p>
                         <p class="muted">Bayar pada: {{ $transaction->paid_at?->format('d M Y H:i') ?: '–' }}</p>
                     </div>
                 </div>
@@ -98,9 +100,9 @@
                     <div class="children" style="margin-top: 12px;">
                         @foreach($familyChildren as $child)
                             <div class="child">
-                                <div class="child-name">{{ $child->full_name }}</div>
+                                <div class="child-name">{{ $child->display_name ?? $child->full_name }}</div>
                                 <div class="child-meta">{{ $child->class_name }}</div>
-                                <div class="child-meta">No. Murid: {{ $child->student_no }}</div>
+                                <div class="child-meta">No. Murid: {{ $child->display_student_no ?? $child->student_no }}</div>
                             </div>
                         @endforeach
                     </div>

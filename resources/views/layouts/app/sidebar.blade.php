@@ -63,7 +63,7 @@
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
 
-                    @if (auth()->user()->isTeacher() || auth()->user()->isPta())
+                    @if (auth()->user()->canAccessTeacherRecords())
                         <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
                             {{ __('Student & Family Lists') }}
                         </flux:sidebar.item>
@@ -83,13 +83,19 @@
                             {{ __('Public Parent Search') }}
                         </flux:sidebar.item>
 
-                        @if (auth()->user()->isTeacher() || auth()->user()->isPta())
+                        @if (auth()->user()->isSystemAdmin())
                             <div class="my-2 border-t border-zinc-200/80"></div>
                             <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
                                 {{ __('Student import') }}
                             </flux:sidebar.item>
                             <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
                                 {{ __('Year Reconcile & Backup') }}
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if (auth()->user()->canManageTeacherUsers())
+                            <flux:sidebar.item icon="user-group" :href="route('super-teacher.teachers.index')" :current="request()->routeIs('super-teacher.teachers.*')" wire:navigate>
+                                {{ __('Teacher Users') }}
                             </flux:sidebar.item>
                         @endif
                     @endif
