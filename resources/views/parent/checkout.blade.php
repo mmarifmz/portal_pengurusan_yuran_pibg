@@ -120,6 +120,43 @@
                     </div>
                 @endforeach
             </div>
+
+            <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+                    <h4 class="text-sm font-bold uppercase tracking-wide text-zinc-700">5 Cubaan Bayaran Terkini</h4>
+                    <div class="mt-3 space-y-2">
+                        @forelse ($recentPaymentAttempts as $attempt)
+                            <div class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="font-semibold text-zinc-900">{{ $attempt->external_order_display }}</span>
+                                    <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[0.65rem] font-semibold text-zinc-600">{{ ucfirst((string) $attempt->status) }}</span>
+                                </div>
+                                <p class="mt-1">{{ $attempt->created_at_for_display?->format('d M Y H:i') ?? '-' }} · RM {{ number_format((float) $attempt->amount, 2) }}</p>
+                            </div>
+                        @empty
+                            <p class="text-xs text-zinc-500">Belum ada cubaan bayaran direkodkan untuk keluarga ini.</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+                    <h4 class="text-sm font-bold uppercase tracking-wide text-zinc-700">Sejarah Sumbangan Tahun {{ $lastYear }}</h4>
+                    <p class="mt-2 text-sm text-zinc-700">Jumlah sumbangan berjaya: <span class="font-bold text-zinc-900">RM {{ number_format((float) $lastYearContributionTotal, 2) }}</span></p>
+                    <div class="mt-3 space-y-2">
+                        @forelse ($lastYearContributionHistory as $contribution)
+                            <div class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700">
+                                <div class="flex items-center justify-between gap-3">
+                                    <span class="font-semibold text-zinc-900">{{ $contribution->external_order_display }}</span>
+                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-700">Berjaya</span>
+                                </div>
+                                <p class="mt-1">{{ $contribution->paid_at_for_display?->format('d M Y H:i') ?? $contribution->created_at_for_display?->format('d M Y H:i') ?? '-' }} · RM {{ number_format((float) $contribution->amount, 2) }}</p>
+                            </div>
+                        @empty
+                            <p class="text-xs text-zinc-500">Tiada rekod sumbangan berjaya untuk tahun {{ $lastYear }}.</p>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
         </section>
     </div>
 

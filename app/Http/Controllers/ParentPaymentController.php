@@ -54,6 +54,27 @@ class ParentPaymentController extends Controller
             }
         }
 
+        $recentPaymentAttempts = FamilyPaymentTransaction::query()
+            ->with('familyBilling')
+            ->whereHas('familyBilling', fn ($query) => $query->where('family_code', $familyBilling->family_code))
+            ->latest('id')
+            ->limit(5)
+            ->get();
+
+        $lastYear = (int) $familyBilling->billing_year - 1;
+        $lastYearContributionBase = FamilyPaymentTransaction::query()
+            ->where('status', 'success')
+            ->whereHas('familyBilling', fn ($query) => $query
+                ->where('family_code', $familyBilling->family_code)
+                ->where('billing_year', $lastYear));
+
+        $lastYearContributionTotal = (float) (clone $lastYearContributionBase)->sum('amount');
+        $lastYearContributionHistory = (clone $lastYearContributionBase)
+            ->latest('paid_at')
+            ->latest('id')
+            ->limit(5)
+            ->get();
+
         return view('parent.checkout', [
             'familyBilling' => $familyBilling,
             'familyChildren' => $children,
@@ -64,6 +85,10 @@ class ParentPaymentController extends Controller
             'isTesterMode' => $isTesterMode,
             'testerAmount' => $this->testerAmount(),
             'checkoutBaseAmount' => $checkoutBaseAmount,
+            'recentPaymentAttempts' => $recentPaymentAttempts,
+            'lastYear' => $lastYear,
+            'lastYearContributionTotal' => $lastYearContributionTotal,
+            'lastYearContributionHistory' => $lastYearContributionHistory,
         ]);
     }
 
