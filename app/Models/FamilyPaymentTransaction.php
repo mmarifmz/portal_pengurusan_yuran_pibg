@@ -60,6 +60,47 @@ class FamilyPaymentTransaction extends Model
         });
     }
 
+    public static function orderIdShortform(): string
+    {
+        $settings = SiteSetting::getMany([
+            'order_id_shortform' => 'PBG',
+        ]);
+
+        $value = strtoupper((string) ($settings['order_id_shortform'] ?? 'PBG'));
+        $value = preg_replace('/[^A-Z0-9]/', '', $value) ?? '';
+
+        if ($value === '') {
+            return 'PBG';
+        }
+
+        return substr($value, 0, 3);
+    }
+
+    public static function makeCompactExternalOrderId(): string
+    {
+        $datePart = now()->format('ymd');
+        $randomPart = strtoupper(Str::random(4));
+
+        return sprintf('PBG-%s-%s-%s', $datePart, $randomPart, self::orderIdShortform());
+    }
+
+    public static function formatExternalOrderId(string $externalOrderId): string
+    {
+        $value = trim($externalOrderId);
+
+        if ($value === '') {
+            return '-';
+        }
+
+        if (preg_match('/^PBG-\d{6}-[A-Z0-9]{4}-[A-Z0-9]{3}$/', $value) === 1) {
+            return $value;
+        }
+
+        $fingerprint = strtoupper(substr(hash('crc32b', $value), 0, 6));
+
+        return sprintf('PBG-%s-%s', $fingerprint, self::orderIdShortform());
+    }
+
     public function ensureReceiptUuid(): void
     {
         if ($this->receipt_uuid) {
@@ -89,6 +130,11 @@ class FamilyPaymentTransaction extends Model
     public function getPaidAtForDisplayAttribute(): ?Carbon
     {
         return $this->normalizeForDisplay($this->paid_at);
+    }
+
+    public function getExternalOrderDisplayAttribute(): string
+    {
+        return self::formatExternalOrderId((string) $this->external_order_id);
     }
 
     private function normalizeForDisplay(DateTimeInterface|string|null $value): ?Carbon

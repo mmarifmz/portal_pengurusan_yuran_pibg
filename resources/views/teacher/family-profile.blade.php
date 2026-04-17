@@ -182,7 +182,7 @@
                         @forelse ($paymentHistory as $payment)
                             <tr>
                                 <td class="px-4 py-3 text-zinc-700">{{ $payment->paid_at_for_display?->format('d M Y H:i') ?? $payment->created_at_for_display?->format('d M Y H:i') }}</td>
-                                <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $payment->external_order_id }}</td>
+                                <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $payment->external_order_display }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $payment->provider_bill_code ?: '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold text-zinc-900">{{ number_format((float) $payment->amount, 2) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ ucfirst((string) $payment->status) }}</td>

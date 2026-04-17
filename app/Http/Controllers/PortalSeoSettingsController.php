@@ -25,6 +25,7 @@ class PortalSeoSettingsController extends Controller
             'seo_og_site_name' => ['required', 'string', 'max:160'],
             'school_logo_url' => ['nullable', 'string', 'max:400'],
             'school_logo_file' => ['nullable', 'image', 'max:2048'],
+            'order_id_shortform' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z0-9]{3}$/'],
         ]);
 
         $schoolLogoUrl = trim((string) ($validated['school_logo_url'] ?? ''));
@@ -45,6 +46,7 @@ class PortalSeoSettingsController extends Controller
             'seo_og_site_name' => trim((string) $validated['seo_og_site_name']),
             'seo_favicon_url' => $schoolLogoUrl,
             'school_logo_url' => $schoolLogoUrl,
+            'order_id_shortform' => strtoupper((string) $validated['order_id_shortform']),
         ]);
 
         return redirect()
@@ -64,6 +66,7 @@ class PortalSeoSettingsController extends Controller
             'seo_og_site_name' => 'Portal Yuran PIBG SK Sri Petaling',
             'seo_favicon_url' => asset('images/sksp-logo.png'),
             'school_logo_url' => asset('images/sksp-logo.png'),
+            'order_id_shortform' => 'PBG',
         ];
     }
 }

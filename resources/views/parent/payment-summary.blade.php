@@ -160,7 +160,7 @@
             </div>
 
             <div class="mt-5 space-y-2 text-sm text-zinc-600">
-                <p>Order ID: {{ $transaction->external_order_id }}</p>
+                <p>Order ID: {{ $transaction->external_order_display }}</p>
                 <p>Bill Code: {{ $transaction->provider_bill_code }}</p>
                 <p>Return Status: {{ $transaction->return_status ? ucfirst($transaction->return_status) : 'Pending completion' }}</p>
                 <p>Provider Ref No: {{ $transaction->provider_ref_no ?? '-' }}</p>

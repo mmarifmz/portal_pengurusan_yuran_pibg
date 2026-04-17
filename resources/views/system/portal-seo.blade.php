@@ -91,6 +91,19 @@
                     <span class="mt-1 block text-xs text-zinc-500">PNG/JPG/WEBP, max 2MB. This one logo is used for portal, favicon, and receipts.</span>
                 </label>
 
+                <label class="text-sm font-medium text-zinc-700">
+                    Order ID Shortform (3 chars)
+                    <input
+                        name="order_id_shortform"
+                        type="text"
+                        maxlength="3"
+                        required
+                        value="{{ old('order_id_shortform', $settings['order_id_shortform'] ?? 'PBG') }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                    <span class="mt-1 block text-xs text-zinc-500">Digunakan sebagai suffix Order ID ringkas. Contoh: <span class="font-semibold">PBG-260417-A1B2-{{ old('order_id_shortform', $settings['order_id_shortform'] ?? 'PBG') }}</span></span>
+                </label>
+
                 <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Current Logo Preview</p>
                     <img src="{{ $settings['school_logo_url'] ?? asset('images/sksp-logo.png') }}" alt="Current school logo" class="mt-2 h-14 w-14 rounded-full border border-zinc-200 bg-white p-1" />

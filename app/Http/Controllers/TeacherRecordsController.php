@@ -587,7 +587,7 @@ class TeacherRecordsController extends Controller
             foreach ($payments as $payment) {
                 fputcsv($handle, [
                     optional($payment->paid_at ?? $payment->created_at)->format('Y-m-d H:i:s'),
-                    (string) $payment->external_order_id,
+                    (string) $payment->external_order_display,
                     (string) ($payment->provider_bill_code ?? ''),
                     number_format((float) $payment->amount, 2, '.', ''),
                     (string) $payment->status,

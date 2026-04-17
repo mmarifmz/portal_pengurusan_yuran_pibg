@@ -187,7 +187,7 @@
                     <tr>
                         <td>
                             <p class="label">Order ID</p>
-                            <p class="value">{{ $transaction->external_order_id }}</p>
+                            <p class="value">{{ $transaction->external_order_display }}</p>
                         </td>
                         <td>
                             <p class="label">Status</p>

@@ -34,7 +34,7 @@ class ParentPaymentNotificationService
                 : 'Maklumat pembayaran PIBG anda telah dikemaskini.',
             'Kod keluarga: '.$transaction->familyBilling->family_code,
             'Jumlah: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_id,
+            'Order ID: '.$transaction->external_order_display,
         ];
 
         if ($transaction->provider_invoice_no) {

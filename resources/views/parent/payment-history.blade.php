@@ -55,7 +55,7 @@
                         @forelse ($transactions as $transaction)
                             <tr>
                                 <td class="px-4 py-3">{{ $transaction->created_at_for_display?->format('d M Y H:i') ?? '-' }}</td>
-                                <td class="px-4 py-3">{{ $transaction->external_order_id }}</td>
+                                <td class="px-4 py-3">{{ $transaction->external_order_display }}</td>
                                 <td class="px-4 py-3">{{ $transaction->provider_bill_code ?? '-' }}</td>
                                 <td class="px-4 py-3">{{ $transaction->payer_name ?? '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ number_format((float) $transaction->amount, 2) }}</td>

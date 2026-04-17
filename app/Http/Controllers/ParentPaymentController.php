@@ -100,7 +100,7 @@ class ParentPaymentController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        $externalOrderId = 'PBG-'.strtoupper((string) Str::ulid());
+        $externalOrderId = $this->generateExternalOrderId();
 
         try {
             $billCode = $this->toyyibPayService->createBill([
@@ -418,6 +418,19 @@ class ParentPaymentController extends Controller
         }
     }
 
+
+    private function generateExternalOrderId(): string
+    {
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $candidate = FamilyPaymentTransaction::makeCompactExternalOrderId();
+
+            if (! FamilyPaymentTransaction::query()->where('external_order_id', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        return 'PBG-'.strtoupper((string) Str::ulid());
+    }
     private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
     {
         $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
@@ -428,7 +441,7 @@ class ParentPaymentController extends Controller
             'Saya ingin kongsi resit bayaran PIBG:',
             'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
             'Jumlah: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_id,
+            'Order ID: '.$transaction->external_order_display,
             'Resit web: '.$receiptUrl,
         ]);
 

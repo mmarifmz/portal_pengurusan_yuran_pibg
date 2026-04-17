@@ -49,9 +49,7 @@ class ReceiptController extends Controller
             'backUrl' => $backUrl,
             'backLabel' => $isPublicReceipt ? 'Back to portal' : 'Back',
             'isPublicReceipt' => $isPublicReceipt,
-            'displayOrderId' => $isPublicReceipt
-                ? $this->maskMiddle((string) $transaction->external_order_id, 4, 3)
-                : (string) $transaction->external_order_id,
+            'displayOrderId' => $transaction->external_order_display,
             'displayPayerEmail' => $isPublicReceipt
                 ? $this->maskEmail($transaction->payer_email)
                 : ($transaction->payer_email ?: '-'),
@@ -76,7 +74,7 @@ class ReceiptController extends Controller
             'Saya ingin kongsi resit bayaran PIBG:',
             'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
             'Jumlah: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_id,
+            'Order ID: '.$transaction->external_order_display,
             'Resit web: '.$receiptUrl,
         ]);
 

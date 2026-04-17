@@ -78,7 +78,7 @@
                     </div>
                     <div>
                         <p class="label">Order ID</p>
-                        <p class="value">{{ $displayOrderId ?? $transaction->external_order_id }}</p>
+                        <p class="value">{{ $displayOrderId ?? $transaction->external_order_display }}</p>
                     </div>
                     <div>
                         <p class="label">Status</p>
