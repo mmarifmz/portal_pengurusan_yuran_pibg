@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
+use App\Models\LegacyStudentPayment;
 use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Support\ParentPhone;
@@ -36,6 +37,13 @@ class ParentPaymentController extends Controller
             ->where('family_code', $familyBilling->family_code)
             ->orderBy('full_name')
             ->get();
+        $studentIds = $children->pluck('id')->filter()->values();
+        $childNames = $children
+            ->pluck('full_name')
+            ->map(fn ($name) => $this->normalizeNameForLegacyMatch((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
 
         $isTesterMode = (bool) $request->user()?->isParentTester();
         $checkoutOutstanding = (float) $familyBilling->outstanding_amount;
@@ -62,18 +70,79 @@ class ParentPaymentController extends Controller
             ->get();
 
         $lastYear = (int) $familyBilling->billing_year - 1;
-        $lastYearContributionBase = FamilyPaymentTransaction::query()
+        $portalLastYearContributions = FamilyPaymentTransaction::query()
             ->where('status', 'success')
             ->whereHas('familyBilling', fn ($query) => $query
                 ->where('family_code', $familyBilling->family_code)
-                ->where('billing_year', $lastYear));
-
-        $lastYearContributionTotal = (float) (clone $lastYearContributionBase)->sum('amount');
-        $lastYearContributionHistory = (clone $lastYearContributionBase)
-            ->latest('paid_at')
-            ->latest('id')
-            ->limit(5)
+                ->where('billing_year', $lastYear))
             ->get();
+        $portalContributionRows = $portalLastYearContributions
+            ->map(function (FamilyPaymentTransaction $transaction): array {
+                $donationAmount = $this->resolveSuccessfulDonationAmount($transaction);
+                if ($donationAmount <= 0) {
+                    return [];
+                }
+
+                return [
+                    'id' => 'portal-'.$transaction->id,
+                    'reference' => (string) $transaction->external_order_display,
+                    'amount' => $donationAmount,
+                    'paid_at' => $transaction->paid_at_for_display ?? $transaction->created_at_for_display,
+                    'source' => 'portal',
+                ];
+            })
+            ->filter()
+            ->values();
+
+        $legacyLastYearContributions = LegacyStudentPayment::query()
+            ->where('source_year', $lastYear)
+            ->where('payment_status', 'paid')
+            ->where(function ($nested) use ($familyBilling, $studentIds) {
+                $nested->where('family_code', $familyBilling->family_code);
+
+                if ($studentIds->isNotEmpty()) {
+                    $nested->orWhereIn('student_id', $studentIds->all());
+                }
+            })
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->filter(function (LegacyStudentPayment $payment) use ($familyBilling, $studentIds, $childNames): bool {
+                if ((float) ($payment->donation_amount ?? 0) <= 0) {
+                    return false;
+                }
+
+                if ($payment->student_id !== null && $studentIds->contains((int) $payment->student_id)) {
+                    return true;
+                }
+
+                if ((string) $payment->family_code !== (string) $familyBilling->family_code) {
+                    return false;
+                }
+
+                $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+                return $legacyName !== '' && $childNames->contains($legacyName);
+            })
+            ->values();
+
+        $legacyContributionRows = $legacyLastYearContributions
+            ->map(fn (LegacyStudentPayment $payment): array => [
+                'id' => 'legacy-'.$payment->id,
+                'reference' => (string) ($payment->payment_reference ?: 'LEGACY-'.$payment->id),
+                'amount' => (float) ($payment->donation_amount ?? 0),
+                'paid_at' => $payment->paid_at,
+                'source' => 'legacy',
+            ]);
+
+        $lastYearContributionHistory = $portalContributionRows
+            ->concat($legacyContributionRows)
+            ->sortByDesc(fn (array $item): int => $item['paid_at']?->getTimestamp() ?? 0)
+            ->take(5)
+            ->values();
+
+        $lastYearContributionTotal = (float) $portalContributionRows->sum('amount')
+            + (float) $legacyContributionRows->sum('amount');
 
         return view('parent.checkout', [
             'familyBilling' => $familyBilling,
@@ -90,6 +159,25 @@ class ParentPaymentController extends Controller
             'lastYearContributionTotal' => $lastYearContributionTotal,
             'lastYearContributionHistory' => $lastYearContributionHistory,
         ]);
+    }
+
+    private function resolveSuccessfulDonationAmount(FamilyPaymentTransaction $transaction): float
+    {
+        $storedDonation = (float) ($transaction->donation_amount ?? 0);
+        if ($storedDonation > 0) {
+            return round($storedDonation, 2);
+        }
+
+        $derived = (float) $transaction->amount - (float) ($transaction->fee_amount_paid ?? 0);
+        return round(max(0, $derived), 2);
+    }
+
+    private function normalizeNameForLegacyMatch(string $name): string
+    {
+        $value = mb_strtoupper(trim($name));
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim((string) $value);
     }
 
     public function create(Request $request, FamilyBilling $familyBilling): RedirectResponse
@@ -623,4 +711,3 @@ class ParentPaymentController extends Controller
         return 'not successful';
     }
 }
-
