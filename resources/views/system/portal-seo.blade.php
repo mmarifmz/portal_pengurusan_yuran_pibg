@@ -80,6 +80,18 @@
                     />
                 </label>
 
+                <label class="text-sm font-medium text-zinc-700">
+                    School Logo URL (Resit)
+                    <input
+                        name="school_logo_url"
+                        type="text"
+                        required
+                        value="{{ old('school_logo_url', $settings['school_logo_url'] ?? '') }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                    <span class="mt-1 block text-xs text-zinc-500">Digunakan untuk paparan resit web dan muat turun resit PDF.</span>
+                </label>
+
                 <div>
                     <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
                         Save SEO Settings

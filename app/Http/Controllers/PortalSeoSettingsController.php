@@ -24,6 +24,7 @@ class PortalSeoSettingsController extends Controller
             'seo_keywords' => ['required', 'string', 'max:600'],
             'seo_og_site_name' => ['required', 'string', 'max:160'],
             'seo_favicon_url' => ['required', 'string', 'max:400'],
+            'school_logo_url' => ['required', 'string', 'max:400'],
         ]);
 
         SiteSetting::setMany([
@@ -32,6 +33,7 @@ class PortalSeoSettingsController extends Controller
             'seo_keywords' => trim((string) $validated['seo_keywords']),
             'seo_og_site_name' => trim((string) $validated['seo_og_site_name']),
             'seo_favicon_url' => trim((string) $validated['seo_favicon_url']),
+            'school_logo_url' => trim((string) $validated['school_logo_url']),
         ]);
 
         return redirect()
@@ -50,6 +52,7 @@ class PortalSeoSettingsController extends Controller
             'seo_keywords' => 'Portal Yuran PIBG, SK Sri Petaling, Avante Intelligence, Arif.my, digitalisasi pendidikan, pendigitalan sekolah, semakan yuran, pembayaran PIBG, portal ibu bapa, inisiatif pendidikan digital',
             'seo_og_site_name' => 'Portal Yuran PIBG SK Sri Petaling',
             'seo_favicon_url' => asset('images/sksp-logo.png'),
+            'school_logo_url' => asset('images/sksp-logo.png'),
         ];
     }
 }

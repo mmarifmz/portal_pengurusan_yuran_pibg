@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyPaymentTransaction;
+use App\Models\SiteSetting;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -61,9 +62,21 @@ class ReceiptController extends Controller
                 ? $this->maskMiddle((string) ($transaction->provider_invoice_no ?: 'Belum dijana'), 3, 2)
                 : ($transaction->provider_invoice_no ?: 'Belum dijana'),
             'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
+            'schoolLogoUrl' => $this->schoolLogoUrl(),
         ]);
     }
 
+
+    private function schoolLogoUrl(): string
+    {
+        $settings = SiteSetting::getMany([
+            'school_logo_url' => asset('images/sksp-logo.png'),
+        ]);
+
+        $logoUrl = trim((string) ($settings['school_logo_url'] ?? ''));
+
+        return $logoUrl !== '' ? $logoUrl : asset('images/sksp-logo.png');
+    }
 
     private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
     {

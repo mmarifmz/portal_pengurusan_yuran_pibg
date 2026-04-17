@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
+use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Support\ParentPhone;
 use App\Services\ParentPaymentNotificationService;
@@ -306,12 +307,42 @@ class ParentPaymentController extends Controller
             ->orderBy('full_name')
             ->get();
 
+        $schoolLogoUrl = $this->schoolLogoUrl();
+        $schoolLogoPdfSource = $this->schoolLogoPdfSource($schoolLogoUrl);
+
         $pdf = Pdf::loadView('parent.receipt-pdf', [
             'transaction' => $transaction,
             'familyChildren' => $familyChildren,
+            'schoolLogoUrl' => $schoolLogoUrl,
+            'schoolLogoPdfSource' => $schoolLogoPdfSource,
         ])->setPaper('a4');
 
         return $pdf->download("resit-transaksi-yuran-pibg-{$externalOrderId}.pdf");
+    }
+
+    private function schoolLogoUrl(): string
+    {
+        $settings = SiteSetting::getMany([
+            'school_logo_url' => asset('images/sksp-logo.png'),
+        ]);
+
+        $logoUrl = trim((string) ($settings['school_logo_url'] ?? ''));
+
+        return $logoUrl !== '' ? $logoUrl : asset('images/sksp-logo.png');
+    }
+
+    private function schoolLogoPdfSource(string $schoolLogoUrl): string
+    {
+        $path = parse_url($schoolLogoUrl, PHP_URL_PATH);
+
+        if (is_string($path) && trim($path) !== '') {
+            $resolved = public_path(ltrim($path, '/'));
+            if (is_file($resolved)) {
+                return $resolved;
+            }
+        }
+
+        return public_path('images/sksp-logo.png');
     }
 
     private function synchronizeSuccessfulPayment(FamilyPaymentTransaction $transaction): void

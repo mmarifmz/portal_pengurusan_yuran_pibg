@@ -28,6 +28,21 @@
             padding: 18px 22px;
         }
 
+        .hero-header {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .hero-header td {
+            vertical-align: top;
+        }
+
+        .hero-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 999px;
+        }
+
         .hero-meta {
             margin: 0;
             font-size: 10px;
@@ -143,9 +158,16 @@
     <div class="page">
         <div class="card">
             <div class="hero">
-                <p class="hero-meta">Portal Yuran PIBG</p>
-                <p class="hero-title">Resit Transaksi Yuran PIBG</p>
-                <p class="hero-sub">Rujukan {{ $transaction->receipt_uuid }}</p>
+                <table class="hero-header">
+                    <tr>
+                        <td>
+                            <p class="hero-meta">Portal Yuran PIBG</p>
+                            <p class="hero-title">Resit Transaksi Yuran PIBG</p>
+                            <p class="hero-sub">Rujukan {{ $transaction->receipt_uuid }}</p>
+                        </td>
+                        <td style="text-align: right; width: 70px;"><img src="{{ $schoolLogoPdfSource ?? public_path('images/sksp-logo.png') }}" alt="Logo Sekolah" class="hero-logo"></td>
+                    </tr>
+                </table>
             </div>
 
             <div class="section">

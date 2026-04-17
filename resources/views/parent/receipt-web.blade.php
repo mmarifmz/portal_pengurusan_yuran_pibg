@@ -43,7 +43,7 @@
     <header class="topbar">
         <div class="topbar-inner">
             <a href="{{ $portalUrl ?? route('home') }}" class="brand">
-                <img src="{{ asset('images/sksp-logo.png') }}" alt="Logo SK Sri Petaling">
+                <img src="{{ $schoolLogoUrl ?? asset('images/sksp-logo.png') }}" alt="Logo SK Sri Petaling">
                 <div>
                     <p class="brand-title">Portal Rasmi</p>
                     <p class="brand-sub">Yuran &amp; Sumbangan PIBG SK Sri Petaling</p>
