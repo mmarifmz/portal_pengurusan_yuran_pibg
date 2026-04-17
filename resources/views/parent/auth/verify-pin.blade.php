@@ -43,10 +43,6 @@
                 </div>
             </a>
 
-            <div class="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:gap-2">
-                <a href="{{ route('parent.search') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Carian Nama Murid</a>
-                <a href="{{ route('login') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Guru / Admin</a>
-            </div>
         </div>
     </header>
 
