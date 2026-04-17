@@ -311,7 +311,7 @@ class ParentPaymentController extends Controller
             'familyChildren' => $familyChildren,
         ])->setPaper('a4');
 
-        return $pdf->download("receipt-{$externalOrderId}.pdf");
+        return $pdf->download("resit-transaksi-yuran-pibg-{$externalOrderId}.pdf");
     }
 
     private function synchronizeSuccessfulPayment(FamilyPaymentTransaction $transaction): void
@@ -554,3 +554,4 @@ class ParentPaymentController extends Controller
         return 'not successful';
     }
 }
+
