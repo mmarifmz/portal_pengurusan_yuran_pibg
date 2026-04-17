@@ -8,6 +8,7 @@ use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\WhatsAppTacSender;
+use App\Support\ParentPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -27,10 +28,27 @@ class ParentTacNotificationController extends Controller
             'parent_name' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $phone = preg_replace('/\s+/', '', $validated['phone']) ?: $validated['phone'];
+        $phone = ParentPhone::sanitizeInput($validated['phone']);
         $selectedBilling = filled($validated['family_billing_id'] ?? null)
             ? FamilyBilling::query()->find($validated['family_billing_id'])
             : null;
+
+        if (! $selectedBilling) {
+            $selectedBilling = $this->resolveFamilyBillingForPhone($phone);
+        }
+
+        if ($selectedBilling && ! $this->phoneCanAccessFamilyBilling($phone, $selectedBilling)) {
+            if (! $selectedBilling->registerPhone($phone)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This family already has 5 registered phone numbers. Please remove one before adding a new phone.',
+                ], 422);
+            }
+        }
+
+        if ($selectedBilling) {
+            $selectedBilling->registerPhone($phone);
+        }
 
         $parent = User::query()
             ->where('role', 'parent')
@@ -64,7 +82,7 @@ class ParentTacNotificationController extends Controller
             'attempts' => 0,
         ]);
 
-        $delivery = $this->whatsAppTacSender->sendTac($phone, $code);
+        $delivery = $this->whatsAppTacSender->sendTac($phone, $code, $selectedBilling?->family_code);
 
         return response()->json([
             'success' => true,
@@ -88,14 +106,16 @@ class ParentTacNotificationController extends Controller
             ?: $familyStudents->first()?->parent_name
             ?: "Parent {$familyBilling->family_code}");
 
+        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
+
         $parent = User::query()->create([
             'name' => $resolvedName,
             'email' => sprintf(
                 'parent-%s-%s@placeholder.local',
                 Str::lower($familyBilling->family_code),
-                preg_replace('/\D+/', '', $phone) ?: Str::lower((string) Str::ulid())
+                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
             ),
-            'phone' => $phone,
+            'phone' => $sanitizedPhone,
             'role' => 'parent',
             'password' => Str::random(40),
             'email_verified_at' => now(),
@@ -103,8 +123,57 @@ class ParentTacNotificationController extends Controller
 
         Student::query()
             ->where('family_code', $familyBilling->family_code)
-            ->update(['parent_phone' => $phone]);
+            ->where(function ($query) {
+                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
+            })
+            ->update(['parent_phone' => $sanitizedPhone]);
 
         return $parent;
+    }
+
+    private function phoneCanAccessFamilyBilling(string $phone, FamilyBilling $familyBilling): bool
+    {
+        if ($familyBilling->hasRegisteredPhone($phone)) {
+            return true;
+        }
+
+        return Student::query()
+            ->whereIn('parent_phone', ParentPhone::variants($phone))
+            ->where('family_code', $familyBilling->family_code)
+            ->exists();
+    }
+
+    private function resolveFamilyBillingForPhone(string $phone): ?FamilyBilling
+    {
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return null;
+        }
+
+        $familyCodesFromStudents = Student::query()
+            ->whereIn('parent_phone', ParentPhone::variants($phone))
+            ->whereNotNull('family_code')
+            ->pluck('family_code');
+
+        $familyCodesFromRegisteredPhones = FamilyBilling::query()
+            ->whereHas('phones', fn ($query) => $query->where('normalized_phone', $normalizedPhone))
+            ->pluck('family_code');
+
+        $familyCodes = $familyCodesFromStudents
+            ->merge($familyCodesFromRegisteredPhones)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($familyCodes->isEmpty()) {
+            return null;
+        }
+
+        return FamilyBilling::query()
+            ->whereIn('family_code', $familyCodes)
+            ->orderByDesc('billing_year')
+            ->orderByDesc('id')
+            ->first();
     }
 }

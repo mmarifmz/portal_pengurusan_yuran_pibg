@@ -128,6 +128,14 @@
     </header>
 
     <main class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        @if (session('status'))
+            <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{{ session('status') }}</div>
+        @endif
+
+        @if ($errors->any())
+            <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ $errors->first() }}</div>
+        @endif
+
         <section class="hero-strip box p-4 sm:p-5">
             <div class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
                 <div>
@@ -254,20 +262,15 @@
                                     <div class="border-t border-zinc-200 lg:border-t-0 lg:border-l lg:border-zinc-200">
                                         @if ($family['billing'])
                                             @if (auth()->user()?->isParent())
-                                                @php
-                                                    $buttonLabel = $family['billing']->outstanding_amount <= 0
-                                                        ? 'Log Masuk Portal Ibu Bapa'
-                                                        : ($family['has_registered_phone'] ? 'Log Masuk & Bayar Yuran' : 'Daftar Masuk & Bayar Yuran');
-                                                    $buttonClasses = $family['billing']->outstanding_amount <= 0
-                                                        ? 'bg-sky-600 hover:bg-sky-700'
-                                                        : ($family['has_registered_phone'] ? 'bg-[color:var(--brand-green)] hover:bg-[color:var(--brand-forest)]' : 'bg-orange-500 hover:bg-orange-600');
-                                                @endphp
-                                                <a
-                                                    href="{{ route('parent.payments.checkout', $family['billing']) }}"
-                                                    class="flex h-full min-h-32 w-full items-center justify-center px-5 py-6 text-center text-base font-bold text-white transition {{ $buttonClasses }}"
-                                                >
-                                                    {{ $buttonLabel }}
-                                                </a>
+                                                <form method="POST" action="{{ route('parent.search.select', $family['billing']) }}" class="h-full">
+                                                    @csrf
+                                                    <button
+                                                        type="submit"
+                                                        class="flex h-full min-h-32 w-full items-center justify-center bg-[color:var(--brand-green)] px-5 py-6 text-center text-base font-bold text-white transition hover:bg-[color:var(--brand-forest)]"
+                                                    >
+                                                        Pilih Anak Ini
+                                                    </button>
+                                                </form>
                                             @else
                                                 @php
                                                     $buttonLabel = $family['billing']->outstanding_amount <= 0
@@ -278,7 +281,7 @@
                                                         : ($family['has_registered_phone'] ? 'bg-[color:var(--brand-green)] hover:bg-[color:var(--brand-forest)]' : 'bg-orange-500 hover:bg-orange-600');
                                                 @endphp
                                                 <a
-                                                    href="{{ route('parent.login.form', ['billing' => $family['billing']->id, 'phone' => $family['parent_phone']]) }}"
+                                                    href="{{ route('parent.login.form', ['billing' => $family['billing']->id, 'phone' => $family['parent_phone'], 'return' => request()->fullUrl()]) }}"
                                                     class="flex h-full min-h-32 w-full items-center justify-center px-5 py-6 text-center text-base font-bold text-white transition {{ $buttonClasses }}"
                                                 >
                                                     {{ $buttonLabel }}

@@ -65,6 +65,30 @@
             </div>
 
             <div class="mt-4 overflow-x-auto">
+                <h3 class="mb-2 text-sm font-semibold text-zinc-900">Family Attached Phones</h3>
+                <table class="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        <tr>
+                            <th class="px-4 py-3">Phone Number</th>
+                            <th class="px-4 py-3">Last Logged In</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200">
+                        @forelse ($familyPhoneAccess as $phoneAccess)
+                            <tr>
+                                <td class="px-4 py-3 text-zinc-700">{{ $phoneAccess['phone'] }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $phoneAccess['latest_login_at']?->format('d M Y H:i') ?: '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="2" class="px-4 py-4 text-center text-zinc-500">No phone number attached to this family yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 overflow-x-auto">
                 <table class="min-w-full divide-y divide-zinc-200 text-sm">
                     <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                         <tr>

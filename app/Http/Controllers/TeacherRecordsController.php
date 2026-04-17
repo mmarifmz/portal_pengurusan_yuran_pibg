@@ -6,6 +6,7 @@ use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\ParentLoginOtp;
+use App\Models\ParentLoginAudit;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -324,6 +325,7 @@ class TeacherRecordsController extends Controller
 
         $familyBillings = FamilyBilling::query()
             ->where('family_code', $familyCode)
+            ->with(['phones' => fn ($query) => $query->orderBy('id')])
             ->orderByDesc('billing_year')
             ->get();
 
@@ -402,6 +404,42 @@ class TeacherRecordsController extends Controller
         $successfulLogins = $accessLogs->filter(fn (ParentLoginOtp $log): bool => $log->used_at !== null)->count();
         $latestAccessAt = $accessLogs->first()?->created_at;
         $isOnboarded = $linkedParents->isNotEmpty() && $successfulLogins > 0;
+
+        $attachedFamilyPhones = $familyBillings
+            ->flatMap(fn (FamilyBilling $billing) => $billing->phones->pluck('phone'))
+            ->map(fn ($phone) => trim((string) $phone))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $attachedFamilyNormalizedPhones = $attachedFamilyPhones
+            ->map(fn (string $phone) => $this->normalizePhoneForMatch($phone))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $latestFamilyPhoneLoginByNormalized = $attachedFamilyNormalizedPhones->isEmpty()
+            ? collect()
+            : ParentLoginAudit::query()
+                ->selectRaw('normalized_phone, MAX(logged_in_at) as latest_logged_in_at')
+                ->whereIn('normalized_phone', $attachedFamilyNormalizedPhones->all())
+                ->groupBy('normalized_phone')
+                ->get()
+                ->keyBy('normalized_phone');
+
+        $familyPhoneAccess = $attachedFamilyPhones
+            ->map(function (string $phone) use ($latestFamilyPhoneLoginByNormalized): array {
+                $normalized = $this->normalizePhoneForMatch($phone);
+                $latestLogin = $normalized !== ''
+                    ? $latestFamilyPhoneLoginByNormalized->get($normalized)?->latest_logged_in_at
+                    : null;
+
+                return [
+                    'phone' => $phone,
+                    'latest_login_at' => $latestLogin ? now()->parse((string) $latestLogin) : null,
+                ];
+            })
+            ->values();
 
         $currentBilling = $familyBillings->first();
         $totalPaid = (float) $familyBillings->sum('paid_amount');
@@ -490,6 +528,7 @@ class TeacherRecordsController extends Controller
             'isOnboarded' => $isOnboarded,
             'successfulLogins' => $successfulLogins,
             'latestAccessAt' => $latestAccessAt,
+            'familyPhoneAccess' => $familyPhoneAccess,
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => $legacyPaidTotal,
             'legacyDonationTotal' => $legacyDonationTotal,
@@ -506,6 +545,7 @@ class TeacherRecordsController extends Controller
 
         $familyBillings = FamilyBilling::query()
             ->where('family_code', $familyCode)
+            ->with(['phones' => fn ($query) => $query->orderBy('id')])
             ->orderByDesc('billing_year')
             ->get();
 

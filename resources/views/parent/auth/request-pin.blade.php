@@ -78,7 +78,12 @@
 
                     @if ($selectedBilling)
                         <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                            You are starting payment onboarding for family code <span class="font-semibold">{{ $selectedBilling->family_code }}</span> ({{ $selectedBilling->billing_year }}).
+                            <p>
+                                You are starting payment onboarding for family code <span class="font-semibold">{{ $selectedBilling->family_code }}</span> ({{ $selectedBilling->billing_year }}).
+                            </p>
+                            <p class="mt-2 text-emerald-800">
+                                If you want to register a new parent phone number for this family, type the new number in the <span class="font-semibold">Phone number</span> field and click <span class="font-semibold">Send TAC</span>.
+                            </p>
                         </div>
                     @endif
 
@@ -115,6 +120,7 @@
                         @if ($selectedBilling)
                             <input type="hidden" name="family_billing_id" value="{{ $selectedBilling->id }}">
                         @endif
+                        <input type="hidden" name="return_url" value="{{ $returnUrl }}">
 
                         <div>
                             <label for="phone" class="mb-2 block text-sm font-semibold text-zinc-800">

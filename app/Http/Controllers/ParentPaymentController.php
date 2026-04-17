@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
+use App\Support\ParentPhone;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class ParentPaymentController extends Controller
@@ -161,12 +163,7 @@ class ParentPaymentController extends Controller
         $user = $request->user();
         $isTesterMode = (bool) $user?->isParentTester();
 
-        $familyCodes = Student::query()
-            ->where('parent_phone', (string) $user?->phone)
-            ->whereNotNull('family_code')
-            ->pluck('family_code')
-            ->unique()
-            ->values();
+        $familyCodes = $this->resolveOwnedFamilyCodes((string) $user?->phone);
 
         $transactions = FamilyPaymentTransaction::query()
             ->with('familyBilling')
@@ -361,6 +358,11 @@ class ParentPaymentController extends Controller
         });
 
         $transaction->refresh();
+
+        if (filled($transaction->payer_phone)) {
+            $billing->registerPhone((string) $transaction->payer_phone);
+        }
+
         $this->syncParentProfileFromPaidTransaction($transaction);
 
         if (! $transaction->receipt_notified_at && filled($transaction->payer_phone)) {
@@ -444,18 +446,20 @@ class ParentPaymentController extends Controller
 
     private function authorizeParentFamilyBilling(Request $request, FamilyBilling $familyBilling): void
     {
+        $selectionCompleted = (bool) $request->session()->get('parent_child_selection_completed', false);
+        $selectedBillingId = (int) $request->session()->get('parent_selected_family_billing_id', 0);
+
+        abort_unless(
+            $selectionCompleted && $selectedBillingId === (int) $familyBilling->id,
+            403,
+            'Please select your child from Carian Nama Murid before opening checkout.'
+        );
+
         if ($request->user()?->isParentTester()) {
             return;
         }
 
-        $userPhone = (string) $request->user()?->phone;
-
-        $ownedFamilyCodes = Student::query()
-            ->where('parent_phone', $userPhone)
-            ->whereNotNull('family_code')
-            ->pluck('family_code')
-            ->unique()
-            ->values();
+        $ownedFamilyCodes = $this->resolveOwnedFamilyCodes((string) $request->user()?->phone);
 
         abort_unless($ownedFamilyCodes->contains($familyBilling->family_code), 403, 'Unauthorized family billing access.');
     }
@@ -465,6 +469,33 @@ class ParentPaymentController extends Controller
         $configured = (float) config('services.parent_tester_amount', 1);
 
         return round(max(0.01, $configured), 2);
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function resolveOwnedFamilyCodes(string $phone): Collection
+    {
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return collect();
+        }
+
+        $studentFamilyCodes = Student::query()
+            ->whereIn('parent_phone', ParentPhone::variants($phone))
+            ->whereNotNull('family_code')
+            ->pluck('family_code');
+
+        $registeredFamilyCodes = FamilyBilling::query()
+            ->whereHas('phones', fn ($query) => $query->where('normalized_phone', $normalizedPhone))
+            ->pluck('family_code');
+
+        return $studentFamilyCodes
+            ->merge($registeredFamilyCodes)
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     private function syncParentProfileFromPaidTransaction(FamilyPaymentTransaction $transaction): void

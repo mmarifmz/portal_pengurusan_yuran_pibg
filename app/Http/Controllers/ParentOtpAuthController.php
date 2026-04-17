@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\WhatsAppTacSender;
+use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +36,7 @@ class ParentOtpAuthController extends Controller
         return view('parent.auth.request-pin', [
             'prefillPhone' => (string) $request->query('phone', ''),
             'selectedBilling' => $selectedBilling,
+            'returnUrl' => $this->sanitizeReturnUrl((string) $request->query('return', ''), $request),
             // Temporarily hidden while we redesign tukar nombor telefon flow.
             'showPaidFamilyPhoneReset' => false,
             'paidFamilyResetPhone' => (string) $request->session()->get('paid_family_phone_reset_phone', ''),
@@ -46,9 +49,10 @@ class ParentOtpAuthController extends Controller
             'phone' => ['required', 'string', 'max:25'],
             'family_billing_id' => ['nullable', 'integer', 'exists:family_billings,id'],
             'confirm_phone_reset' => ['nullable', 'boolean'],
+            'return_url' => ['nullable', 'string', 'max:1500'],
         ]);
 
-        $phone = $this->normalizePhone($validated['phone']);
+        $phone = ParentPhone::sanitizeInput($validated['phone']);
         $confirmPhoneReset = (bool) ($validated['confirm_phone_reset'] ?? false);
         $isTesterPhone = $this->isTesterPhone($phone);
 
@@ -66,14 +70,22 @@ class ParentOtpAuthController extends Controller
         }
 
         if ($selectedBilling && ! $isTesterPhone && ! $this->phoneCanAccessFamilyBilling($phone, $selectedBilling)) {
-            if ($confirmPhoneReset && $this->familyBillingAllowsPhoneReset($selectedBilling)) {
-                $parent = $this->resetPaidFamilyPhone($phone, $selectedBilling);
-            } else {
+            if (! $selectedBilling->registerPhone($phone)) {
                 return back()->withErrors([
-                    'phone' => $this->familyBillingAllowsPhoneReset($selectedBilling)
-                        ? 'Phone number does not match this family billing record yet. Please contact admin for phone update.'
-                        : 'Phone number does not match this family billing record.',
+                    'phone' => $this->familyBillingPhoneLimitMessage(),
                 ])->withInput();
+            }
+        }
+
+        if ($selectedBilling && ! $isTesterPhone) {
+            $this->registerFamilyPhoneIfPossible($phone, $selectedBilling);
+        }
+
+        if (! $selectedBilling && ! $isTesterPhone) {
+            $selectedBilling = $this->resolveFamilyBillingForPhone($phone);
+
+            if ($selectedBilling) {
+                $this->registerFamilyPhoneIfPossible($phone, $selectedBilling);
             }
         }
 
@@ -129,6 +141,9 @@ class ParentOtpAuthController extends Controller
 
         session([
             'parent_otp_phone' => $phone,
+            'parent_otp_expires_at' => $otp->expires_at?->getTimestamp(),
+            'parent_otp_return_url' => $this->sanitizeReturnUrl((string) ($validated['return_url'] ?? ''), $request),
+            'parent_otp_preview' => $this->buildOtpPreview($selectedBilling, $phone),
         ]);
 
         if ($selectedBilling) {
@@ -155,11 +170,35 @@ class ParentOtpAuthController extends Controller
             return redirect()->route('parent.login.form');
         }
 
+        $phone = (string) $request->session()->get('parent_otp_phone');
+        $expiresAtTimestamp = (int) $request->session()->get('parent_otp_expires_at', 0);
+
+        if ($expiresAtTimestamp <= 0) {
+            $latestOtp = ParentLoginOtp::query()
+                ->where('phone', $phone)
+                ->whereNull('used_at')
+                ->latest('id')
+                ->first();
+
+            if ($latestOtp?->expires_at) {
+                $expiresAtTimestamp = $latestOtp->expires_at->getTimestamp();
+                $request->session()->put('parent_otp_expires_at', $expiresAtTimestamp);
+            }
+        }
+
+        $preview = (array) $request->session()->get('parent_otp_preview', []);
+
         return view('parent.auth.verify-pin', [
-            'phone' => $request->session()->get('parent_otp_phone'),
+            'phone' => $phone,
             'debugCode' => app()->environment('testing') || config('services.whatsapp.debug_show_tac')
                 ? $request->session()->get('parent_otp_debug_code')
                 : null,
+            'otpExpiresAtIso' => $expiresAtTimestamp > 0
+                ? now()->setTimestamp($expiresAtTimestamp)->toIso8601String()
+                : null,
+            'otpReturnUrl' => (string) $request->session()->get('parent_otp_return_url', route('parent.search')),
+            'maskedStudentName' => (string) ($preview['masked_student_name'] ?? ''),
+            'maskedFamilyCode' => (string) ($preview['masked_family_code'] ?? ''),
         ]);
     }
 
@@ -215,31 +254,57 @@ class ParentOtpAuthController extends Controller
 
         Auth::login($user, false);
         $request->session()->regenerate();
+
+        ParentLoginAudit::query()->create([
+            'user_id' => $user->id,
+            'phone' => $phone,
+            'normalized_phone' => ParentPhone::normalizeForMatch($phone),
+            'logged_in_at' => now(),
+        ]);
         $intendedCheckoutId = $request->session()->pull('parent_login_intended_checkout');
-        $request->session()->forget(['parent_otp_phone', 'parent_otp_debug_code']);
+        $request->session()->forget([
+            'parent_otp_phone',
+            'parent_otp_debug_code',
+            'parent_otp_expires_at',
+            'parent_otp_return_url',
+            'parent_otp_preview',
+        ]);
 
         if ($intendedCheckoutId) {
             $familyBilling = FamilyBilling::query()->find($intendedCheckoutId);
 
             if ($familyBilling && ($this->userCanAccessFamilyBilling($user, $familyBilling) || $user->isParentTester())) {
+                $request->session()->put('parent_child_selection_completed', true);
+                $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
+
                 return redirect()->route('parent.payments.checkout', $familyBilling);
             }
         }
 
-        return redirect()->route('parent.dashboard');
+        $request->session()->put('parent_child_selection_completed', false);
+        $request->session()->forget('parent_selected_family_billing_id');
+
+        return redirect()->route('parent.search')
+            ->with('status', 'Log masuk berjaya. Sila cari nama anak dan pilih rekod keluarga untuk teruskan.');
     }
 
     private function dispatchTac(User $parent, string $code, ?FamilyBilling $selectedBilling = null): void
     {
+        $phone = (string) $parent->phone;
+
         $familyCode = $selectedBilling?->family_code
             ?? Student::query()
-                ->where('parent_phone', (string) $parent->phone)
+                ->whereIn('parent_phone', ParentPhone::variants($phone))
                 ->whereNotNull('family_code')
                 ->where('family_code', '!=', '')
                 ->orderBy('family_code')
+                ->value('family_code')
+            ?? FamilyBilling::query()
+                ->whereHas('phones', fn ($query) => $query->where('normalized_phone', ParentPhone::normalizeForMatch($phone)))
+                ->orderBy('family_code')
                 ->value('family_code');
 
-        $this->whatsAppTacSender->sendTac((string) $parent->phone, $code, $familyCode);
+        $this->whatsAppTacSender->sendTac($phone, $code, $familyCode);
 
         if (blank($parent->email)) {
             return;
@@ -258,15 +323,14 @@ class ParentOtpAuthController extends Controller
         }
     }
 
-    private function normalizePhone(string $phone): string
-    {
-        return preg_replace('/\s+/', '', $phone) ?: $phone;
-    }
-
     private function phoneCanAccessFamilyBilling(string $phone, FamilyBilling $familyBilling): bool
     {
+        if ($familyBilling->hasRegisteredPhone($phone)) {
+            return true;
+        }
+
         return Student::query()
-            ->where('parent_phone', $phone)
+            ->whereIn('parent_phone', ParentPhone::variants($phone))
             ->where('family_code', $familyBilling->family_code)
             ->exists();
     }
@@ -282,46 +346,22 @@ class ParentOtpAuthController extends Controller
             || strtolower((string) $familyBilling->status) === 'paid';
     }
 
-    private function resetPaidFamilyPhone(string $phone, FamilyBilling $familyBilling): User
+    private function resetPaidFamilyPhone(string $phone, FamilyBilling $familyBilling): ?User
     {
-        $familyStudents = Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->get();
+        if (! $familyBilling->registerPhone($phone)) {
+            return null;
+        }
 
-        $existingPhones = $familyStudents
-            ->pluck('parent_phone')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $parent = User::query()
+        $existingParent = User::query()
             ->where('role', 'parent')
-            ->where('phone', $phone)
+            ->where('phone', ParentPhone::sanitizeInput($phone))
             ->first();
 
-        if (! $parent && $existingPhones->isNotEmpty()) {
-            $parent = User::query()
-                ->where('role', 'parent')
-                ->whereIn('phone', $existingPhones)
-                ->orderBy('id')
-                ->first();
+        if ($existingParent) {
+            return $existingParent;
         }
 
-        if ($parent) {
-            $parent->forceFill([
-                'phone' => $phone,
-            ])->save();
-        } else {
-            $parent = $this->registerParentForFamily($phone, $familyBilling);
-        }
-
-        Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->update([
-                'parent_phone' => $phone,
-            ]);
-
-        return $parent;
+        return $this->registerParentForFamily($phone, $familyBilling);
     }
 
     private function registerParentForFamily(string $phone, FamilyBilling $familyBilling): User
@@ -335,23 +375,30 @@ class ParentOtpAuthController extends Controller
             ?? $familyStudents->first()?->parent_name
             ?? "Parent {$familyBilling->family_code}");
 
+        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
+
         $parent = User::query()->create([
             'name' => $parentName,
             'email' => sprintf(
                 'parent-%s-%s@placeholder.local',
                 Str::lower($familyBilling->family_code),
-                preg_replace('/\D+/', '', $phone) ?: Str::lower((string) Str::ulid())
+                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
             ),
-            'phone' => $phone,
+            'phone' => $sanitizedPhone,
             'role' => 'parent',
             'password' => Str::random(40),
             'email_verified_at' => now(),
         ]);
 
+        $this->registerFamilyPhoneIfPossible($sanitizedPhone, $familyBilling);
+
         Student::query()
             ->where('family_code', $familyBilling->family_code)
+            ->where(function ($query) {
+                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
+            })
             ->update([
-                'parent_phone' => $phone,
+                'parent_phone' => $sanitizedPhone,
             ]);
 
         return $parent;
@@ -359,63 +406,179 @@ class ParentOtpAuthController extends Controller
 
     private function isTesterPhone(string $phone): bool
     {
-        $normalizedInput = $this->normalizePhoneForMatch($phone);
+        $normalizedInput = ParentPhone::normalizeForMatch($phone);
 
         if ($normalizedInput === '') {
             return false;
         }
 
         $testerPhones = collect((array) config('services.parent_tester_phones', []))
-            ->map(fn ($testerPhone) => $this->normalizePhoneForMatch((string) $testerPhone))
+            ->map(fn ($testerPhone) => ParentPhone::normalizeForMatch((string) $testerPhone))
             ->filter()
             ->values();
 
         return $testerPhones->contains($normalizedInput);
     }
 
-    private function normalizePhoneForMatch(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-
-        if ($digits === '') {
-            return '';
-        }
-
-        if (str_starts_with($digits, '60')) {
-            return $digits;
-        }
-
-        if (str_starts_with($digits, '0')) {
-            return '6'.$digits;
-        }
-
-        if (str_starts_with($digits, '1')) {
-            return '60'.$digits;
-        }
-
-        return $digits;
-    }
-
     private function findOrCreateTesterParent(string $phone): User
     {
+        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
+
         $existing = User::query()
             ->where('role', 'parent')
-            ->where('phone', $phone)
+            ->where('phone', $sanitizedPhone)
             ->first();
 
         if ($existing) {
             return $existing;
         }
 
-        $digits = $this->normalizePhoneForMatch($phone);
+        $digits = ParentPhone::normalizeForMatch($sanitizedPhone);
 
         return User::query()->create([
             'name' => 'Treasury Tester',
             'email' => sprintf('tester-%s@placeholder.local', $digits !== '' ? $digits : Str::lower((string) Str::ulid())),
-            'phone' => $phone,
+            'phone' => $sanitizedPhone,
             'role' => 'parent',
             'password' => Str::random(40),
             'email_verified_at' => now(),
         ]);
+    }
+
+    private function registerFamilyPhoneIfPossible(string $phone, FamilyBilling $familyBilling): void
+    {
+        if ($familyBilling->hasRegisteredPhone($phone)) {
+            return;
+        }
+
+        $familyBilling->registerPhone($phone);
+    }
+
+    private function familyBillingPhoneLimitMessage(): string
+    {
+        return 'This family already has the maximum 5 phone numbers registered. Please ask admin to remove one phone first.';
+    }
+
+    private function resolveFamilyBillingForPhone(string $phone): ?FamilyBilling
+    {
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return null;
+        }
+
+        $familyCodesFromStudents = Student::query()
+            ->whereIn('parent_phone', ParentPhone::variants($phone))
+            ->whereNotNull('family_code')
+            ->pluck('family_code');
+
+        $familyCodesFromRegisteredPhones = FamilyBilling::query()
+            ->whereHas('phones', fn ($query) => $query->where('normalized_phone', $normalizedPhone))
+            ->pluck('family_code');
+
+        $familyCodes = $familyCodesFromStudents
+            ->merge($familyCodesFromRegisteredPhones)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($familyCodes->isEmpty()) {
+            return null;
+        }
+
+        return FamilyBilling::query()
+            ->whereIn('family_code', $familyCodes)
+            ->orderByDesc('billing_year')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @return array{masked_student_name: string, masked_family_code: string}
+     */
+    private function buildOtpPreview(?FamilyBilling $selectedBilling, string $phone): array
+    {
+        $billing = $selectedBilling ?? $this->resolveFamilyBillingForPhone($phone);
+
+        if (! $billing) {
+            return [
+                'masked_student_name' => '',
+                'masked_family_code' => '',
+            ];
+        }
+
+        $studentName = (string) Student::query()
+            ->where('family_code', $billing->family_code)
+            ->orderBy('full_name')
+            ->value('full_name');
+
+        return [
+            'masked_student_name' => $this->maskStudentName($studentName),
+            'masked_family_code' => $this->maskFamilyCode((string) $billing->family_code),
+        ];
+    }
+
+    private function maskStudentName(string $fullName): string
+    {
+        $trimmed = trim($fullName);
+
+        if ($trimmed === '') {
+            return '';
+        }
+
+        $length = mb_strlen($trimmed);
+        $visibleLength = max(3, (int) ceil($length * 0.6));
+        $maskedLength = max(1, $length - $visibleLength);
+
+        return mb_substr($trimmed, 0, $visibleLength).str_repeat('#', $maskedLength);
+    }
+
+    private function maskFamilyCode(string $familyCode): string
+    {
+        $trimmed = trim($familyCode);
+
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (mb_strlen($trimmed) <= 4) {
+            return mb_substr($trimmed, 0, 1).str_repeat('#', max(1, mb_strlen($trimmed) - 1));
+        }
+
+        return mb_substr($trimmed, 0, 4).str_repeat('#', max(2, mb_strlen($trimmed) - 4));
+    }
+
+    private function sanitizeReturnUrl(string $candidate, Request $request): string
+    {
+        $fallback = route('parent.search');
+        $target = trim($candidate);
+
+        if ($target === '') {
+            $target = trim((string) $request->headers->get('referer', ''));
+        }
+
+        if ($target === '') {
+            return $fallback;
+        }
+
+        $parts = parse_url($target);
+
+        if (! is_array($parts)) {
+            return $fallback;
+        }
+
+        if (isset($parts['host']) && strcasecmp((string) $parts['host'], (string) $request->getHost()) !== 0) {
+            return $fallback;
+        }
+
+        $path = '/'.ltrim((string) ($parts['path'] ?? ''), '/');
+
+        if (! str_starts_with($path, '/parent/search')) {
+            return $fallback;
+        }
+
+        $query = isset($parts['query']) && $parts['query'] !== '' ? '?'.$parts['query'] : '';
+
+        return $request->getSchemeAndHttpHost().$path.$query;
     }
 }

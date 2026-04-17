@@ -69,6 +69,12 @@
                         </flux:sidebar.item>
                     @endif
 
+                    @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
+                        <flux:sidebar.item icon="device-phone-mobile" :href="route('teacher.family-login-monitor')" :current="request()->routeIs('teacher.family-login-monitor')" wire:navigate>
+                            {{ __('Family Login Monitor') }}
+                        </flux:sidebar.item>
+                    @endif
+
                     @if (auth()->user()->isParent())
                         <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
                             {{ __('Parent Dashboard') }}

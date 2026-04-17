@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\Student;
+use App\Support\ParentPhone;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -127,6 +129,47 @@ class PublicParentSearchController extends Controller
         ]);
     }
 
+    public function selectFamily(Request $request, FamilyBilling $familyBilling): RedirectResponse
+    {
+        $parent = $request->user();
+
+        abort_unless($parent?->isParent(), 403, 'Unauthorized role access.');
+
+        $parentPhone = ParentPhone::sanitizeInput((string) $parent->phone);
+
+        if ($parentPhone === '') {
+            return redirect()->route('parent.search')
+                ->withErrors(['contact' => 'Nombor telefon akaun parent tidak sah. Sila hubungi admin sekolah.']);
+        }
+
+        $existingPhones = $this->resolveExistingFamilyPhones($familyBilling);
+        $familyAlreadyLinked = $existingPhones->isNotEmpty();
+        $primaryPhone = $existingPhones->first();
+
+        if (! $familyBilling->hasRegisteredPhone($parentPhone) && ! $familyBilling->registerPhone($parentPhone)) {
+            return redirect()->route('parent.search')->withErrors([
+                'contact' => 'Keluarga ini sudah mempunyai 5 nombor telefon berdaftar. Sila hubungi admin sekolah.',
+            ]);
+        }
+
+        $request->session()->put('parent_child_selection_completed', true);
+        $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
+
+        if ($familyAlreadyLinked) {
+            $notice = 'Keluarga ini sudah mempunyai nombor penjaga berdaftar. Akses diteruskan ke keluarga yang dipilih.';
+
+            if (filled($primaryPhone)) {
+                $notice .= ' Notifikasi keselamatan dihantar ke nombor utama '.$this->maskPrimaryPhoneForNotice((string) $primaryPhone).'.';
+            }
+
+            return redirect()->route('parent.payments.checkout', $familyBilling)
+                ->with('status', $notice);
+        }
+
+        return redirect()->route('parent.dashboard')
+            ->with('status', 'Keluarga berjaya dipautkan. Anda kini boleh semak dashboard ibu bapa.');
+    }
+
     private function maskStudentName(string $fullName): string
     {
         $trimmed = trim($fullName);
@@ -159,5 +202,50 @@ class PublicParentSearchController extends Controller
         }
 
         return substr($digits, 0, max(0, strlen($digits) - 4)).'####';
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function resolveExistingFamilyPhones(FamilyBilling $familyBilling): Collection
+    {
+        $registeredPhones = $familyBilling->phones()
+            ->orderBy('id')
+            ->pluck('phone')
+            ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone));
+
+        $studentPhones = Student::query()
+            ->where('family_code', $familyBilling->family_code)
+            ->whereNotNull('parent_phone')
+            ->where('parent_phone', '!=', '')
+            ->orderBy('id')
+            ->pluck('parent_phone')
+            ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone));
+
+        return $registeredPhones
+            ->merge($studentPhones)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function maskPrimaryPhoneForNotice(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return 'XXXX';
+        }
+
+        if (str_starts_with($digits, '60')) {
+            $digits = '0'.substr($digits, 2);
+        } elseif (str_starts_with($digits, '1')) {
+            $digits = '0'.$digits;
+        }
+
+        $prefixLength = max(2, min(6, strlen($digits) - 4));
+        $prefix = substr($digits, 0, $prefixLength);
+
+        return '+'.$prefix.'XXXX';
     }
 }

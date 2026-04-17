@@ -44,7 +44,6 @@
             </a>
 
             <div class="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:gap-2">
-                <a href="{{ route('parent.login.form') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Tukar nombor telefon</a>
                 <a href="{{ route('parent.search') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Carian Nama Murid</a>
                 <a href="{{ route('login') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Guru / Admin</a>
             </div>
@@ -67,6 +66,13 @@
 
                     <div class="mt-5 rounded-xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-700 shadow-sm">
                         <p>{{ __('Phone:') }} <span class="font-semibold text-zinc-900">{{ $phone }}</span></p>
+                        @if (! empty($maskedStudentName) || ! empty($maskedFamilyCode))
+                            <p class="mt-2">{{ __('Student:') }} <span class="font-semibold text-zinc-900">{{ $maskedStudentName ?: '-' }}</span></p>
+                            <p class="mt-1">{{ __('Family code:') }} <span class="font-semibold text-zinc-900">{{ $maskedFamilyCode ?: '-' }}</span></p>
+                        @endif
+                        @if ($otpExpiresAtIso)
+                            <p class="mt-2 text-amber-700">Session expires in <span id="otp-timer" class="font-bold">05:00</span></p>
+                        @endif
                         @if ($debugCode)
                             <p class="mt-2 font-medium text-amber-700">Dev code: {{ $debugCode }}</p>
                         @endif
@@ -117,6 +123,44 @@
             <p>Demi kemudahan semakan keluarga & bayaran yuran tahunan</p>
         </div>
     </footer>
+
+    <script>
+        (function () {
+            const expiresAtIso = @json($otpExpiresAtIso);
+            const returnUrl = @json($otpReturnUrl);
+            const timerElement = document.getElementById('otp-timer');
+
+            if (!expiresAtIso || !timerElement || !returnUrl) {
+                return;
+            }
+
+            const expiresAtMs = new Date(expiresAtIso).getTime();
+
+            const updateTimer = () => {
+                const remainingMs = expiresAtMs - Date.now();
+
+                if (remainingMs <= 0) {
+                    timerElement.textContent = '00:00';
+                    window.location.href = returnUrl;
+                    return;
+                }
+
+                const totalSeconds = Math.floor(remainingMs / 1000);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+
+                timerElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            };
+
+            updateTimer();
+            const intervalId = window.setInterval(() => {
+                updateTimer();
+                if (timerElement.textContent === '00:00') {
+                    window.clearInterval(intervalId);
+                }
+            }, 1000);
+        })();
+    </script>
 
     @fluxScripts
 </body>

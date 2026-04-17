@@ -13,6 +13,7 @@ use App\Http\Controllers\StudentImportController;
 use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\TeacherUserManagementController;
+use App\Http\Controllers\TeacherFamilyLoginMonitorController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Models\Student;
@@ -78,6 +79,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/teacher/records/family/{familyCode}/payments/export', [TeacherRecordsController::class, 'exportFamilyPayments'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.payments.export');
+    Route::get('/teacher/family-login-monitor', [TeacherFamilyLoginMonitorController::class, 'index'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.family-login-monitor');
     Route::get('/teacher/records/duplicates/{student}/review', [TeacherRecordsController::class, 'reviewDuplicate'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.duplicates.review');
@@ -92,6 +96,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/parent/dashboard', [ParentDashboardController::class, 'index'])
         ->middleware('role:parent')
         ->name('parent.dashboard');
+
+    Route::post('/parent/search/select/{familyBilling}', [PublicParentSearchController::class, 'selectFamily'])
+        ->middleware('role:parent')
+        ->name('parent.search.select');
 
     Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.'], function () {
         Route::get('history', [ParentPaymentController::class, 'history'])->name('history');

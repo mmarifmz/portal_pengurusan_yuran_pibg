@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyBillingPhone;
 use App\Models\Student;
 use App\Models\User;
 
@@ -44,7 +45,8 @@ it('logs parent in using valid tac', function () {
         'pin' => $pin,
     ]);
 
-    $verifyResponse->assertRedirect(route('parent.dashboard'));
+    $verifyResponse->assertRedirect(route('parent.search')); 
+    $verifyResponse->assertSessionHas('parent_child_selection_completed', false);
 
     $this->assertAuthenticated();
     expect(auth()->user()->role)->toBe('parent');
@@ -118,4 +120,258 @@ it('redirects parent to the selected checkout after valid tac verification', fun
 
     $verifyResponse->assertRedirect(route('parent.payments.checkout', $billing));
     $this->assertAuthenticated();
+});
+
+
+it('allows TAC request when phone is registered in family phone list', function () {
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F900',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'SSP1900',
+        'family_code' => 'SSP-F900',
+        'full_name' => 'Aina Nur',
+        'class_name' => '3 Amanah',
+        'parent_name' => 'Ibu Aina',
+        'parent_phone' => '0111111111',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $billing->id,
+        'phone' => '0132000000',
+        'normalized_phone' => '60132000000',
+    ]);
+
+    $response = $this->post(route('parent.login.request'), [
+        'phone' => '0132000000',
+        'family_billing_id' => $billing->id,
+    ]);
+
+    $response->assertRedirect(route('parent.login.verify.form'));
+    $this->assertDatabaseHas('users', [
+        'role' => 'parent',
+        'phone' => '0132000000',
+    ]);
+});
+
+it('allows adding fifth phone for a paid family via reset flow', function () {
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F901',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'SSP1901',
+        'family_code' => 'SSP-F901',
+        'full_name' => 'Aqil Firdaus',
+        'class_name' => '4 Bestari',
+        'parent_name' => 'Bapa Aqil',
+        'parent_phone' => '0120000000',
+    ]);
+
+    foreach (['0120000001', '0120000002', '0120000003', '0120000004'] as $seedPhone) {
+        FamilyBillingPhone::query()->create([
+            'family_billing_id' => $billing->id,
+            'phone' => $seedPhone,
+            'normalized_phone' => '6'.$seedPhone,
+        ]);
+    }
+
+    $response = $this->post(route('parent.login.request'), [
+        'phone' => '0139998888',
+        'family_billing_id' => $billing->id,
+        'confirm_phone_reset' => 1,
+    ]);
+
+    $response->assertRedirect(route('parent.login.verify.form'));
+
+    $this->assertDatabaseHas('family_billing_phones', [
+        'family_billing_id' => $billing->id,
+        'normalized_phone' => '60139998888',
+    ]);
+});
+
+it('rejects adding sixth phone for a paid family', function () {
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F902',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'SSP1902',
+        'family_code' => 'SSP-F902',
+        'full_name' => 'Irfan Hakim',
+        'class_name' => '5 Cemerlang',
+        'parent_name' => 'Ibu Irfan',
+        'parent_phone' => '0121000000',
+    ]);
+
+    foreach (['0121000001', '0121000002', '0121000003', '0121000004', '0121000005'] as $seedPhone) {
+        FamilyBillingPhone::query()->create([
+            'family_billing_id' => $billing->id,
+            'phone' => $seedPhone,
+            'normalized_phone' => '6'.$seedPhone,
+        ]);
+    }
+
+    $response = $this->from(route('parent.login.form', ['billing' => $billing->id]))->post(route('parent.login.request'), [
+        'phone' => '0130007777',
+        'family_billing_id' => $billing->id,
+        'confirm_phone_reset' => 1,
+    ]);
+
+    $response->assertSessionHasErrors(['phone']);
+
+    $this->assertDatabaseMissing('family_billing_phones', [
+        'family_billing_id' => $billing->id,
+        'normalized_phone' => '60130007777',
+    ]);
+});
+
+it('routes selected family to checkout when family already has a registered parent phone', function () {
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0137778888',
+        'email' => 'parent.select.family@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F950',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'SSP1950',
+        'family_code' => 'SSP-F950',
+        'full_name' => 'Nadia Hana',
+        'class_name' => '3 Aktif',
+        'parent_name' => 'Ibu Nadia',
+        'parent_phone' => '0115431234',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $billing->id,
+        'phone' => '0115431234',
+        'normalized_phone' => '60115431234',
+    ]);
+
+    $response = $this->actingAs($parent)->post(route('parent.search.select', $billing));
+
+    $response->assertRedirect(route('parent.payments.checkout', $billing));
+    $response->assertSessionHas('parent_child_selection_completed', true);
+    $response->assertSessionHas('status');
+
+    $this->assertDatabaseHas('family_billing_phones', [
+        'family_billing_id' => $billing->id,
+        'normalized_phone' => '60137778888',
+    ]);
+});
+
+it('routes selected family to dashboard when this is the first registered family phone', function () {
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0171112222',
+        'email' => 'parent.first.family@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F951',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'SSP1951',
+        'family_code' => 'SSP-F951',
+        'full_name' => 'Aiman Danish',
+        'class_name' => '2 Dinamik',
+        'parent_name' => 'Bapa Aiman',
+        'parent_phone' => null,
+    ]);
+
+    $response = $this->actingAs($parent)->post(route('parent.search.select', $billing));
+
+    $response->assertRedirect(route('parent.dashboard'));
+    $response->assertSessionHas('parent_child_selection_completed', true);
+
+    $this->assertDatabaseHas('family_billing_phones', [
+        'family_billing_id' => $billing->id,
+        'normalized_phone' => '60171112222',
+    ]);
+});
+it('blocks manual checkout URL access when child selection session is missing', function () {
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0183334444',
+        'email' => 'parent.manual.block@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F960',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $billing->id,
+        'phone' => '0183334444',
+        'normalized_phone' => '60183334444',
+    ]);
+
+    $response = $this->actingAs($parent)->get(route('parent.payments.checkout', $billing));
+
+    $response->assertForbidden();
+});
+
+it('allows checkout URL access after child selection session is completed for that family', function () {
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0187779999',
+        'email' => 'parent.manual.allow@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'SSP-F961',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $billing->id,
+        'phone' => '0187779999',
+        'normalized_phone' => '60187779999',
+    ]);
+
+    $response = $this->actingAs($parent)
+        ->withSession([
+            'parent_child_selection_completed' => true,
+            'parent_selected_family_billing_id' => $billing->id,
+        ])
+        ->get(route('parent.payments.checkout', $billing));
+
+    $response->assertOk();
 });
