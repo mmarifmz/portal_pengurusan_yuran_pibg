@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name', 'is_payment_tester'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -29,6 +29,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_payment_tester' => 'boolean',
         ];
     }
 
@@ -91,42 +92,6 @@ class User extends Authenticatable
 
     public function isParentTester(): bool
     {
-        if (! $this->isParent()) {
-            return false;
-        }
-
-        $testerPhones = collect((array) config('services.parent_tester_phones', []))
-            ->map(fn ($phone) => self::normalizePhoneForMatch((string) $phone))
-            ->filter()
-            ->values();
-
-        if ($testerPhones->isEmpty()) {
-            return false;
-        }
-
-        return $testerPhones->contains(self::normalizePhoneForMatch((string) $this->phone));
-    }
-
-    private static function normalizePhoneForMatch(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-
-        if ($digits === '') {
-            return '';
-        }
-
-        if (str_starts_with($digits, '60')) {
-            return $digits;
-        }
-
-        if (str_starts_with($digits, '0')) {
-            return '6'.$digits;
-        }
-
-        if (str_starts_with($digits, '1')) {
-            return '60'.$digits;
-        }
-
-        return $digits;
+        return $this->isParent() && (bool) $this->is_payment_tester;
     }
 }

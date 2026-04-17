@@ -54,10 +54,13 @@ class ParentOtpAuthController extends Controller
 
         $phone = ParentPhone::sanitizeInput($validated['phone']);
         $confirmPhoneReset = (bool) ($validated['confirm_phone_reset'] ?? false);
-        $isTesterPhone = $this->isTesterPhone($phone);
 
         $selectedBilling = null;
-        $parent = null;
+        $parent = User::query()
+            ->where('role', 'parent')
+            ->where('phone', $phone)
+            ->first();
+        $isPaymentTester = (bool) $parent?->isParentTester();
 
         if (filled($validated['family_billing_id'] ?? null)) {
             $selectedBilling = FamilyBilling::query()->find($validated['family_billing_id']);
@@ -69,7 +72,7 @@ class ParentOtpAuthController extends Controller
             }
         }
 
-        if ($selectedBilling && ! $isTesterPhone && ! $this->phoneCanAccessFamilyBilling($phone, $selectedBilling)) {
+        if ($selectedBilling && ! $isPaymentTester && ! $this->phoneCanAccessFamilyBilling($phone, $selectedBilling)) {
             if (! $selectedBilling->registerPhone($phone)) {
                 return back()->withErrors([
                     'phone' => $this->familyBillingPhoneLimitMessage(),
@@ -77,11 +80,11 @@ class ParentOtpAuthController extends Controller
             }
         }
 
-        if ($selectedBilling && ! $isTesterPhone) {
+        if ($selectedBilling && ! $isPaymentTester) {
             $this->registerFamilyPhoneIfPossible($phone, $selectedBilling);
         }
 
-        if (! $selectedBilling && ! $isTesterPhone) {
+        if (! $selectedBilling && ! $isPaymentTester) {
             $selectedBilling = $this->resolveFamilyBillingForPhone($phone);
 
             if ($selectedBilling) {
@@ -89,14 +92,6 @@ class ParentOtpAuthController extends Controller
             }
         }
 
-        $parent ??= User::query()
-            ->where('role', 'parent')
-            ->where('phone', $phone)
-            ->first();
-
-        if (! $parent && $isTesterPhone) {
-            $parent = $this->findOrCreateTesterParent($phone);
-        }
 
         if (! $parent && $selectedBilling) {
             $parent = $this->registerParentForFamily($phone, $selectedBilling);
@@ -402,47 +397,6 @@ class ParentOtpAuthController extends Controller
             ]);
 
         return $parent;
-    }
-
-    private function isTesterPhone(string $phone): bool
-    {
-        $normalizedInput = ParentPhone::normalizeForMatch($phone);
-
-        if ($normalizedInput === '') {
-            return false;
-        }
-
-        $testerPhones = collect((array) config('services.parent_tester_phones', []))
-            ->map(fn ($testerPhone) => ParentPhone::normalizeForMatch((string) $testerPhone))
-            ->filter()
-            ->values();
-
-        return $testerPhones->contains($normalizedInput);
-    }
-
-    private function findOrCreateTesterParent(string $phone): User
-    {
-        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
-
-        $existing = User::query()
-            ->where('role', 'parent')
-            ->where('phone', $sanitizedPhone)
-            ->first();
-
-        if ($existing) {
-            return $existing;
-        }
-
-        $digits = ParentPhone::normalizeForMatch($sanitizedPhone);
-
-        return User::query()->create([
-            'name' => 'Treasury Tester',
-            'email' => sprintf('tester-%s@placeholder.local', $digits !== '' ? $digits : Str::lower((string) Str::ulid())),
-            'phone' => $sanitizedPhone,
-            'role' => 'parent',
-            'password' => Str::random(40),
-            'email_verified_at' => now(),
-        ]);
     }
 
     private function registerFamilyPhoneIfPossible(string $phone, FamilyBilling $familyBilling): void

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class FamilyPaymentTransaction extends Model
@@ -77,5 +78,32 @@ class FamilyPaymentTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function getCreatedAtForDisplayAttribute(): ?Carbon
+    {
+        return $this->normalizeForDisplay($this->created_at);
+    }
+
+    public function getPaidAtForDisplayAttribute(): ?Carbon
+    {
+        return $this->normalizeForDisplay($this->paid_at);
+    }
+
+    private function normalizeForDisplay(?Carbon $value): ?Carbon
+    {
+        if (! $value) {
+            return null;
+        }
+
+        $timezone = config('app.timezone', 'Asia/Kuala_Lumpur');
+        $localized = $value->copy()->timezone($timezone);
+
+        // Backward-compatibility: older rows may be stored with an 8-hour offset.
+        if ($localized->greaterThan(now($timezone)->addMinutes(5))) {
+            return $localized->subHours(8);
+        }
+
+        return $localized;
     }
 }

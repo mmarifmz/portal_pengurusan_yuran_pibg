@@ -32,6 +32,9 @@
                         <x-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
                             {{ __('Portal SEO') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('system.payment-testers.index')" :active="request()->routeIs('system.payment-testers.*')">
+                            {{ __('Payment Testers') }}
+                        </x-nav-link>
                     @endif
                     @if (Auth::user()->canManageTeacherUsers())
                         <x-nav-link :href="route('super-teacher.teachers.index')" :active="request()->routeIs('super-teacher.teachers.*')">
@@ -117,6 +120,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
                     {{ __('Portal SEO') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('system.payment-testers.index')" :active="request()->routeIs('system.payment-testers.*')">
+                    {{ __('Payment Testers') }}
                 </x-responsive-nav-link>
             @endif
             @if (Auth::user()->canManageTeacherUsers())

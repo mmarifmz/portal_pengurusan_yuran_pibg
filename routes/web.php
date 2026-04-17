@@ -14,6 +14,7 @@ use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\TeacherUserManagementController;
 use App\Http\Controllers\TeacherFamilyLoginMonitorController;
+use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Models\Student;
@@ -150,6 +151,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/system/portal-seo', [PortalSeoSettingsController::class, 'update'])
         ->middleware('role:system_admin')
         ->name('system.portal-seo.update');
+
+    Route::get('/system/payment-testers', [PaymentTesterUserController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.index');
+    Route::patch('/system/payment-testers/{user}', [PaymentTesterUserController::class, 'update'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.update');
 
     Route::get('/super-teacher/teachers', [TeacherUserManagementController::class, 'index'])
         ->middleware('role:super_teacher,system_admin')

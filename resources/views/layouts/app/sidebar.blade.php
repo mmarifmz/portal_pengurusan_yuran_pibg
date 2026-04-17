@@ -100,6 +100,9 @@
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
                                 {{ __('Portal SEO') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
+                                {{ __('Payment Testers') }}
+                            </flux:sidebar.item>
                         @endif
 
                         @if (auth()->user()->canManageTeacherUsers())
