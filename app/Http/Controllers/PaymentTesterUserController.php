@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class PaymentTesterUserController extends Controller
@@ -12,8 +13,9 @@ class PaymentTesterUserController extends Controller
     public function index(Request $request): View
     {
         $keyword = trim((string) $request->string('q')->toString());
+        $hasPaymentTesterColumn = Schema::hasColumn('users', 'is_payment_tester');
 
-        $parentUsers = User::query()
+        $parentUsersQuery = User::query()
             ->where('role', 'parent')
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($nested) use ($keyword): void {
@@ -21,8 +23,15 @@ class PaymentTesterUserController extends Controller
                         ->orWhere('email', 'like', "%{$keyword}%")
                         ->orWhere('phone', 'like', "%{$keyword}%");
                 });
-            })
-            ->orderByDesc('is_payment_tester')
+            });
+
+        if ($hasPaymentTesterColumn) {
+            $parentUsersQuery->orderByDesc('is_payment_tester');
+        } else {
+            $parentUsersQuery->select('users.*')->selectRaw('false as is_payment_tester');
+        }
+
+        $parentUsers = $parentUsersQuery
             ->orderBy('name')
             ->paginate(30)
             ->withQueryString();
@@ -30,12 +39,19 @@ class PaymentTesterUserController extends Controller
         return view('system.payment-testers', [
             'parentUsers' => $parentUsers,
             'keyword' => $keyword,
+            'hasPaymentTesterColumn' => $hasPaymentTesterColumn,
         ]);
     }
 
     public function update(Request $request, User $user): RedirectResponse
     {
         abort_unless($user->role === 'parent', 404);
+
+        if (! Schema::hasColumn('users', 'is_payment_tester')) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Payment tester column not found. Please run migration: php artisan migrate --path=database/migrations/2026_04_17_000006_add_is_payment_tester_to_users_table.php');
+        }
 
         $validated = $request->validate([
             'is_payment_tester' => ['required', 'boolean'],

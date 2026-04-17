@@ -12,6 +12,19 @@
             </div>
         @endif
 
+        @if (session('error'))
+            <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {{ session('error') }}
+            </div>
+        @endif
+
+        @unless ($hasPaymentTesterColumn)
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Payment tester setup is incomplete on this database. Run:
+                <code class="rounded bg-amber-100 px-1 py-0.5 text-xs">php artisan migrate --path=database/migrations/2026_04_17_000006_add_is_payment_tester_to_users_table.php</code>
+            </div>
+        @endunless
+
         @if ($errors->any())
             <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {{ $errors->first() }}
@@ -70,6 +83,7 @@
                                         <input type="hidden" name="is_payment_tester" value="{{ $parentUser->is_payment_tester ? '0' : '1' }}">
                                         <button
                                             type="submit"
+                                            @disabled(! $hasPaymentTesterColumn)
                                             class="inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-semibold transition {{ $parentUser->is_payment_tester ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}"
                                         >
                                             {{ $parentUser->is_payment_tester ? 'Disable RM1 Tester' : 'Enable RM1 Tester' }}
