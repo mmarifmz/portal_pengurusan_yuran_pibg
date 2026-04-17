@@ -19,10 +19,11 @@ class PublicParentSearchController extends Controller
         $totalFamilyResults = 0;
         $visibleLimit = max(20, min((int) $request->integer('visible_limit', 20), 200));
 
-        if ($request->filled('student_keyword') || $request->filled('contact')) {
+        if ($request->filled('student_keyword') || $request->filled('class_name') || $request->filled('contact')) {
             $validated = $request->validate([
-                'student_keyword' => ['nullable', 'string', 'max:100', 'required_without:contact'],
-                'contact' => ['nullable', 'string', 'max:30', 'required_without:student_keyword'],
+                'student_keyword' => ['nullable', 'string', 'max:100', 'required_without_all:class_name,contact'],
+                'class_name' => ['nullable', 'string', 'max:50', 'required_without_all:student_keyword,contact'],
+                'contact' => ['nullable', 'string', 'max:30', 'required_without_all:student_keyword,class_name'],
             ]);
 
             $hasSearched = true;
@@ -34,8 +35,12 @@ class PublicParentSearchController extends Controller
                 ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
                     $query->where(function ($nested) use ($keyword) {
                         $nested->where('full_name', 'like', "%{$keyword}%")
+                            ->orWhere('student_no', 'like', "%{$keyword}%")
                             ->orWhere('class_name', 'like', "%{$keyword}%");
                     });
+                })
+                ->when($validated['class_name'] ?? null, function ($query, $className) {
+                    $query->where('class_name', $className);
                 })
                 ->orderByRaw('CASE WHEN family_code IS NULL OR family_code = "" THEN 1 ELSE 0 END')
                 ->orderBy('family_code')
@@ -104,12 +109,21 @@ class PublicParentSearchController extends Controller
             $familyResults = $familyResults->take($visibleLimit)->values();
         }
 
+        $availableClasses = Student::query()
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->distinct()
+            ->orderBy('class_name')
+            ->pluck('class_name')
+            ->values();
+
         return view('parent.search', [
             'familyResults' => $familyResults,
             'searchBillings' => $searchBillings,
             'hasSearched' => $hasSearched,
             'totalFamilyResults' => $totalFamilyResults,
             'visibleLimit' => $visibleLimit,
+            'availableClasses' => $availableClasses,
         ]);
     }
 

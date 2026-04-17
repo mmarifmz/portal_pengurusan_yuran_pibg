@@ -149,17 +149,30 @@
                 </div>
 
                 <form method="GET" action="{{ route('parent.search') }}" class="box p-4">
-                    <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="grid gap-3 sm:grid-cols-3">
                         <div>
-                            <label for="student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Nama / Kelas</label>
-                            <input id="student_keyword" name="student_keyword" type="text" value="{{ old('student_keyword', request('student_keyword')) }}" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Ayra / 4 Anggerik">
+                            <label for="student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Nama</label>
+                            <input id="student_keyword" name="student_keyword" type="text" value="{{ old('student_keyword', request('student_keyword')) }}" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh: NUR AISHA">
                             @error('student_keyword')
                                 <p class="mt-1 text-xs text-rose-500">{{ $message }}</p>
                             @enderror
                         </div>
 
                         <div>
-                            <label for="contact" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Parent Phone</label>
+                            <label for="class_name" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Kelas</label>
+                            <select id="class_name" name="class_name" class="search-input w-full rounded-xl pr-9 text-sm focus:ring-0">
+                                <option value="">Semua kelas</option>
+                                @foreach (($availableClasses ?? collect()) as $className)
+                                    <option value="{{ $className }}" @selected(request('class_name') === $className)>{{ $className }}</option>
+                                @endforeach
+                            </select>
+                            @error('class_name')
+                                <p class="mt-1 text-xs text-rose-500">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="contact" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">No Telefon Ibu Bapa</label>
                             <input id="contact" name="contact" type="text" value="{{ old('contact', request('contact')) }}" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Masukkan nombor penuh">
                             @error('contact')
                                 <p class="mt-1 text-xs text-rose-500">{{ $message }}</p>
@@ -288,6 +301,7 @@
                         <a
                             href="{{ route('parent.search', array_filter([
                                 'student_keyword' => request('student_keyword'),
+                                'class_name' => request('class_name'),
                                 'contact' => request('contact'),
                                 'visible_limit' => min($visibleLimit + 20, 200),
                             ], fn ($value) => $value !== null && $value !== '')) }}"

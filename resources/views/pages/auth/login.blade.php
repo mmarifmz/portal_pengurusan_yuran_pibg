@@ -74,7 +74,7 @@
 
                         <div>
                             <label for="email" class="mb-2 block text-sm font-semibold text-zinc-800">{{ __('Email address') }}</label>
-                            <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="email@example.com" class="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--brand-green)] focus:ring-4 focus:ring-emerald-100" />
+                            <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="cikgu.azam@sripetaling.edu.my" class="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--brand-green)] focus:ring-4 focus:ring-emerald-100" />
                             @error('email')
                                 <p class="mt-2 text-sm text-rose-600">{{ $message }}</p>
                             @enderror
@@ -83,11 +83,6 @@
                         <div>
                             <div class="mb-2 flex items-center justify-between gap-2">
                                 <label for="password" class="block text-sm font-semibold text-zinc-800">{{ __('Password') }}</label>
-                                @if (Route::has('password.request'))
-                                    <a href="{{ route('password.request') }}" class="text-xs font-semibold text-[color:var(--brand-green)] underline decoration-transparent transition hover:decoration-current">
-                                        {{ __('Forgot your password?') }}
-                                    </a>
-                                @endif
                             </div>
                             <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="{{ __('Password') }}" class="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--brand-green)] focus:ring-4 focus:ring-emerald-100" />
                             @error('password')

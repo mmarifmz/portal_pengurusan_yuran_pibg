@@ -13,9 +13,22 @@ use App\Http\Controllers\StudentImportController;
 use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\DashboardController;
+use App\Models\Student;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', function () {
+    $classOptions = Student::query()
+        ->whereNotNull('class_name')
+        ->where('class_name', '!=', '')
+        ->distinct()
+        ->orderBy('class_name')
+        ->pluck('class_name')
+        ->values();
+
+    return view('welcome', [
+        'classOptions' => $classOptions,
+    ]);
+})->name('home');
 
 Route::get('/parent/search', [PublicParentSearchController::class, 'index'])
     ->name('parent.search');

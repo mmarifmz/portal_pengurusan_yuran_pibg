@@ -106,9 +106,13 @@
                         Portal ini digunakan untuk semakan murid, semakan status yuran, dan rujukan pembayaran sumbangan PIBG.
                         Kadar asas ialah <strong>RM100 setahun bagi setiap keluarga</strong> berdasarkan kod keluarga.
                     </p>
-                    <div class="mt-5 grid gap-2 sm:flex sm:flex-wrap">
-                        <a href="{{ route('parent.search') }}" class="rounded-xl bg-[color:var(--brand-green)] px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--brand-forest)]">Semak Nama Murid</a>
-                    </div>
+                    <form action="{{ route('parent.search') }}" method="GET" class="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                        <div>
+                            <label for="hero_student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-600">Carian Murid Seluruh Portal</label>
+                            <input id="hero_student_keyword" name="student_keyword" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh : Muhammad">
+                        </div>
+                        <button type="submit" class="rounded-xl bg-[color:var(--brand-green)] px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-[color:var(--brand-forest)]">Semak Nama Murid</button>
+                    </form>
                 </div>
 
                 <div class="box p-4 sm:p-5">
@@ -152,16 +156,25 @@
 
         <section class="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div class="box p-5 sm:p-6">
-                <h2 class="section-title text-lg font-bold text-[color:var(--brand-forest)]">Semakan Pantas</h2>
-                <p class="mt-1 text-sm text-zinc-600">Carian awal sebelum login parent.</p>
+                <h2 class="section-title text-lg font-bold text-[color:var(--brand-forest)]">Carian Terperinci</h2>
+                <p class="mt-1 text-sm text-zinc-600">Carian menyeluruh berdasarkan nama, kelas, dan telefon ibu bapa.</p>
 
                 <form action="{{ route('parent.search') }}" method="GET" class="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div class="sm:col-span-2">
-                        <label for="student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Nama / No Murid / Kelas</label>
-                        <input id="student_keyword" name="student_keyword" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh: Adam / 4A-0001 / 4 ALAMANDA">
+                    <div>
+                        <label for="student_keyword" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">NAMA</label>
+                        <input id="student_keyword" name="student_keyword" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh : Muhammad">
+                    </div>
+                    <div>
+                        <label for="class_name" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">KELAS</label>
+                        <select id="class_name" name="class_name" class="search-input w-full rounded-xl pr-9 text-sm focus:ring-0">
+                            <option value="">Semua kelas</option>
+                            @foreach (($classOptions ?? collect()) as $className)
+                                <option value="{{ $className }}">{{ $className }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="sm:col-span-2">
-                        <label for="contact" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">No Telefon Penjaga</label>
+                        <label for="contact" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">No Telefon Ibu Bapa</label>
                         <input id="contact" name="contact" type="text" class="search-input w-full rounded-xl text-sm focus:ring-0" placeholder="Contoh: 0123">
                     </div>
                     <div class="sm:col-span-2">

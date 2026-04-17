@@ -204,7 +204,7 @@
                                     <td class="px-5 py-4 font-semibold text-zinc-900">{{ $student->full_name }}</td>
                                     <td class="px-5 py-4 text-sm text-zinc-700">{{ $student->class_name ?: '-' }}</td>
                                     <td class="px-5 py-4 text-sm text-zinc-600">
-                                        <p>{{ $student->parent_name ?: 'No parent on file' }}</p>
+                                        <p>{{ $student->resolved_parent_name ?: 'No parent on file' }}</p>
                                         <p class="text-xs text-zinc-400">{{ $student->parent_phone ?: '-' }}</p>
                                     </td>
                                     <td class="px-5 py-4 text-right font-semibold {{ $student->outstanding_balance > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
