@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -90,14 +91,14 @@ class FamilyPaymentTransaction extends Model
         return $this->normalizeForDisplay($this->paid_at);
     }
 
-    private function normalizeForDisplay(?Carbon $value): ?Carbon
+    private function normalizeForDisplay(DateTimeInterface|string|null $value): ?Carbon
     {
         if (! $value) {
             return null;
         }
 
         $timezone = config('app.timezone', 'Asia/Kuala_Lumpur');
-        $localized = $value->copy()->timezone($timezone);
+        $localized = Carbon::parse($value)->timezone($timezone);
 
         // Backward-compatibility: older rows may be stored with an 8-hour offset.
         if ($localized->greaterThan(now($timezone)->addMinutes(5))) {
