@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @php
+        $title = 'Carian Murid | Portal Yuran PIBG SK Sri Petaling';
+    @endphp
     @include('partials.head')
-    <title>Parent Search | {{ config('app.name') }}</title>
 
     <style>
         :root {

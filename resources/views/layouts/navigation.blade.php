@@ -24,6 +24,9 @@
                         <x-nav-link :href="route('teacher.reconcile.index')" :active="request()->routeIs('teacher.reconcile.*')">
                             {{ __('Year Reconcile & Backup') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
+                            {{ __('Portal SEO') }}
+                        </x-nav-link>
                     @endif
                     @if (Auth::user()->canManageTeacherUsers())
                         <x-nav-link :href="route('super-teacher.teachers.index')" :active="request()->routeIs('super-teacher.teachers.*')">
@@ -101,6 +104,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('teacher.reconcile.index')" :active="request()->routeIs('teacher.reconcile.*')">
                     {{ __('Year Reconcile & Backup') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
+                    {{ __('Portal SEO') }}
                 </x-responsive-nav-link>
             @endif
             @if (Auth::user()->canManageTeacherUsers())

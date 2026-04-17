@@ -91,6 +91,9 @@
                             <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
                                 {{ __('Year Reconcile & Backup') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
+                                {{ __('Portal SEO') }}
+                            </flux:sidebar.item>
                         @endif
 
                         @if (auth()->user()->canManageTeacherUsers())

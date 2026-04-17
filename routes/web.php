@@ -13,6 +13,7 @@ use App\Http\Controllers\StudentImportController;
 use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\TeacherUserManagementController;
+use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Models\Student;
 use Illuminate\Support\Facades\Route;
@@ -134,6 +135,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/billing/setup/current-year', [BillingSetupController::class, 'setupCurrentYear'])
         ->middleware('role:system_admin')
         ->name('billing.setup.current-year');
+
+    Route::get('/system/portal-seo', [PortalSeoSettingsController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.portal-seo.index');
+    Route::patch('/system/portal-seo', [PortalSeoSettingsController::class, 'update'])
+        ->middleware('role:system_admin')
+        ->name('system.portal-seo.update');
 
     Route::get('/super-teacher/teachers', [TeacherUserManagementController::class, 'index'])
         ->middleware('role:super_teacher,system_admin')

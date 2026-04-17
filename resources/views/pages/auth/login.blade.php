@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @php
+        $title = 'Log Masuk Guru / Admin | Portal Yuran PIBG SK Sri Petaling';
+    @endphp
     @include('partials.head')
-    <title>Guru / Admin Login | {{ config('app.name') }}</title>
 
     <style>
         :root {

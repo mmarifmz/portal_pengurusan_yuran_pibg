@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="ms">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Resit Bayaran</title>
+    @php
+        $title = 'Resit Bayaran | Portal Yuran PIBG SK Sri Petaling';
+    @endphp
+    @include('partials.head')
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: #f4f4f5; color: #18181b; }
         .topbar { background: #ffffff; border-bottom: 1px solid #e4e4e7; }
