@@ -109,7 +109,7 @@
     <header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm">
         <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <a href="{{ route('home') }}" class="flex items-center gap-3">
-                <img src="{{ asset('images/sksp-logo.png') }}" alt="Logo SK Sri Petaling" class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm sm:h-14 sm:w-14" />
+                <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="Logo SK Sri Petaling" class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm sm:h-14 sm:w-14" />
                 <div>
                     <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">Portal Rasmi</p>
                     <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Yuran &amp; Sumbangan PIBG SK Sri Petaling</p>

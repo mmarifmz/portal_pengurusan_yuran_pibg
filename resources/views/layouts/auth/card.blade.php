@@ -8,7 +8,7 @@
             <div class="flex w-full max-w-md flex-col gap-6">
                 <a href="{{ route('home') }}" class="flex flex-col items-center gap-2 font-medium" wire:navigate>
                     <div class="flex items-center justify-between gap-4">
-                        <img src="{{ asset('images/sksp-logo.png') }}"
+                        <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}"
                             alt="SK Sri Petaling logo"
                             class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm" />
                     </div> 

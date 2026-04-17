@@ -15,6 +15,7 @@ class SiteSetting extends Model
     ];
 
     private const CACHE_KEY = 'site_settings.map.v1';
+    private const DEFAULT_LOGO_ASSET = 'images/sksp-logo.png';
 
     /**
      * @return array<string, string>
@@ -59,5 +60,36 @@ class SiteSetting extends Model
         }
 
         Cache::forget(self::CACHE_KEY);
+    }
+
+    public static function schoolLogoUrl(): string
+    {
+        $settings = self::getMany([
+            'school_logo_url' => asset(self::DEFAULT_LOGO_ASSET),
+        ]);
+
+        $logoUrl = trim((string) ($settings['school_logo_url'] ?? ''));
+
+        return $logoUrl !== '' ? $logoUrl : asset(self::DEFAULT_LOGO_ASSET);
+    }
+
+    public static function faviconUrl(): string
+    {
+        return self::schoolLogoUrl();
+    }
+
+    public static function schoolLogoPdfSource(): string
+    {
+        $logoUrl = self::schoolLogoUrl();
+        $path = parse_url($logoUrl, PHP_URL_PATH);
+
+        if (is_string($path) && trim($path) !== '') {
+            $resolved = public_path(ltrim($path, '/'));
+            if (is_file($resolved)) {
+                return $resolved;
+            }
+        }
+
+        return public_path(self::DEFAULT_LOGO_ASSET);
     }
 }

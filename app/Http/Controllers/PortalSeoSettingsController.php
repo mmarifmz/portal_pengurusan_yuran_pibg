@@ -23,22 +23,33 @@ class PortalSeoSettingsController extends Controller
             'seo_description' => ['required', 'string', 'max:500'],
             'seo_keywords' => ['required', 'string', 'max:600'],
             'seo_og_site_name' => ['required', 'string', 'max:160'],
-            'seo_favicon_url' => ['required', 'string', 'max:400'],
-            'school_logo_url' => ['required', 'string', 'max:400'],
+            'school_logo_url' => ['nullable', 'string', 'max:400'],
+            'school_logo_file' => ['nullable', 'image', 'max:2048'],
         ]);
+
+        $schoolLogoUrl = trim((string) ($validated['school_logo_url'] ?? ''));
+
+        if ($request->hasFile('school_logo_file')) {
+            $path = $request->file('school_logo_file')->store('branding', 'public');
+            $schoolLogoUrl = asset('storage/'.$path);
+        }
+
+        if ($schoolLogoUrl === '') {
+            $schoolLogoUrl = SiteSetting::schoolLogoUrl();
+        }
 
         SiteSetting::setMany([
             'seo_site_title' => trim((string) $validated['seo_site_title']),
             'seo_description' => trim((string) $validated['seo_description']),
             'seo_keywords' => trim((string) $validated['seo_keywords']),
             'seo_og_site_name' => trim((string) $validated['seo_og_site_name']),
-            'seo_favicon_url' => trim((string) $validated['seo_favicon_url']),
-            'school_logo_url' => trim((string) $validated['school_logo_url']),
+            'seo_favicon_url' => $schoolLogoUrl,
+            'school_logo_url' => $schoolLogoUrl,
         ]);
 
         return redirect()
             ->route('system.portal-seo.index')
-            ->with('status', 'Portal SEO settings updated successfully.');
+            ->with('status', 'Portal branding and SEO settings updated successfully.');
     }
 
     /**

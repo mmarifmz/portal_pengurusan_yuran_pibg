@@ -2,8 +2,8 @@
     <div class="space-y-6">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">System Admin</p>
-            <h1 class="text-2xl font-bold text-zinc-900">Portal SEO & Metadata</h1>
-            <p class="text-sm text-zinc-500">Manage global title, description, keywords and favicon across all pages.</p>
+            <h1 class="text-2xl font-bold text-zinc-900">Portal SEO & Branding</h1>
+            <p class="text-sm text-zinc-500">Manage global metadata and one shared school logo used across portal UI, favicon, web receipt, and PDF documents.</p>
         </div>
 
         @if (session('status'))
@@ -23,7 +23,7 @@
         @endif
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <form method="POST" action="{{ route('system.portal-seo.update') }}" class="grid gap-4">
+            <form method="POST" action="{{ route('system.portal-seo.update') }}" enctype="multipart/form-data" class="grid gap-4">
                 @csrf
                 @method('PATCH')
 
@@ -70,31 +70,35 @@
                 </label>
 
                 <label class="text-sm font-medium text-zinc-700">
-                    Favicon URL
-                    <input
-                        name="seo_favicon_url"
-                        type="text"
-                        required
-                        value="{{ old('seo_favicon_url', $settings['seo_favicon_url'] ?? '') }}"
-                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    />
-                </label>
-
-                <label class="text-sm font-medium text-zinc-700">
-                    School Logo URL (Resit)
+                    School Logo URL
                     <input
                         name="school_logo_url"
                         type="text"
-                        required
                         value="{{ old('school_logo_url', $settings['school_logo_url'] ?? '') }}"
                         class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                     />
-                    <span class="mt-1 block text-xs text-zinc-500">Digunakan untuk paparan resit web dan muat turun resit PDF.</span>
+                    <span class="mt-1 block text-xs text-zinc-500">Optional. If you upload a file below, the uploaded file will override this URL.</span>
                 </label>
+
+                <label class="text-sm font-medium text-zinc-700">
+                    Upload School Logo
+                    <input
+                        name="school_logo_file"
+                        type="file"
+                        accept="image/*"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-emerald-700"
+                    />
+                    <span class="mt-1 block text-xs text-zinc-500">PNG/JPG/WEBP, max 2MB. This one logo is used for portal, favicon, and receipts.</span>
+                </label>
+
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Current Logo Preview</p>
+                    <img src="{{ $settings['school_logo_url'] ?? asset('images/sksp-logo.png') }}" alt="Current school logo" class="mt-2 h-14 w-14 rounded-full border border-zinc-200 bg-white p-1" />
+                </div>
 
                 <div>
                     <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
-                        Save SEO Settings
+                        Save SEO & Branding
                     </button>
                 </div>
             </form>

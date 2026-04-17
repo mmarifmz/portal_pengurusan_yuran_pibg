@@ -7,7 +7,7 @@
         'seo_description' => 'Portal rasmi semakan dan pembayaran Yuran & Sumbangan PIBG SK Sri Petaling, didukung oleh Avante Intelligence dan Arif.my sebagai inisiatif pendigitalan pendidikan sekolah.',
         'seo_keywords' => 'Portal Yuran PIBG, SK Sri Petaling, Avante Intelligence, Arif.my, digitalisasi pendidikan, pendigitalan sekolah, semakan yuran, pembayaran PIBG, portal ibu bapa, inisiatif pendidikan digital',
         'seo_og_site_name' => 'Portal Yuran PIBG SK Sri Petaling',
-        'seo_favicon_url' => asset('images/sksp-logo.png'),
+        'seo_favicon_url' => \App\Models\SiteSetting::faviconUrl(),
     ];
 
     $seoConfig = \App\Models\SiteSetting::getMany($seoDefaults);
@@ -15,7 +15,7 @@
     $seoDescription = filled($metaDescription ?? null) ? (string) $metaDescription : (string) ($seoConfig['seo_description'] ?? $seoDefaults['seo_description']);
     $seoKeywords = filled($metaKeywords ?? null) ? (string) $metaKeywords : (string) ($seoConfig['seo_keywords'] ?? $seoDefaults['seo_keywords']);
     $seoOgSiteName = (string) ($seoConfig['seo_og_site_name'] ?? $seoDefaults['seo_og_site_name']);
-    $seoFaviconUrl = (string) ($seoConfig['seo_favicon_url'] ?? $seoDefaults['seo_favicon_url']);
+    $seoFaviconUrl = \App\Models\SiteSetting::faviconUrl();
 @endphp
 
 <title>{{ $seoTitle }}</title>
@@ -29,9 +29,9 @@
 <meta name="twitter:title" content="{{ $seoTitle }}">
 <meta name="twitter:description" content="{{ $seoDescription }}">
 
-<link rel="icon" type="image/png" href="{{ $seoFaviconUrl }}?v=4">
-<link rel="shortcut icon" type="image/png" href="{{ $seoFaviconUrl }}?v=4">
-<link rel="apple-touch-icon" href="{{ $seoFaviconUrl }}?v=4">
+<link rel="icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">
+<link rel="shortcut icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">
+<link rel="apple-touch-icon" href="{{ $seoFaviconUrl }}?v=5">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />

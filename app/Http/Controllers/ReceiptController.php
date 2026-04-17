@@ -66,18 +66,6 @@ class ReceiptController extends Controller
         ]);
     }
 
-
-    private function schoolLogoUrl(): string
-    {
-        $settings = SiteSetting::getMany([
-            'school_logo_url' => asset('images/sksp-logo.png'),
-        ]);
-
-        $logoUrl = trim((string) ($settings['school_logo_url'] ?? ''));
-
-        return $logoUrl !== '' ? $logoUrl : asset('images/sksp-logo.png');
-    }
-
     private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
     {
         $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
