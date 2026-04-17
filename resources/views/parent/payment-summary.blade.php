@@ -4,22 +4,22 @@
         $stamp = match ($status) {
             'success' => [
                 'label' => 'PAID',
-                'classes' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                'classes' => 'border-emerald-600 bg-emerald-600 text-white',
                 'note' => 'Pembayaran berjaya diterima oleh portal.',
             ],
             'failed' => [
                 'label' => 'FAILED',
-                'classes' => 'border-rose-300 bg-rose-50 text-rose-800',
+                'classes' => 'border-rose-600 bg-rose-600 text-white',
                 'note' => 'Pembayaran tidak berjaya. Sila cuba semula.',
             ],
             'superseded' => [
                 'label' => 'DIBATALKAN',
-                'classes' => 'border-amber-300 bg-amber-50 text-amber-800',
+                'classes' => 'border-zinc-500 bg-zinc-500 text-white',
                 'note' => 'Bil ini sudah dinyahaktifkan kerana terdapat bil baharu.',
             ],
             default => [
                 'label' => 'PENDING',
-                'classes' => 'border-sky-300 bg-sky-50 text-sky-800',
+                'classes' => 'border-amber-500 bg-amber-500 text-white',
                 'note' => 'Portal sedang menunggu pengesahan pembayaran.',
             ],
         };
@@ -127,21 +127,21 @@
         }
     </style>
 
-    <div class="space-y-6 print-sheet print-single-page">
-        <div class="box p-6">
+    <div class="space-y-5 print-sheet print-single-page">
+        <div class="box bg-[color:var(--brand-soft)] p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 class="text-lg font-semibold text-[color:var(--brand-forest)]">Return to Merchant Summary</h2>
-                    <p class="mt-1 text-sm text-zinc-600">Portal telah memproses maklumat pulangan dari gerbang pembayaran.</p>
+                    <h2 class="text-lg font-semibold text-[color:var(--brand-forest)]">Ringkasan Proses Pembayaran</h2>
+                    <p class="mt-1 text-sm text-zinc-600">Portal sedang menyemak dan mengemaskini keputusan pembayaran anda.</p>
                 </div>
-                <div class="rounded-xl border px-4 py-2 text-sm font-extrabold tracking-wider {{ $stamp['classes'] }}">
+                <div class="hidden rounded-xl border px-4 py-2 text-sm font-extrabold tracking-wider sm:inline-flex {{ $stamp['classes'] }}">
                     {{ $stamp['label'] }}
                 </div>
             </div>
             <p class="mt-3 text-sm font-medium text-zinc-700">{{ $stamp['note'] }}</p>
         </div>
 
-        <div class="box p-6">
+        <div class="box p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-[color:var(--brand-forest)]">Status Transaksi</h2>
             <p class="mt-1 text-sm text-zinc-600">Kod keluarga {{ $transaction->familyBilling->family_code }} · {{ $transaction->familyBilling->billing_year }}</p>
             <div class="mt-4 grid gap-3 sm:grid-cols-3">
@@ -159,7 +159,7 @@
                 </div>
             </div>
 
-            <div class="mt-5 space-y-2 text-sm text-zinc-600">
+            <div class="mt-4 space-y-2 text-sm text-zinc-600">
                 <p>Order ID: {{ $transaction->external_order_display }}</p>
                 <p>Bill Code: {{ $transaction->provider_bill_code }}</p>
                 <p>Return Status: {{ $transaction->return_status ? ucfirst($transaction->return_status) : 'Pending completion' }}</p>
@@ -167,16 +167,13 @@
                 <p>Invoice: {{ $transaction->provider_invoice_no ?? 'Belum dijana' }}</p>
             </div>
 
-            <div class="no-print mt-5 flex flex-wrap gap-2">
+            <div class="no-print mt-4 flex flex-wrap gap-2">
                 <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Muat Turun Resit</a>
-                <button type="button" onclick="window.print()" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Print Receipt</button>
                 <a href="{{ $receiptUrl }}" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Buka Resit Web</a>
-                <a href="{{ $teacherShareUrl }}" target="_blank" rel="noopener" class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Share with Teacher (WhatsApp)</a>
-                <a href="{{ route('parent.dashboard') }}" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-[color:var(--brand-forest)] hover:bg-zinc-50">Kembali ke Dashboard</a>
             </div>
         </div>
 
-        <div class="box p-6 print-optional">
+        <div class="box bg-[color:var(--brand-soft)] p-5 sm:p-6 print-optional">
             <h3 class="text-base font-semibold text-[color:var(--brand-forest)]">Ringkasan Proses Pembayaran</h3>
             <div class="mt-3 grid gap-2 text-sm text-zinc-700">
                 <p>Gerbang pembayaran: <span class="font-semibold uppercase">{{ $transaction->payment_provider }}</span></p>
@@ -189,7 +186,7 @@
             </div>
         </div>
 
-        <div class="box p-6">
+        <div class="box p-5 sm:p-6">
             <h3 class="text-base font-semibold text-[color:var(--brand-forest)]">Maklumat Pembayar</h3>
             <div class="mt-3 grid gap-1 text-sm text-zinc-600">
                 <p>Nama: {{ $transaction->payer_name ?? '-' }}</p>
@@ -198,7 +195,7 @@
             </div>
         </div>
 
-        <div class="box p-6">
+        <div class="box p-5 sm:p-6">
             <h3 class="text-base font-semibold text-[color:var(--brand-forest)]">Senarai Anak</h3>
             <div class="mt-4 grid gap-3 sm:grid-cols-2 print-children-grid">
                 @foreach($familyChildren as $child)
