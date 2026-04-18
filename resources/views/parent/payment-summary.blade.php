@@ -19,7 +19,7 @@
             ],
             default => [
                 'label' => 'PENDING',
-                'classes' => 'border-amber-500 bg-amber-500 text-white',
+                'classes' => 'border-amber-300 bg-amber-100 text-amber-800',
                 'note' => 'Portal sedang menunggu pengesahan pembayaran.',
             ],
         };

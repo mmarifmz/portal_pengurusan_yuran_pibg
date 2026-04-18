@@ -23,7 +23,7 @@
                 </a>
                 <a
                     href="{{ route('parent.payments.history', ['filter' => 'pending']) }}"
-                    class="rounded-full border px-4 py-1.5 text-xs font-semibold transition {{ $activeFilter === 'pending' ? 'border-sky-400 bg-sky-50 text-sky-700' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50' }}"
+                    class="rounded-full border px-4 py-1.5 text-xs font-semibold transition {{ $activeFilter === 'pending' ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50' }}"
                 >
                     Pending Completion
                 </a>

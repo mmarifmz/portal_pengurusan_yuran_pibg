@@ -161,7 +161,7 @@
             <div class="mt-3 flex flex-wrap items-center gap-2">
                 <a href="{{ $allPaymentsUrl }}" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $paymentFilter === 'all' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50' }}">All</a>
                 <a href="{{ $successfulPaymentsUrl }}" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $paymentFilter === 'successful' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50' }}">Successful</a>
-                <a href="{{ $pendingPaymentsUrl }}" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $paymentFilter === 'pending' ? 'border-amber-600 bg-amber-500 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50' }}">Pending</a>
+                <a href="{{ $pendingPaymentsUrl }}" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $paymentFilter === 'pending' ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50' }}">Pending</a>
                 <a href="{{ $cancelledPaymentsUrl }}" class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $paymentFilter === 'cancelled' ? 'border-rose-600 bg-rose-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50' }}">Cancelled</a>
             </div>
 
