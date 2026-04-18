@@ -33,6 +33,16 @@ class ParentPaymentController extends Controller
     {
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
+        $isCurrentYearBilling = (int) $familyBilling->billing_year === (int) now()->year;
+        $hasSuccessfulCurrentYearPayment = (float) $familyBilling->outstanding_amount <= 0
+            || (string) $familyBilling->status === 'paid';
+
+        if ($isCurrentYearBilling && $hasSuccessfulCurrentYearPayment) {
+            return redirect()
+                ->route('parent.dashboard')
+                ->with('status', "Bayaran yuran {$familyBilling->billing_year} untuk keluarga {$familyBilling->family_code} telah berjaya. Tiada semakan checkout diperlukan.");
+        }
+
         $children = Student::query()
             ->where('family_code', $familyBilling->family_code)
             ->orderBy('full_name')
