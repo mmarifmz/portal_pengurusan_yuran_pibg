@@ -168,6 +168,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/super-teacher/teachers/{user}', [TeacherUserManagementController::class, 'update'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.update');
+    Route::patch('/super-teacher/teachers/{user}/status', [TeacherUserManagementController::class, 'updateStatus'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.update-status');
+    Route::patch('/super-teacher/teachers/{user}/whatsapp-notifications', [TeacherUserManagementController::class, 'updateWhatsappNotifications'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.update-whatsapp-notifications');
+    Route::delete('/super-teacher/teachers/{user}', [TeacherUserManagementController::class, 'destroy'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.destroy');
 });
 
 require __DIR__.'/settings.php';

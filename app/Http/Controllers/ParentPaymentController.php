@@ -539,6 +539,26 @@ class ParentPaymentController extends Controller
                 ]);
             }
         }
+
+        try {
+            $teacherDeliveries = $this->paymentNotificationService->sendTeacherClassNotifications($transaction);
+
+            if ($teacherDeliveries !== []) {
+                Log::info('Teacher WhatsApp notifications sent for successful payment.', [
+                    'transaction_id' => $transaction->id,
+                    'teacher_count' => count($teacherDeliveries),
+                    'teachers' => collect($teacherDeliveries)->map(fn (array $row) => [
+                        'teacher_id' => $row['teacher_id'] ?? null,
+                        'teacher_class' => $row['teacher_class'] ?? null,
+                    ])->values()->all(),
+                ]);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to send teacher WhatsApp notifications.', [
+                'transaction_id' => $transaction->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
 

@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name', 'is_payment_tester'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name', 'is_payment_tester', 'is_active', 'receive_whatsapp_notifications'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -30,6 +30,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_payment_tester' => 'boolean',
+            'is_active' => 'boolean',
+            'receive_whatsapp_notifications' => 'boolean',
         ];
     }
 

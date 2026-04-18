@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\FamilyPaymentTransaction;
+use App\Models\Student;
+use App\Models\User;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 class ParentPaymentNotificationService
@@ -62,5 +65,93 @@ class ParentPaymentNotificationService
         $transaction->ensureReceiptUuid();
 
         return route('receipts.show', ['receiptUuid' => $transaction->receipt_uuid]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function sendTeacherClassNotifications(FamilyPaymentTransaction $transaction): array
+    {
+        $billing = $transaction->familyBilling()->first();
+        if (! $billing) {
+            return [];
+        }
+
+        $classNames = Student::query()
+            ->where('family_code', $billing->family_code)
+            ->where('billing_year', (int) $billing->billing_year)
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->pluck('class_name')
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($classNames->isEmpty()) {
+            return [];
+        }
+
+        $teachers = User::query()
+            ->where('role', 'teacher')
+            ->where('is_active', true)
+            ->where('receive_whatsapp_notifications', true)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->whereIn('class_name', $classNames->all())
+            ->orderBy('name')
+            ->get();
+
+        if ($teachers->isEmpty()) {
+            return [];
+        }
+
+        $childrenByClass = Student::query()
+            ->where('family_code', $billing->family_code)
+            ->where('billing_year', (int) $billing->billing_year)
+            ->whereIn('class_name', $classNames->all())
+            ->orderBy('full_name')
+            ->get()
+            ->groupBy(fn (Student $student) => (string) $student->class_name)
+            ->map(fn (Collection $rows) => $rows->pluck('full_name')->map(fn ($name) => trim((string) $name))->filter()->values());
+
+        $receiptUrl = $this->receiptUrl($transaction);
+        $deliveries = [];
+
+        foreach ($teachers as $teacher) {
+            $teacherClass = (string) $teacher->class_name;
+            $childNames = $childrenByClass->get($teacherClass, collect())
+                ->take(5)
+                ->implode(', ');
+
+            $lines = [
+                'Assalamualaikum '.$teacher->name.',',
+                '',
+                'Makluman bayaran PIBG berjaya diterima untuk kelas anda.',
+                'Kod keluarga: '.$billing->family_code,
+                'Tahun bil: '.$billing->billing_year,
+                'Kelas: '.$teacherClass,
+                'Jumlah: RM'.number_format((float) $transaction->amount, 2),
+                'Order ID: '.$transaction->external_order_display,
+            ];
+
+            if ($childNames !== '') {
+                $lines[] = 'Murid: '.$childNames;
+            }
+
+            $lines[] = 'Resit web: '.$receiptUrl;
+
+            $delivery = $this->whatsAppTacSender->sendMessage((string) $teacher->phone, implode("\n", $lines));
+
+            $deliveries[] = [
+                'teacher_id' => $teacher->id,
+                'teacher_name' => $teacher->name,
+                'teacher_phone' => $teacher->phone,
+                'teacher_class' => $teacherClass,
+                'delivery' => $delivery,
+            ];
+        }
+
+        return $deliveries;
     }
 }

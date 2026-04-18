@@ -59,6 +59,10 @@ class FortifyServiceProvider extends ServiceProvider
                 return null;
             }
 
+            if (isset($user->is_active) && ! (bool) $user->is_active) {
+                return null;
+            }
+
             if (! Hash::check((string) $request->password, (string) $user->password)) {
                 return null;
             }
