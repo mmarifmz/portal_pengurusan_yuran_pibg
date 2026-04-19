@@ -26,12 +26,76 @@
         </section>
 
         <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-4">
+                <form method="GET" action="{{ route('teacher.family-login-monitor') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 xl:col-span-2">
+                        Search
+                        <input
+                            type="search"
+                            name="q"
+                            value="{{ $search }}"
+                            placeholder="Family code / phone / class"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Paid Status
+                        <select name="paid_status" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <option value="all" @selected($paidStatus === 'all')>All</option>
+                            <option value="paid" @selected($paidStatus === 'paid')>Paid only</option>
+                            <option value="unpaid" @selected($paidStatus === 'unpaid')>Unpaid only</option>
+                        </select>
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Class
+                        <select name="class_name" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <option value="">All classes</option>
+                            @foreach ($classOptions as $className)
+                                <option value="{{ $className }}" @selected($selectedClass === $className)>{{ $className }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Login From
+                        <input
+                            type="date"
+                            name="date_from"
+                            value="{{ $dateFromInput }}"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Login To
+                        <input
+                            type="date"
+                            name="date_to"
+                            value="{{ $dateToInput }}"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+
+                    <div class="md:col-span-2 xl:col-span-6 flex items-center gap-2">
+                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                            Apply Filters
+                        </button>
+                        <a href="{{ route('teacher.family-login-monitor') }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                            Reset
+                        </a>
+                    </div>
+                </form>
+            </div>
+
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-zinc-200">
                     <thead class="bg-zinc-50">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
                             <th class="px-4 py-3">Family Code</th>
                             <th class="px-4 py-3">Phone Number</th>
+                            <th class="px-4 py-3">Class</th>
                             <th class="px-4 py-3 text-right">Login Count</th>
                             <th class="px-4 py-3">Latest Login Timestamp</th>
                             <th class="px-4 py-3">Yuran Paid</th>
@@ -49,6 +113,7 @@
                                     </a>
                                 </td>
                                 <td class="px-4 py-3">{{ $row['phones_display'] !== '' ? $row['phones_display'] : '-' }}</td>
+                                <td class="px-4 py-3">{{ $row['class_display'] !== '' ? $row['class_display'] : '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ number_format($row['login_count']) }}</td>
                                 <td class="px-4 py-3">{{ $row['latest_login_at'] ? $row['latest_login_at']->format('d M Y H:i:s') : '-' }}</td>
                                 <td class="px-4 py-3">
@@ -61,7 +126,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-10 text-center text-zinc-500">No registered family phone data found yet.</td>
+                                <td colspan="6" class="px-4 py-10 text-center text-zinc-500">No registered family phone data found yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

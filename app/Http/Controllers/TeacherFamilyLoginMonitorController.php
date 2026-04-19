@@ -4,14 +4,63 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\ParentLoginAudit;
+use App\Models\Student;
 use App\Support\ParentPhone;
 use Illuminate\Support\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class TeacherFamilyLoginMonitorController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $search = trim((string) $request->string('q')->toString());
+        $paidStatus = (string) $request->string('paid_status', 'all')->toString();
+        if (! in_array($paidStatus, ['all', 'paid', 'unpaid'], true)) {
+            $paidStatus = 'all';
+        }
+
+        $selectedClass = trim((string) $request->string('class_name')->toString());
+        $dateFromInput = trim((string) $request->string('date_from')->toString());
+        $dateToInput = trim((string) $request->string('date_to')->toString());
+
+        $dateFrom = null;
+        if ($dateFromInput !== '') {
+            try {
+                $dateFrom = Carbon::parse($dateFromInput)->startOfDay();
+            } catch (\Throwable) {
+                $dateFrom = null;
+                $dateFromInput = '';
+            }
+        }
+
+        $dateTo = null;
+        if ($dateToInput !== '') {
+            try {
+                $dateTo = Carbon::parse($dateToInput)->endOfDay();
+            } catch (\Throwable) {
+                $dateTo = null;
+                $dateToInput = '';
+            }
+        }
+
+        $classOptions = Student::query()
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->distinct()
+            ->orderBy('class_name')
+            ->pluck('class_name')
+            ->values();
+
+        $familyClasses = Student::query()
+            ->whereNotNull('family_code')
+            ->where('family_code', '!=', '')
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->get(['family_code', 'class_name'])
+            ->groupBy('family_code')
+            ->map(fn ($rows) => $rows->pluck('class_name')->filter()->unique()->sort()->values());
+
         $latestBillingIds = FamilyBilling::query()
             ->selectRaw('MAX(id) as id')
             ->groupBy('family_code')
@@ -30,7 +79,7 @@ class TeacherFamilyLoginMonitorController extends Controller
             ->get()
             ->keyBy('normalized_phone');
 
-        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone): array {
+        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $familyClasses): array {
             $phones = $familyBilling->phones
                 ->pluck('phone')
                 ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone))
@@ -68,17 +117,65 @@ class TeacherFamilyLoginMonitorController extends Controller
             return [
                 'family_code' => (string) $familyBilling->family_code,
                 'phones_display' => $phones->implode(', '),
+                'classes' => $familyClasses->get((string) $familyBilling->family_code, collect()),
+                'class_display' => $familyClasses->get((string) $familyBilling->family_code, collect())->implode(', '),
                 'login_count' => $loginCount,
                 'latest_login_at' => $latestLoginAt,
                 'is_paid' => $familyBilling->outstanding_amount <= 0,
             ];
-        })->values();
+        });
+
+        $rows = $rows
+            ->when($search !== '', function ($collection) use ($search) {
+                $needle = mb_strtolower($search);
+
+                return $collection->filter(function (array $row) use ($needle): bool {
+                    return str_contains(mb_strtolower((string) ($row['family_code'] ?? '')), $needle)
+                        || str_contains(mb_strtolower((string) ($row['phones_display'] ?? '')), $needle)
+                        || str_contains(mb_strtolower((string) ($row['class_display'] ?? '')), $needle);
+                });
+            })
+            ->when($paidStatus === 'paid', fn ($collection) => $collection->where('is_paid', true))
+            ->when($paidStatus === 'unpaid', fn ($collection) => $collection->where('is_paid', false))
+            ->when($selectedClass !== '', fn ($collection) => $collection->filter(
+                fn (array $row) => collect($row['classes'] ?? [])->contains($selectedClass)
+            ))
+            ->when($dateFrom !== null, fn ($collection) => $collection->filter(
+                fn (array $row) => $row['latest_login_at'] !== null && $row['latest_login_at']->greaterThanOrEqualTo($dateFrom)
+            ))
+            ->when($dateTo !== null, fn ($collection) => $collection->filter(
+                fn (array $row) => $row['latest_login_at'] !== null && $row['latest_login_at']->lessThanOrEqualTo($dateTo)
+            ))
+            ->sort(function (array $a, array $b): int {
+                $aTs = $a['latest_login_at']?->timestamp ?? 0;
+                $bTs = $b['latest_login_at']?->timestamp ?? 0;
+
+                if ($aTs !== $bTs) {
+                    return $bTs <=> $aTs;
+                }
+
+                $aCount = (int) ($a['login_count'] ?? 0);
+                $bCount = (int) ($b['login_count'] ?? 0);
+
+                if ($aCount !== $bCount) {
+                    return $bCount <=> $aCount;
+                }
+
+                return strcmp((string) ($a['family_code'] ?? ''), (string) ($b['family_code'] ?? ''));
+            })
+            ->values();
 
         return view('teacher.family-login-monitor', [
             'rows' => $rows,
             'generatedAt' => now(),
             'totalFamilies' => $rows->count(),
             'totalLoginCount' => $rows->sum('login_count'),
+            'search' => $search,
+            'paidStatus' => $paidStatus,
+            'selectedClass' => $selectedClass,
+            'classOptions' => $classOptions,
+            'dateFromInput' => $dateFromInput,
+            'dateToInput' => $dateToInput,
         ]);
     }
 }
