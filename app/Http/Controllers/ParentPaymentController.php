@@ -80,31 +80,28 @@ class ParentPaymentController extends Controller
             ->get();
 
         $lastYear = (int) $familyBilling->billing_year - 1;
-        $portalLastYearContributions = FamilyPaymentTransaction::query()
+        $portalLastYearPayments = FamilyPaymentTransaction::query()
             ->where('status', 'success')
             ->whereHas('familyBilling', fn ($query) => $query
                 ->where('family_code', $familyBilling->family_code)
                 ->where('billing_year', $lastYear))
             ->get();
-        $portalContributionRows = $portalLastYearContributions
+        $portalPaymentRows = $portalLastYearPayments
             ->map(function (FamilyPaymentTransaction $transaction): array {
                 $donationAmount = $this->resolveSuccessfulDonationAmount($transaction);
-                if ($donationAmount <= 0) {
-                    return [];
-                }
 
                 return [
                     'id' => 'portal-'.$transaction->id,
                     'reference' => (string) $transaction->external_order_display,
-                    'amount' => $donationAmount,
+                    'paid_amount' => round((float) $transaction->amount, 2),
+                    'donation_amount' => $donationAmount,
                     'paid_at' => $transaction->paid_at_for_display ?? $transaction->created_at_for_display,
                     'source' => 'portal',
                 ];
             })
-            ->filter()
             ->values();
 
-        $legacyLastYearContributions = LegacyStudentPayment::query()
+        $legacyLastYearPayments = LegacyStudentPayment::query()
             ->where('source_year', $lastYear)
             ->where('payment_status', 'paid')
             ->where(function ($nested) use ($familyBilling, $studentIds) {
@@ -119,10 +116,6 @@ class ParentPaymentController extends Controller
             ->limit(200)
             ->get()
             ->filter(function (LegacyStudentPayment $payment) use ($familyBilling, $studentIds, $childNames): bool {
-                if ((float) ($payment->donation_amount ?? 0) <= 0) {
-                    return false;
-                }
-
                 if ($payment->student_id !== null && $studentIds->contains((int) $payment->student_id)) {
                     return true;
                 }
@@ -136,23 +129,26 @@ class ParentPaymentController extends Controller
             })
             ->values();
 
-        $legacyContributionRows = $legacyLastYearContributions
+        $legacyPaymentRows = $legacyLastYearPayments
             ->map(fn (LegacyStudentPayment $payment): array => [
                 'id' => 'legacy-'.$payment->id,
                 'reference' => (string) ($payment->payment_reference ?: 'LEGACY-'.$payment->id),
-                'amount' => (float) ($payment->donation_amount ?? 0),
+                'paid_amount' => round((float) ($payment->amount_paid ?? 0), 2),
+                'donation_amount' => round((float) ($payment->donation_amount ?? 0), 2),
                 'paid_at' => $payment->paid_at,
                 'source' => 'legacy',
             ]);
 
-        $lastYearContributionHistory = $portalContributionRows
-            ->concat($legacyContributionRows)
+        $lastYearPaymentHistory = $portalPaymentRows
+            ->concat($legacyPaymentRows)
             ->sortByDesc(fn (array $item): int => $item['paid_at']?->getTimestamp() ?? 0)
             ->take(5)
             ->values();
 
-        $lastYearContributionTotal = (float) $portalContributionRows->sum('amount')
-            + (float) $legacyContributionRows->sum('amount');
+        $lastYearPaidTotal = (float) $portalPaymentRows->sum('paid_amount')
+            + (float) $legacyPaymentRows->sum('paid_amount');
+        $lastYearContributionTotal = (float) $portalPaymentRows->sum('donation_amount')
+            + (float) $legacyPaymentRows->sum('donation_amount');
 
         return view('parent.checkout', [
             'familyBilling' => $familyBilling,
@@ -166,8 +162,9 @@ class ParentPaymentController extends Controller
             'checkoutBaseAmount' => $checkoutBaseAmount,
             'recentPaymentAttempts' => $recentPaymentAttempts,
             'lastYear' => $lastYear,
+            'lastYearPaidTotal' => $lastYearPaidTotal,
             'lastYearContributionTotal' => $lastYearContributionTotal,
-            'lastYearContributionHistory' => $lastYearContributionHistory,
+            'lastYearPaymentHistory' => $lastYearPaymentHistory,
         ]);
     }
 

@@ -45,12 +45,26 @@
                     @endif
                     <div class="space-y-2">
                         <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Nama Ibu Bapa / Penjaga</label>
-                        <input name="payer_name" type="text" required class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm" value="{{ old('payer_name', $defaultName) }}">
+                        <input
+                            name="payer_name"
+                            type="text"
+                            required
+                            class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                            placeholder="Contoh: Nurul Aini binti Ahmad"
+                            value="{{ old('payer_name') }}"
+                        >
                         <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_name')" />
                     </div>
                     <div class="space-y-2">
                         <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</label>
-                        <input name="payer_email" type="email" required class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm" value="{{ old('payer_email', $defaultEmail) }}">
+                        <input
+                            name="payer_email"
+                            type="email"
+                            required
+                            class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                            placeholder="Contoh: ibu.bapa@email.com"
+                            value="{{ old('payer_email') }}"
+                        >
                         <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_email')" />
                     </div>
                     <div class="space-y-2">
@@ -141,19 +155,26 @@
         </section>
 
         <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-lg">
-            <h3 class="text-base font-bold text-[color:var(--brand-forest)]">Sejarah Sumbangan Tahun {{ $lastYear }}</h3>
-            <p class="mt-2 text-sm text-zinc-700">Jumlah sumbangan berjaya: <span class="font-bold text-zinc-900">RM {{ number_format((float) $lastYearContributionTotal, 2) }}</span></p>
+            <h3 class="text-base font-bold text-[color:var(--brand-forest)]">Sejarah Bayaran Tahun {{ $lastYear }}</h3>
+            <p class="mt-2 text-sm text-zinc-700">Jumlah dibayar berjaya: <span class="font-bold text-zinc-900">RM {{ number_format((float) ($lastYearPaidTotal ?? 0), 2) }}</span></p>
+            <p class="mt-1 text-sm text-zinc-700">Jumlah sumbangan berjaya: <span class="font-bold text-zinc-900">RM {{ number_format((float) $lastYearContributionTotal, 2) }}</span></p>
             <div class="mt-3 space-y-2">
-                @forelse ($lastYearContributionHistory as $contribution)
+                @forelse ($lastYearPaymentHistory as $payment)
                     <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                         <div class="flex items-center justify-between gap-3">
-                            <span class="font-semibold text-zinc-900">{{ $contribution['reference'] }}</span>
+                            <span class="font-semibold text-zinc-900">{{ $payment['reference'] }}</span>
                             <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-700">Berjaya</span>
                         </div>
-                        <p class="mt-1">{{ $contribution['paid_at']?->format('d M Y H:i') ?? '-' }}, RM {{ number_format((float) $contribution['amount'], 2) }}</p>
+                        <p class="mt-1">
+                            {{ $payment['paid_at']?->format('d M Y H:i') ?? '-' }},
+                            Bayaran RM {{ number_format((float) ($payment['paid_amount'] ?? 0), 2) }}
+                            @if ((float) ($payment['donation_amount'] ?? 0) > 0)
+                                · Sumbangan RM {{ number_format((float) $payment['donation_amount'], 2) }}
+                            @endif
+                        </p>
                     </div>
                 @empty
-                    <p class="text-xs text-zinc-500">Tiada rekod sumbangan berjaya untuk tahun {{ $lastYear }}.</p>
+                    <p class="text-xs text-zinc-500">Tiada rekod bayaran berjaya untuk tahun {{ $lastYear }}.</p>
                 @endforelse
             </div>
         </section>
