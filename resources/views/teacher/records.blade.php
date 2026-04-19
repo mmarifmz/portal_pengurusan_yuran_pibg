@@ -198,7 +198,7 @@
                 </div>
 
                 <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-                    Baris dengan latar hijau menandakan keluarga sudah bayar untuk tahun {{ $lastYear }}.
+                    Baris dengan latar hijau menandakan keluarga sudah bayar untuk tahun {{ $billingYear }}.
                 </div>
                 <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
                     Lencana biru “Paid {{ $billingYear }}” menandakan keluarga sudah bayar untuk tahun semasa.
@@ -210,7 +210,6 @@
                     <table class="min-w-full divide-y divide-zinc-200 text-sm text-zinc-700">
                         <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                             <tr>
-                                <th class="px-5 py-3">Student No</th>
                                 <th class="px-5 py-3">Family Code</th>
                                 <th class="px-5 py-3">Name</th>
                                 <th class="px-5 py-3">Class</th>
@@ -226,8 +225,7 @@
                                     $isPaidThisYear = filled($student->family_code) && $paidThisYearFamilyCodes->contains((string) $student->family_code);
                                     $isPaidLastYear = filled($student->family_code) && $paidLastYearFamilyCodes->contains((string) $student->family_code);
                                 @endphp
-                                <tr class="{{ $isPaidLastYear ? 'bg-emerald-50/70' : '' }}">
-                                    <td class="px-5 py-4 font-mono text-xs font-semibold text-zinc-900">{{ $student->student_no }}</td>
+                                <tr class="{{ $isPaidThisYear ? 'bg-emerald-50/70' : '' }}">
                                     <td class="px-5 py-4 text-sm text-zinc-600">
                                         @if ($student->family_code)
                                             <div class="inline-flex items-center gap-2">
@@ -258,6 +256,22 @@
                                         @endphp
                                         <p>{{ $parentDisplayName }}</p>
                                         <p class="text-xs text-zinc-400">{{ $student->parent_phone ?: '-' }}</p>
+                                        @php
+                                            $studentTags = collect([
+                                                $student->is_b40 ? 'B40' : null,
+                                                $student->is_kwap ? 'KWAP' : null,
+                                                $student->is_rmt ? 'RMT' : null,
+                                            ])->filter()->values();
+                                        @endphp
+                                        @if ($studentTags->isNotEmpty())
+                                            <div class="mt-1 flex flex-wrap gap-1">
+                                                @foreach ($studentTags as $tag)
+                                                    <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700">
+                                                        {{ $tag }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                         @if ($needsParentProfileUpdate)
                                             @if (filled($student->family_code))
                                                 <a
@@ -274,7 +288,11 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-right font-semibold {{ $student->outstanding_balance > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
-                                        RM {{ number_format($student->outstanding_balance, 2) }}
+                                        @if ($isPaidThisYear)
+                                            <span class="text-zinc-400">-</span>
+                                        @else
+                                            RM {{ number_format($student->outstanding_balance, 2) }}
+                                        @endif
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="flex flex-wrap items-center gap-2">
@@ -289,7 +307,14 @@
                                         </div>
                                     </td>
                                     <td class="px-5 py-4 text-right">
-                                        @if ($student->is_duplicate)
+                                        @if (filled($student->family_code))
+                                            <a
+                                                href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}#update-parent-profile"
+                                                class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                                            >
+                                                Update Profile
+                                            </a>
+                                        @elseif ($student->is_duplicate)
                                             <a
                                                 href="{{ route('teacher.records.duplicates.review', $student) }}"
                                                 class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
@@ -303,7 +328,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-5 py-8 text-center text-sm text-zinc-500">
+                                    <td colspan="7" class="px-5 py-8 text-center text-sm text-zinc-500">
                                         No students match the current filter.
                                     </td>
                                 </tr>

@@ -636,6 +636,25 @@ class TeacherRecordsController extends Controller
             ->with('status', 'Family parent profile updated successfully.');
     }
 
+    public function updateStudentTags(Request $request, Student $student): RedirectResponse
+    {
+        $validated = $request->validate([
+            'is_b40' => ['nullable', 'boolean'],
+            'is_kwap' => ['nullable', 'boolean'],
+            'is_rmt' => ['nullable', 'boolean'],
+        ]);
+
+        $student->update([
+            'is_b40' => array_key_exists('is_b40', $validated),
+            'is_kwap' => array_key_exists('is_kwap', $validated),
+            'is_rmt' => array_key_exists('is_rmt', $validated),
+        ]);
+
+        return redirect()
+            ->route('teacher.records.family', ['familyCode' => (string) $student->family_code])
+            ->with('status', 'Student tags updated successfully.');
+    }
+
     public function exportFamilyPayments(Request $request, string $familyCode): StreamedResponse
     {
         $students = Student::query()

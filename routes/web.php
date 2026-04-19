@@ -80,6 +80,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/teacher/records/family/{familyCode}/parent-profile', [TeacherRecordsController::class, 'updateFamilyParentProfile'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.parent-profile.update');
+    Route::patch('/teacher/records/students/{student}/tags', [TeacherRecordsController::class, 'updateStudentTags'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.records.students.tags.update');
     Route::get('/teacher/records/family/{familyCode}/payments/export', [TeacherRecordsController::class, 'exportFamilyPayments'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.payments.export');

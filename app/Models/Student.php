@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Model;
     'billing_year',
     'annual_fee',
     'import_raw_line',
+    'is_b40',
+    'is_kwap',
+    'is_rmt',
 ])]
 class Student extends Model
 {
@@ -34,6 +37,9 @@ class Student extends Model
             'total_fee' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'annual_fee' => 'decimal:2',
+            'is_b40' => 'boolean',
+            'is_kwap' => 'boolean',
+            'is_rmt' => 'boolean',
         ];
     }
 
