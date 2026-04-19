@@ -24,7 +24,6 @@ class TeacherReconciliationController extends Controller
         return view('teacher.reconcile', [
             'preview' => null,
             'previewToken' => null,
-            'backupFiles' => $this->listBackupFiles(),
         ]);
     }
 
@@ -64,7 +63,6 @@ class TeacherReconciliationController extends Controller
         return view('teacher.reconcile', [
             'preview' => $preview,
             'previewToken' => $previewToken,
-            'backupFiles' => $this->listBackupFiles(),
         ]);
     }
 
@@ -173,6 +171,13 @@ class TeacherReconciliationController extends Controller
             ->with('status', "Reconcile applied. Created {$created}, updated {$updated}, marked leaver {$markedLeaver}, historical paid imported {$historicalImported} (matched {$historicalImportedMatched}, unmatched {$historicalImportedUnmatched}), skipped {$historicalSkipped}.");
     }
 
+    public function backupIndex(): View
+    {
+        return view('system.backups', [
+            'backupFiles' => $this->listBackupFiles(),
+        ]);
+    }
+
     public function createBackup(): RedirectResponse
     {
         $connection = config('database.default');
@@ -186,7 +191,7 @@ class TeacherReconciliationController extends Controller
 
         if ($database === '' || $username === '') {
             return redirect()
-                ->route('teacher.reconcile.index')
+                ->route('system.backups.index')
                 ->withErrors(['backup' => 'Database credentials are incomplete for backup.']);
         }
 
@@ -210,21 +215,21 @@ class TeacherReconciliationController extends Controller
 
         if (! $process->isSuccessful()) {
             return redirect()
-                ->route('teacher.reconcile.index')
+                ->route('system.backups.index')
                 ->withErrors(['backup' => 'Backup failed: '.trim($process->getErrorOutput())]);
         }
 
         $sql = $process->getOutput();
         if (trim($sql) === '') {
             return redirect()
-                ->route('teacher.reconcile.index')
+                ->route('system.backups.index')
                 ->withErrors(['backup' => 'Backup failed: mysqldump returned empty output.']);
         }
 
         Storage::disk('local')->put($relativePath, gzencode($sql, 9) ?: $sql);
 
         return redirect()
-            ->route('teacher.reconcile.index')
+            ->route('system.backups.index')
             ->with('status', "Backup created: {$fileName}");
     }
 
@@ -265,12 +270,12 @@ class TeacherReconciliationController extends Controller
         $deleted = Storage::disk('local')->delete($path);
         if (! $deleted) {
             return redirect()
-                ->route('teacher.reconcile.index')
+                ->route('system.backups.index')
                 ->withErrors(['backup' => 'Delete failed. Please try again.']);
         }
 
         return redirect()
-            ->route('teacher.reconcile.index')
+            ->route('system.backups.index')
             ->with('status', "Backup deleted: {$fileName}");
     }
 

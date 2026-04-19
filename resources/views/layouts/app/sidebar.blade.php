@@ -65,13 +65,13 @@
 
                     @if (auth()->user()->canAccessTeacherRecords())
                         <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
-                            {{ __('Student & Family Lists') }}
+                            {{ __('Student Directory') }}
                         </flux:sidebar.item>
                     @endif
 
                     @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
                         <flux:sidebar.item icon="device-phone-mobile" :href="route('teacher.family-login-monitor')" :current="request()->routeIs('teacher.family-login-monitor')" wire:navigate>
-                            {{ __('Family Login Monitor') }}
+                            {{ __('Parent Access Log') }}
                         </flux:sidebar.item>
                     @endif
 
@@ -83,35 +83,40 @@
                             {{ __('Payment History') }}
                         </flux:sidebar.item>
                     @endif
+                </flux:sidebar.group>
 
-                    @if (! auth()->user()->isParent())
-                        <flux:sidebar.item icon="magnifying-glass" :href="route('parent.search')" :current="request()->routeIs('parent.search')" wire:navigate>
-                            {{ __('Public Parent Search') }}
-                        </flux:sidebar.item>
-
+                @if (! auth()->user()->isParent() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
+                    <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">
                         @if (auth()->user()->isSystemAdmin())
-                            <div class="my-2 border-t border-zinc-200/80"></div>
-                            <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
-                                {{ __('Student import') }}
-                            </flux:sidebar.item>
-                            <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
-                                {{ __('Year Reconcile & Backup') }}
-                            </flux:sidebar.item>
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
-                                {{ __('Portal SEO') }}
+                                {{ __('Portal Setting') }}
                             </flux:sidebar.item>
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
-                                {{ __('Payment Testers') }}
+                                {{ __('Tester Zone') }}
                             </flux:sidebar.item>
                         @endif
 
                         @if (auth()->user()->canManageTeacherUsers())
                             <flux:sidebar.item icon="user-group" :href="route('super-teacher.teachers.index')" :current="request()->routeIs('super-teacher.teachers.*')" wire:navigate>
-                                {{ __('Teacher Users') }}
+                                {{ __('Teachers Room') }}
                             </flux:sidebar.item>
                         @endif
-                    @endif
-                </flux:sidebar.group>
+                    </flux:sidebar.group>
+                @endif
+
+                @if (! auth()->user()->isParent() && auth()->user()->isSystemAdmin())
+                    <flux:sidebar.group :heading="__('System Admin')" class="grid gap-1 mt-2">
+                        <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
+                            {{ __('Student Import') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
+                            {{ __('Year Reconcile') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="archive-box" :href="route('system.backups.index')" :current="request()->routeIs('system.backups.*')" wire:navigate>
+                            {{ __('Backup DB') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endif
             </flux:sidebar.nav>
 
             <flux:spacer />

@@ -137,15 +137,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/teacher/reconcile/apply', [TeacherReconciliationController::class, 'apply'])
         ->middleware('role:system_admin')
         ->name('teacher.reconcile.apply');
-    Route::post('/teacher/reconcile/backup', [TeacherReconciliationController::class, 'createBackup'])
+    Route::get('/system/backups', [TeacherReconciliationController::class, 'backupIndex'])
         ->middleware('role:system_admin')
-        ->name('teacher.reconcile.backup.create');
-    Route::get('/teacher/reconcile/backup/{fileName}', [TeacherReconciliationController::class, 'downloadBackup'])
+        ->name('system.backups.index');
+    Route::post('/system/backups', [TeacherReconciliationController::class, 'createBackup'])
         ->middleware('role:system_admin')
-        ->name('teacher.reconcile.backup.download');
-    Route::delete('/teacher/reconcile/backup/{fileName}', [TeacherReconciliationController::class, 'deleteBackup'])
+        ->name('system.backups.create');
+    Route::get('/system/backups/{fileName}', [TeacherReconciliationController::class, 'downloadBackup'])
         ->middleware('role:system_admin')
-        ->name('teacher.reconcile.backup.delete');
+        ->name('system.backups.download');
+    Route::delete('/system/backups/{fileName}', [TeacherReconciliationController::class, 'deleteBackup'])
+        ->middleware('role:system_admin')
+        ->name('system.backups.delete');
 
     Route::post('/billing/setup/current-year', [BillingSetupController::class, 'setupCurrentYear'])
         ->middleware('role:system_admin')
@@ -195,3 +198,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+

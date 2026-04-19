@@ -1,9 +1,9 @@
-<x-layouts::app :title="__('Year Reconcile & Backup')">
+<x-layouts::app :title="__('Year Reconcile')">
     <div class="space-y-6 p-6">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Data operations</p>
-                <h1 class="text-2xl font-bold text-zinc-900">Year Reconcile &amp; Backup</h1>
+                <h1 class="text-2xl font-bold text-zinc-900">Year Reconcile</h1>
                 <p class="text-sm text-zinc-500">Load past-year and current-year CSV, preview impact, then apply safely.</p>
             </div>
             <a href="{{ route('teacher.records') }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50">
@@ -179,63 +179,5 @@
                 </div>
             </section>
         @endif
-
-        <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 class="text-lg font-semibold text-zinc-900">3) Teacher Backup</h2>
-                    <p class="text-xs text-zinc-500">Create a downloadable SQL backup before/after reconcile.</p>
-                </div>
-                <form method="POST" action="{{ route('teacher.reconcile.backup.create') }}">
-                    @csrf
-                    <button type="submit" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50">
-                        Create backup now
-                    </button>
-                </form>
-            </div>
-
-            <div class="mt-4 overflow-x-auto">
-                <table class="min-w-full divide-y divide-zinc-200 text-sm">
-                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                        <tr>
-                            <th class="px-4 py-3">File</th>
-                            <th class="px-4 py-3">Size</th>
-                            <th class="px-4 py-3">Created</th>
-                            <th class="px-4 py-3 text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-200">
-                        @forelse ($backupFiles as $file)
-                            <tr>
-                                <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $file['name'] }}</td>
-                                <td class="px-4 py-3 text-zinc-700">{{ number_format(((int) $file['size']) / 1024, 1) }} KB</td>
-                                <td class="px-4 py-3 text-zinc-700">{{ \Illuminate\Support\Carbon::createFromTimestamp((int) $file['last_modified'])->format('d M Y H:i') }}</td>
-                                <td class="px-4 py-3 text-right">
-                                    <div class="inline-flex items-center gap-2">
-                                        <a href="{{ route('teacher.reconcile.backup.download', ['fileName' => $file['name'], 'format' => 'sql']) }}" class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
-                                            Download SQL
-                                        </a>
-                                        <a href="{{ route('teacher.reconcile.backup.download', ['fileName' => $file['name']]) }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
-                                            Download GZ
-                                        </a>
-                                        <form method="POST" action="{{ route('teacher.reconcile.backup.delete', ['fileName' => $file['name']]) }}" onsubmit="return confirm('Delete this backup permanently?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
-                                                Delete
-                                            </button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="px-4 py-4 text-center text-zinc-500">No backup file yet.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
     </div>
 </x-layouts::app>
