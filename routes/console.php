@@ -3,9 +3,15 @@
 use App\Services\LegacyFamilyBillingImporter;
 use App\Services\WhatsAppTacSender;
 use App\Models\AdminProvisionAudit;
+use App\Models\FamilyBillingPhone;
+use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginOtp;
+use App\Models\Student;
 use App\Models\User;
+use App\Support\ParentPhone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 Artisan::command('inspire', function () {
@@ -238,3 +244,171 @@ Artisan::command('whatsapp:test
 
     return self::SUCCESS;
 })->purpose('Send a WhatsApp TAC/message test to verify provider delivery.');
+
+Artisan::command('parent:test-reset
+    {phone : Phone number to reset}
+    {--clear-student-phone : Also clear this phone from students table}', function () {
+    $phone = trim((string) $this->argument('phone'));
+    $variants = ParentPhone::variants($phone);
+    $normalized = ParentPhone::normalizeForMatch($phone);
+    $clearStudentPhone = (bool) $this->option('clear-student-phone');
+
+    if ($variants === [] || $normalized === '') {
+        $this->error('Invalid phone format.');
+
+        return self::FAILURE;
+    }
+
+    $summary = DB::transaction(function () use ($variants, $normalized, $clearStudentPhone): array {
+        $otpDeleted = ParentLoginOtp::query()->whereIn('phone', $variants)->delete();
+        $auditDeleted = ParentLoginAudit::query()
+            ->whereIn('phone', $variants)
+            ->orWhere('normalized_phone', $normalized)
+            ->delete();
+        $parentUsersDeleted = User::query()
+            ->where('role', 'parent')
+            ->whereIn('phone', $variants)
+            ->delete();
+        $familyPhonesDeleted = FamilyBillingPhone::query()
+            ->where('normalized_phone', $normalized)
+            ->orWhereIn('phone', $variants)
+            ->delete();
+
+        $studentsUpdated = 0;
+        if ($clearStudentPhone) {
+            $studentsUpdated = Student::query()
+                ->whereIn('parent_phone', $variants)
+                ->update(['parent_phone' => null]);
+        }
+
+        return [
+            'otp_deleted' => $otpDeleted,
+            'audit_deleted' => $auditDeleted,
+            'parent_users_deleted' => $parentUsersDeleted,
+            'family_phones_deleted' => $familyPhonesDeleted,
+            'students_updated' => $studentsUpdated,
+        ];
+    });
+
+    $this->info('Parent test reset completed.');
+    $this->line(sprintf(
+        'Parent users: %d | Family phones: %d | TAC logs: %d | Login logs: %d | Students cleared: %d',
+        $summary['parent_users_deleted'],
+        $summary['family_phones_deleted'],
+        $summary['otp_deleted'],
+        $summary['audit_deleted'],
+        $summary['students_updated'],
+    ));
+
+    return self::SUCCESS;
+})->purpose('Reset one phone for fresh parent onboarding tests.');
+
+Artisan::command('parent:phone-correct
+    {wrong_phone : Wrong/mistyped phone}
+    {correct_phone : Correct phone}', function () {
+    $wrongPhone = trim((string) $this->argument('wrong_phone'));
+    $correctPhone = ParentPhone::sanitizeInput((string) $this->argument('correct_phone'));
+
+    $fromVariants = ParentPhone::variants($wrongPhone);
+    $fromNormalized = ParentPhone::normalizeForMatch($wrongPhone);
+    $toNormalized = ParentPhone::normalizeForMatch($correctPhone);
+
+    if ($fromVariants === [] || $fromNormalized === '' || $toNormalized === '') {
+        $this->error('Invalid phone format.');
+
+        return self::FAILURE;
+    }
+
+    if ($fromNormalized === $toNormalized) {
+        $this->error('Wrong phone and corrected phone are the same after normalization.');
+
+        return self::FAILURE;
+    }
+
+    $targetExists = User::query()
+        ->where('role', 'parent')
+        ->whereIn('phone', ParentPhone::variants($correctPhone))
+        ->exists();
+
+    if ($targetExists) {
+        $this->error('Correct phone already exists on a parent account. Merge manually to avoid conflict.');
+
+        return self::FAILURE;
+    }
+
+    $summary = DB::transaction(function () use ($fromVariants, $fromNormalized, $correctPhone, $toNormalized): array {
+        $parentUsersUpdated = User::query()
+            ->where('role', 'parent')
+            ->whereIn('phone', $fromVariants)
+            ->update(['phone' => $correctPhone]);
+
+        $studentsUpdated = Student::query()
+            ->whereIn('parent_phone', $fromVariants)
+            ->update(['parent_phone' => $correctPhone]);
+
+        $otpUpdated = ParentLoginOtp::query()
+            ->whereIn('phone', $fromVariants)
+            ->update(['phone' => $correctPhone]);
+
+        $auditUpdated = ParentLoginAudit::query()
+            ->where(function ($query) use ($fromVariants, $fromNormalized): void {
+                $query->whereIn('phone', $fromVariants)
+                    ->orWhere('normalized_phone', $fromNormalized);
+            })
+            ->update([
+                'phone' => $correctPhone,
+                'normalized_phone' => $toNormalized,
+            ]);
+
+        $familyPhoneUpdated = 0;
+        $familyPhoneDeleted = 0;
+        $rows = FamilyBillingPhone::query()
+            ->where(function ($query) use ($fromVariants, $fromNormalized): void {
+                $query->whereIn('phone', $fromVariants)
+                    ->orWhere('normalized_phone', $fromNormalized);
+            })
+            ->get();
+
+        foreach ($rows as $row) {
+            $existsTarget = FamilyBillingPhone::query()
+                ->where('family_billing_id', $row->family_billing_id)
+                ->where('normalized_phone', $toNormalized)
+                ->where('id', '!=', $row->id)
+                ->exists();
+
+            if ($existsTarget) {
+                $row->delete();
+                $familyPhoneDeleted++;
+                continue;
+            }
+
+            $row->forceFill([
+                'phone' => $correctPhone,
+                'normalized_phone' => $toNormalized,
+            ])->save();
+            $familyPhoneUpdated++;
+        }
+
+        return [
+            'parent_users_updated' => $parentUsersUpdated,
+            'students_updated' => $studentsUpdated,
+            'otp_updated' => $otpUpdated,
+            'audit_updated' => $auditUpdated,
+            'family_phone_updated' => $familyPhoneUpdated,
+            'family_phone_deleted' => $familyPhoneDeleted,
+        ];
+    });
+
+    $this->info('Parent phone correction completed.');
+    $this->line(sprintf(
+        'Parent users: %d | Students: %d | TAC logs: %d | Login logs: %d | Family phones updated: %d | Duplicates removed: %d',
+        $summary['parent_users_updated'],
+        $summary['students_updated'],
+        $summary['otp_updated'],
+        $summary['audit_updated'],
+        $summary['family_phone_updated'],
+        $summary['family_phone_deleted'],
+    ));
+
+    return self::SUCCESS;
+})->purpose('Correct mistyped parent phone across users, logs, students, and family phone records.');

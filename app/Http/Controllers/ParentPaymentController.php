@@ -202,6 +202,20 @@ class ParentPaymentController extends Controller
             'donation_custom' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        $payerName = trim((string) ($validated['payer_name'] ?? ''));
+        $payerEmail = mb_strtolower(trim((string) ($validated['payer_email'] ?? '')));
+
+        $placeholderNamePattern = '/^parent\s+ssp-/i';
+        $isPlaceholderName = preg_match($placeholderNamePattern, $payerName) === 1;
+        $isPlaceholderEmail = str_ends_with($payerEmail, '@placeholder.local');
+
+        if ($isPlaceholderName || $isPlaceholderEmail) {
+            return back()->withErrors([
+                'payer_name' => 'Sila masukkan nama ibu/bapa/penjaga sebenar sebelum membuat bayaran.',
+                'payer_email' => 'Sila gunakan emel sebenar (bukan emel placeholder).',
+            ])->withInput();
+        }
+
         $isTesterMode = (bool) $request->user()?->isParentTester();
         $outstanding = (float) $familyBilling->outstanding_amount;
         $donation = (float) ($validated['donation_custom'] ?: $validated['donation_preset'] ?: 0);

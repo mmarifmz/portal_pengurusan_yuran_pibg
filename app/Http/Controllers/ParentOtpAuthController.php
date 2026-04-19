@@ -474,7 +474,7 @@ class ParentOtpAuthController extends Controller
 
         return [
             'masked_student_name' => $this->maskStudentName($studentName),
-            'masked_family_code' => $this->maskFamilyCode((string) $billing->family_code),
+            'masked_family_code' => (string) $billing->family_code,
         ];
     }
 

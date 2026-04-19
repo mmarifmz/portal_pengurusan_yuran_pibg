@@ -78,6 +78,77 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">Parent Phone Repair Utility</h2>
+            <p class="mt-1 text-sm text-zinc-500">Reset a phone for fresh parent testing, or correct mistyped parent phone numbers.</p>
+
+            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <form method="POST" action="{{ route('system.payment-testers.parent-phone.reset', ['q' => $keyword]) }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                    @csrf
+                    <h3 class="text-sm font-semibold text-zinc-900">Reset Phone (Fresh Test)</h3>
+                    <p class="mt-1 text-xs text-zinc-600">Deletes parent account, registered family phone entries, TAC/login logs for this phone.</p>
+                    <label class="mt-3 block text-sm font-medium text-zinc-700">
+                        Phone Number
+                        <input
+                            name="phone"
+                            type="text"
+                            value="{{ old('phone') }}"
+                            placeholder="01140030076"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+                    <label class="mt-3 inline-flex items-center gap-2 text-sm text-zinc-700">
+                        <input type="hidden" name="clear_student_phone" value="0">
+                        <input type="checkbox" name="clear_student_phone" value="1" class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                        Also clear this phone from students table
+                    </label>
+                    <div class="mt-3">
+                        <button type="submit" class="inline-flex items-center rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100">
+                            Reset Phone
+                        </button>
+                    </div>
+                </form>
+
+                <form method="POST" action="{{ route('system.payment-testers.parent-phone.correct', ['q' => $keyword]) }}" class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                    @csrf
+                    <h3 class="text-sm font-semibold text-zinc-900">Correct Mistyped Phone</h3>
+                    <p class="mt-1 text-xs text-zinc-600">Use when parent keyed wrong number (e.g. missing one digit). Moves records to corrected phone.</p>
+                    <label class="mt-3 block text-sm font-medium text-zinc-700">
+                        Wrong Phone
+                        <input
+                            name="from_phone"
+                            type="text"
+                            value="{{ old('from_phone') }}"
+                            placeholder="0114003007"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+                    <label class="mt-3 block text-sm font-medium text-zinc-700">
+                        Correct Phone
+                        <input
+                            name="to_phone"
+                            type="text"
+                            value="{{ old('to_phone') }}"
+                            placeholder="01140030076"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+                    <div class="mt-3">
+                        <button type="submit" class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100">
+                            Correct Phone
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+                <p class="font-semibold text-zinc-900">One-liner artisan commands</p>
+                <p class="mt-2 font-mono">php artisan parent:test-reset 01140030076</p>
+                <p class="mt-1 font-mono">php artisan parent:test-reset 01140030076 --clear-student-phone</p>
+                <p class="mt-1 font-mono">php artisan parent:phone-correct 0114003007 01140030076</p>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('system.payment-testers.index') }}" class="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <label class="text-sm font-medium text-zinc-700">
                     Search Parent User

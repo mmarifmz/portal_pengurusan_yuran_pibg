@@ -65,8 +65,47 @@ class TeacherRecordsController extends Controller
             ->pluck('class_name')
             ->values();
 
+        $paidThisYearFamilyCodes = FamilyBilling::query()
+            ->where('billing_year', $billingYear)
+            ->where(function ($query): void {
+                $query->where('status', 'paid')
+                    ->orWhereColumn('paid_amount', '>=', 'fee_amount');
+            })
+            ->pluck('family_code')
+            ->filter()
+            ->map(fn ($familyCode) => (string) $familyCode)
+            ->unique()
+            ->values();
+
+        $lastYear = $billingYear - 1;
+        $paidLastYearFamilyCodes = FamilyBilling::query()
+            ->where('billing_year', $lastYear)
+            ->where(function ($query): void {
+                $query->where('status', 'paid')
+                    ->orWhereColumn('paid_amount', '>=', 'fee_amount');
+            })
+            ->pluck('family_code')
+            ->filter()
+            ->map(fn ($familyCode) => (string) $familyCode)
+            ->merge(
+                LegacyStudentPayment::query()
+                    ->where('source_year', $lastYear)
+                    ->where('payment_status', 'paid')
+                    ->pluck('family_code')
+                    ->filter()
+                    ->map(fn ($familyCode) => (string) $familyCode)
+            )
+            ->unique()
+            ->values();
+
         $filteredStudents = $students
             ->when($recordFilter === 'duplicates', fn ($collection) => $collection->filter(fn (Student $student) => $student->is_duplicate))
+            ->when($recordFilter === 'paid-this-year', fn ($collection) => $collection->filter(
+                fn (Student $student) => filled($student->family_code) && $paidThisYearFamilyCodes->contains((string) $student->family_code)
+            ))
+            ->when($recordFilter === 'paid-last-year', fn ($collection) => $collection->filter(
+                fn (Student $student) => filled($student->family_code) && $paidLastYearFamilyCodes->contains((string) $student->family_code)
+            ))
             ->when($recordFilter === 'registered-parent', function ($collection) use ($onboardedParentEmails, $onboardedParentPhones) {
                 return $collection->filter(function (Student $student) use ($onboardedParentEmails, $onboardedParentPhones): bool {
                     $studentEmail = mb_strtolower(trim((string) ($student->parent_email ?? '')));
@@ -207,7 +246,9 @@ class TeacherRecordsController extends Controller
 
         return view('teacher.records', [
             'billingYear' => $billingYear,
+            'lastYear' => $lastYear,
             'students' => $studentsWithResolvedParents,
+            'paidThisYearFamilyCodes' => $paidThisYearFamilyCodes,
             'familyBillings' => $filteredFamilyBillings,
             'studentCount' => $studentCount,
             'familiesCount' => $familiesCount,
@@ -224,6 +265,7 @@ class TeacherRecordsController extends Controller
             'studentNameQuery' => $studentNameQuery,
             'studentNameTooShort' => $studentNameTooShort,
             'filtersActive' => $filtersActive,
+            'paidLastYearFamilyCodes' => $paidLastYearFamilyCodes,
         ]);
     }
 
