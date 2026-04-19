@@ -33,23 +33,23 @@
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan yuran</p>
-                <h3 class="mt-2 text-3xl font-bold text-emerald-700">RM {{ number_format(min($totalCollected, $totalBilled), 2) }}</h3>
+                <h3 class="mt-2 text-3xl font-bold text-emerald-700">RM {{ number_format((float) ($tuitionCollected ?? 0), 2) }}</h3>
                 <p class="mt-1 text-xs text-zinc-500">Tahun {{ $selectedDashboardYear }}</p>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan sumbangan</p>
-                <h3 class="mt-2 text-3xl font-bold text-amber-600">RM {{ number_format(max(0, $totalCollected - ($totalBilled ?: 0)), 2) }}</h3>
-                <p class="mt-1 text-xs text-zinc-500">Tahun {{ $selectedDashboardYear }}</p>
+                <h3 class="mt-2 text-3xl font-bold text-amber-600">RM {{ number_format((float) ($donationCollected ?? 0), 2) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">Bayaran melebihi RM100 (Tahun {{ $selectedDashboardYear }})</p>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah kutipan</p>
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah kutipan keseluruhan</p>
                 <h3 class="mt-2 text-3xl font-bold text-zinc-900">RM {{ number_format($totalCollected, 2) }}</h3>
                 <p class="mt-1 text-xs text-zinc-500">{{ $useLegacyKpiSource ? 'Sumber sejarah 2025' : 'Sumber transaksi portal' }}</p>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wide text-zinc-500">Keluarga berdaftar</p>
-                <h3 class="mt-2 text-3xl font-bold text-zinc-900">{{ number_format($totalFamilies) }}</h3>
-                <p class="mt-1 text-xs text-zinc-500">Pelajar {{ number_format($totalStudents) }}</p>
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Keluarga berbayar</p>
+                <h3 class="mt-2 text-3xl font-bold text-zinc-900">{{ number_format((int) ($familiesPaid ?? 0)) }} / {{ number_format((int) ($totalFamilies ?? 0)) }}</h3>
+                <p class="mt-1 text-xs text-zinc-500">{{ (int) ($paymentCompletion ?? 0) }}% · Pelajar {{ number_format($totalStudents) }}</p>
             </article>
         </div>
 

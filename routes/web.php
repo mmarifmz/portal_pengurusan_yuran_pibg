@@ -77,6 +77,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/teacher/records/family/{familyCode}', [TeacherRecordsController::class, 'familyDetail'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family');
+    Route::patch('/teacher/records/family/{familyCode}/parent-profile', [TeacherRecordsController::class, 'updateFamilyParentProfile'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.records.family.parent-profile.update');
     Route::get('/teacher/records/family/{familyCode}/payments/export', [TeacherRecordsController::class, 'exportFamilyPayments'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.payments.export');

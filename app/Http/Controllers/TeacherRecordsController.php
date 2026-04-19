@@ -381,6 +381,12 @@ class TeacherRecordsController extends Controller
             ->get()
             ->filter(fn (FamilyPaymentTransaction $payment): bool => $this->paymentMatchesFilter($payment, $paymentFilter))
             ->values();
+        $portalDonationByPaymentId = $paymentHistory
+            ->mapWithKeys(fn (FamilyPaymentTransaction $payment): array => [
+                $payment->id => $this->isPaymentSuccessful($payment)
+                    ? $this->resolvePortalDonationAmount($payment)
+                    : 0.0,
+            ]);
 
         $parentRawPhones = $students
             ->pluck('parent_phone')
@@ -487,6 +493,8 @@ class TeacherRecordsController extends Controller
         $totalPaid = (float) $familyBillings->sum('paid_amount');
         $totalBilled = (float) $familyBillings->sum('fee_amount');
         $totalOutstanding = max(0, $totalBilled - $totalPaid);
+        $parentProfileName = (string) ($students->pluck('parent_name')->filter()->first() ?? '');
+        $parentProfileEmail = (string) ($students->pluck('parent_email')->filter()->first() ?? '');
         $studentIds = $students->pluck('id')->filter()->values();
         $studentNames = $students
             ->pluck('full_name')
@@ -566,15 +574,46 @@ class TeacherRecordsController extends Controller
             'totalPaid' => $totalPaid,
             'totalBilled' => $totalBilled,
             'totalOutstanding' => $totalOutstanding,
+            'parentProfileName' => $parentProfileName,
+            'parentProfileEmail' => $parentProfileEmail,
             'paymentFilter' => $paymentFilter,
             'isOnboarded' => $isOnboarded,
             'successfulLogins' => $successfulLogins,
             'latestAccessAt' => $latestAccessAt,
             'familyPhoneAccess' => $familyPhoneAccess,
+            'portalDonationByPaymentId' => $portalDonationByPaymentId,
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => $legacyPaidTotal,
             'legacyDonationTotal' => $legacyDonationTotal,
         ]);
+    }
+
+    public function updateFamilyParentProfile(Request $request, string $familyCode): RedirectResponse
+    {
+        $students = Student::query()
+            ->where('family_code', $familyCode)
+            ->get();
+
+        abort_if($students->isEmpty(), 404);
+
+        $validated = $request->validate([
+            'parent_name' => ['required', 'string', 'max:255'],
+            'parent_email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $parentName = trim((string) $validated['parent_name']);
+        $parentEmail = mb_strtolower(trim((string) $validated['parent_email']));
+
+        Student::query()
+            ->where('family_code', $familyCode)
+            ->update([
+                'parent_name' => $parentName,
+                'parent_email' => $parentEmail,
+            ]);
+
+        return redirect()
+            ->route('teacher.records.family', ['familyCode' => $familyCode])
+            ->with('status', 'Family parent profile updated successfully.');
     }
 
     public function exportFamilyPayments(Request $request, string $familyCode): StreamedResponse
@@ -619,6 +658,7 @@ class TeacherRecordsController extends Controller
                 'Order ID',
                 'Bill Code',
                 'Amount (RM)',
+                'Sumbangan (RM)',
                 'Status',
                 'Return Status',
                 'Payer Name',
@@ -632,6 +672,7 @@ class TeacherRecordsController extends Controller
                     (string) $payment->external_order_display,
                     (string) ($payment->provider_bill_code ?? ''),
                     number_format((float) $payment->amount, 2, '.', ''),
+                    number_format($this->isPaymentSuccessful($payment) ? $this->resolvePortalDonationAmount($payment) : 0, 2, '.', ''),
                     (string) $payment->status,
                     (string) ($payment->return_status ?? ''),
                     (string) ($payment->payer_name ?? ''),
@@ -730,6 +771,25 @@ class TeacherRecordsController extends Controller
 
         return in_array($status, ['failed', 'cancelled', 'canceled', 'superseded'], true)
             || in_array($returnStatus, ['parent cancel', 'not enough fund', 'not successful', 'cancelled'], true);
+    }
+
+    private function isPaymentSuccessful(FamilyPaymentTransaction $payment): bool
+    {
+        $status = strtolower(trim((string) $payment->status));
+        $returnStatus = strtolower(trim((string) ($payment->return_status ?? '')));
+
+        return in_array($status, ['success', 'successful', 'paid'], true)
+            || $returnStatus === 'successful';
+    }
+
+    private function resolvePortalDonationAmount(FamilyPaymentTransaction $payment): float
+    {
+        $storedDonation = (float) ($payment->donation_amount ?? 0);
+        if ($storedDonation > 0) {
+            return round($storedDonation, 2);
+        }
+
+        return round(max(0, (float) $payment->amount - (float) ($payment->fee_amount_paid ?? 0)), 2);
     }
 
     private function normalizeNameForLegacyMatch(string $name): string

@@ -5,6 +5,7 @@
         $pendingPaymentsUrl = route('teacher.records.family', ['familyCode' => $familyCode, 'payment_status' => 'pending']);
         $cancelledPaymentsUrl = route('teacher.records.family', ['familyCode' => $familyCode, 'payment_status' => 'cancelled']);
         $exportPaymentsUrl = route('teacher.records.family.payments.export', ['familyCode' => $familyCode, 'payment_status' => $paymentFilter]);
+        $updateParentProfileUrl = route('teacher.records.family.parent-profile.update', ['familyCode' => $familyCode]);
     @endphp
 
     <div class="space-y-6">
@@ -148,6 +149,46 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div id="update-parent-profile" class="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <h3 class="text-sm font-semibold text-zinc-900">Update Family Parent Profile</h3>
+                <p class="mt-1 text-xs text-zinc-500">Teacher boleh kemas kini nama dan email parent untuk semua murid di family code ini.</p>
+                <form method="POST" action="{{ $updateParentProfileUrl }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+                    @csrf
+                    @method('PATCH')
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Parent Name
+                        <input
+                            type="text"
+                            name="parent_name"
+                            value="{{ old('parent_name', $parentProfileName ?? '') }}"
+                            required
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        @error('parent_name')
+                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                        @enderror
+                    </label>
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Parent Email
+                        <input
+                            type="email"
+                            name="parent_email"
+                            value="{{ old('parent_email', $parentProfileEmail ?? '') }}"
+                            required
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        @error('parent_email')
+                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                        @enderror
+                    </label>
+                    <div class="sm:col-span-2">
+                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                            Save Parent Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-zinc-900">Payment History</h2>
@@ -173,6 +214,7 @@
                             <th class="px-4 py-3">Order ID</th>
                             <th class="px-4 py-3">Bill Code</th>
                             <th class="px-4 py-3 text-right">Amount (RM)</th>
+                            <th class="px-4 py-3 text-right">Sumbangan (RM)</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Return Status</th>
                             <th class="px-4 py-3">Payer</th>
@@ -185,6 +227,7 @@
                                 <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $payment->external_order_display }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $payment->provider_bill_code ?: '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold text-zinc-900">{{ number_format((float) $payment->amount, 2) }}</td>
+                                <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((float) ($portalDonationByPaymentId[$payment->id] ?? 0), 2) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ ucfirst((string) $payment->status) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $payment->return_status ? ucfirst((string) $payment->return_status) : '-' }}</td>
                                 <td class="px-4 py-3 text-zinc-600">
@@ -194,7 +237,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-6 text-center text-zinc-500">No payment history recorded for the selected filter.</td>
+                                <td colspan="8" class="px-4 py-6 text-center text-zinc-500">No payment history recorded for the selected filter.</td>
                             </tr>
                         @endforelse
                     </tbody>

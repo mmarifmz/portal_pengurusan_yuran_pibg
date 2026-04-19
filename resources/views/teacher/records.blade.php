@@ -259,9 +259,18 @@
                                         <p>{{ $parentDisplayName }}</p>
                                         <p class="text-xs text-zinc-400">{{ $student->parent_phone ?: '-' }}</p>
                                         @if ($needsParentProfileUpdate)
-                                            <span class="mt-1 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                                                Update profile
-                                            </span>
+                                            @if (filled($student->family_code))
+                                                <a
+                                                    href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}#update-parent-profile"
+                                                    class="mt-1 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 transition hover:bg-amber-100"
+                                                >
+                                                    Update profile
+                                                </a>
+                                            @else
+                                                <span class="mt-1 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                                                    Update profile
+                                                </span>
+                                            @endif
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-right font-semibold {{ $student->outstanding_balance > 0 ? 'text-rose-600' : 'text-emerald-600' }}">

@@ -59,6 +59,7 @@ class DashboardController extends Controller
 
         $useLegacyKpiSource = $familyBillings->isEmpty() && $legacyPayments->isNotEmpty();
         $legacyPaymentTransactions = collect();
+        $selectedYearTransactions = collect();
         if ($legacyPayments->isNotEmpty()) {
             $legacyPaymentTransactions = $legacyPayments
                 ->groupBy(function (LegacyStudentPayment $payment): string {
@@ -94,26 +95,45 @@ class DashboardController extends Controller
                 })
                 ->values();
         }
+        if (! $useLegacyKpiSource) {
+            $selectedYearTransactions = FamilyPaymentTransaction::query()
+                ->where('status', 'success')
+                ->whereYear('paid_at', $selectedDashboardYear)
+                ->whereNotNull('paid_at')
+                ->get();
+        }
+
+        $yuranThreshold = 100.0;
 
         $totalFamilies = $familyBillings->count();
         $totalStudents = $students->count();
-        $totalCollected = $useLegacyKpiSource
-            ? (float) $legacyPaymentTransactions->sum('amount_paid')
-            : (float) $familyBillings->sum('paid_amount');
+        $familiesPaid = $familyBillings->filter(fn (FamilyBilling $billing) => $billing->outstanding_amount <= 0)->count();
+        $tuitionCollected = $useLegacyKpiSource
+            ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => min((float) ($payment['amount_paid'] ?? 0), $yuranThreshold))
+            : (float) $selectedYearTransactions->sum(fn (FamilyPaymentTransaction $transaction): float => min((float) $transaction->amount, $yuranThreshold));
+        $donationCollected = $useLegacyKpiSource
+            ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => max(0, (float) ($payment['amount_paid'] ?? 0) - $yuranThreshold))
+            : (float) $selectedYearTransactions->sum(fn (FamilyPaymentTransaction $transaction): float => max(0, (float) $transaction->amount - $yuranThreshold));
+        $totalCollected = $tuitionCollected + $donationCollected;
         $totalBilled = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum('amount_due')
             : (float) $familyBillings->sum('fee_amount');
         $totalOutstanding = $useLegacyKpiSource
-            ? max(0, $totalBilled - $totalCollected)
+            ? max(0, $totalBilled - $tuitionCollected)
             : (float) $familyBillings->sum(fn (FamilyBilling $billing) => $billing->outstanding_amount);
 
         if ($useLegacyKpiSource) {
             $totalFamilies = (int) $legacyPaymentTransactions->pluck('family_code')->filter()->unique()->count();
             $totalStudents = (int) $legacyPayments->pluck('student_name')->filter()->unique()->count();
+            $familiesPaid = (int) $legacyPaymentTransactions
+                ->groupBy(fn (array $payment): string => (string) ($payment['family_code'] ?? ''))
+                ->filter(fn ($group, string $familyCode): bool => $familyCode !== '')
+                ->map(fn ($group): float => (float) $group->sum('amount_paid'))
+                ->filter(fn (float $paid): bool => $paid >= $yuranThreshold)
+                ->count();
         }
 
-        $fullyPaid = $familyBillings->filter(fn (FamilyBilling $billing) => $billing->outstanding_amount <= 0)->count();
-        $paymentCompletion = $totalFamilies > 0 ? (int) round(($fullyPaid / $totalFamilies) * 100) : 0;
+        $paymentCompletion = $totalFamilies > 0 ? (int) round(($familiesPaid / $totalFamilies) * 100) : 0;
 
         if ($useLegacyKpiSource) {
             $classCollection = $legacyPaymentTransactions
@@ -175,12 +195,6 @@ class DashboardController extends Controller
                 ->map(fn ($group) => $group->count())
                 ->toArray();
         } else {
-            $selectedYearTransactions = FamilyPaymentTransaction::query()
-                ->where('status', 'success')
-                ->whereYear('paid_at', $selectedDashboardYear)
-                ->whereNotNull('paid_at')
-                ->get();
-
             $monthlyPaid = $selectedYearTransactions
                 ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('n'))
                 ->map(fn ($group) => (float) $group->sum('amount'));
@@ -317,7 +331,10 @@ class DashboardController extends Controller
             'selectedDashboardYear' => $selectedDashboardYear,
             'useLegacyKpiSource' => $useLegacyKpiSource,
             'totalFamilies' => $totalFamilies,
+            'familiesPaid' => $familiesPaid,
             'totalStudents' => $totalStudents,
+            'tuitionCollected' => $tuitionCollected,
+            'donationCollected' => $donationCollected,
             'totalCollected' => $totalCollected,
             'totalOutstanding' => $totalOutstanding,
             'totalBilled' => $totalBilled,
