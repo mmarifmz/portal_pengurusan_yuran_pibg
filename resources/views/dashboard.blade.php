@@ -1,12 +1,13 @@
 ﻿<x-layouts::app :title="__('Dashboard')" class="space-y-6">
     @if ($role !== 'parent')
         <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <form method="GET" action="{{ route('dashboard') }}" class="flex flex-wrap items-end justify-between gap-3">
+            <form method="GET" action="{{ route('dashboard') }}#collection-by-class-section" class="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p class="text-xs uppercase tracking-wide text-zinc-500">Dashboard filter</p>
                     <h3 class="text-lg font-semibold text-zinc-900">Data year selector</h3>
                 </div>
                 <div class="flex items-end gap-2">
+                    <input type="hidden" name="class_tahun" value="{{ $selectedClassYearFilter ?? 'all' }}">
                     <label class="text-xs font-semibold text-zinc-600">
                         Tahun data
                         <select name="dashboard_year" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
@@ -53,14 +54,29 @@
         </div>
 
         <div class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <div class="flex items-center justify-between">
+            <div id="collection-by-class-section" class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <p class="text-xs uppercase tracking-wide text-zinc-500">Collection by class</p>
                         <h3 class="text-lg font-semibold text-zinc-900">Kutipan mengikut kelas (RM)</h3>
                     </div>
-                    <span class="text-xs text-emerald-600">{{ $selectedDashboardYear }} · RM {{ number_format($totalCollected, 2) }}</span>
+                    <div class="flex items-end gap-2">
+                        <form method="GET" action="{{ route('dashboard') }}#collection-by-class-section">
+                            <input type="hidden" name="dashboard_year" value="{{ $selectedDashboardYear }}">
+                            <label class="text-xs font-semibold text-zinc-600">
+                                Tahun
+                                <select name="class_tahun" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                    <option value="all" @selected(($selectedClassYearFilter ?? 'all') === 'all')>Semua</option>
+                                    @foreach (($classYearOptions ?? []) as $classYearOption)
+                                        <option value="{{ $classYearOption }}" @selected((string) ($selectedClassYearFilter ?? 'all') === (string) $classYearOption)>Tahun {{ $classYearOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                        </form>
+                        <span class="text-xs text-emerald-600">{{ $selectedDashboardYear }} · RM {{ number_format($totalCollected, 2) }}</span>
+                    </div>
                 </div>
+                <p class="mt-2 text-xs text-zinc-500">Susunan kelas: tertinggi ke terendah.</p>
                 <div class="mt-4 h-64">
                     <canvas id="collectionByClassChart" class="h-full w-full"></canvas>
                 </div>

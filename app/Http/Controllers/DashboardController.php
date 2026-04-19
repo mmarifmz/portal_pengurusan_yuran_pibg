@@ -39,6 +39,7 @@ class DashboardController extends Controller
         if (! $yearOptions->contains($selectedDashboardYear)) {
             $selectedDashboardYear = (int) $yearOptions->first();
         }
+        $selectedClassYearFilter = trim((string) $request->query('class_tahun', 'all'));
 
         $familyBillings = FamilyBilling::with('students')
             ->where('billing_year', $selectedDashboardYear)
@@ -133,8 +134,30 @@ class DashboardController extends Controller
                 ->values();
         }
 
-        $classChartLabels = $classCollection->pluck('class_name')->map(fn ($label) => (string) $label)->toArray();
-        $classChartCollected = $classCollection->pluck('collected')->toArray();
+        $classYearOptions = collect(range(1, 6));
+        $isValidClassYearFilter = $selectedClassYearFilter === 'all'
+            || $classYearOptions->map(fn (int $year) => (string) $year)->contains($selectedClassYearFilter);
+        if (! $isValidClassYearFilter) {
+            $selectedClassYearFilter = 'all';
+        }
+
+        $filteredClassCollection = $classCollection
+            ->filter(function (array $row) use ($selectedClassYearFilter): bool {
+                if ($selectedClassYearFilter === 'all') {
+                    return true;
+                }
+
+                $classYear = $this->extractClassYear((string) ($row['class_name'] ?? ''));
+                return $classYear !== null && (string) $classYear === $selectedClassYearFilter;
+            })
+            ->sortBy([
+                ['collected', 'desc'],
+                ['class_name', 'asc'],
+            ])
+            ->values();
+
+        $classChartLabels = $filteredClassCollection->pluck('class_name')->map(fn ($label) => (string) $label)->toArray();
+        $classChartCollected = $filteredClassCollection->pluck('collected')->toArray();
 
         $trendMonthLabels = collect(range(1, 12))
             ->map(fn (int $month): string => Carbon::create($selectedDashboardYear, $month, 1)->format('M'))
@@ -301,6 +324,8 @@ class DashboardController extends Controller
             'paymentCompletion' => $paymentCompletion,
             'classChartLabels' => $classChartLabels,
             'classChartCollected' => $classChartCollected,
+            'classYearOptions' => $classYearOptions->toArray(),
+            'selectedClassYearFilter' => $selectedClassYearFilter,
             'dailyTrendLabels' => $dailyTrendLabels,
             'dailyTrendValues' => $dailyTrendValues,
             'calendarPaidCountByDate' => $calendarPaidCountByDate,
@@ -407,5 +432,15 @@ Portal Yuran:
         }
 
         return $digits;
+    }
+
+    private function extractClassYear(string $className): ?int
+    {
+        if (preg_match('/^\s*(\d{1,2})\b/', $className, $matches) !== 1) {
+            return null;
+        }
+
+        $year = (int) ($matches[1] ?? 0);
+        return $year > 0 ? $year : null;
     }
 }
