@@ -52,6 +52,8 @@ return [
         'base_url' => env('WASENDER_BASE_URL', 'https://www.wasenderapi.com/api'),
         'api_key' => env('WASENDER_API_KEY'),
         'webhook_secret' => env('WASENDER_WEBHOOK_SECRET'),
+        'retry_attempts' => (int) env('WASENDER_RETRY_ATTEMPTS', 2),
+        'max_retry_delay_seconds' => (int) env('WASENDER_MAX_RETRY_DELAY_SECONDS', 10),
     ],
 
     'toyyibpay' => [

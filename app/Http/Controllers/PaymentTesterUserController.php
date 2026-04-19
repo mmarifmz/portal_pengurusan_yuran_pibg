@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\WhatsAppTacSender;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -40,6 +41,8 @@ class PaymentTesterUserController extends Controller
             'parentUsers' => $parentUsers,
             'keyword' => $keyword,
             'hasPaymentTesterColumn' => $hasPaymentTesterColumn,
+            'defaultWhatsappTestPhone' => (string) config('services.treasury_whatsapp_phone', ''),
+            'defaultWhatsappTestMessage' => 'Ini mesej ujian WhatsApp dari Portal PIBG.',
         ]);
     }
 
@@ -66,5 +69,38 @@ class PaymentTesterUserController extends Controller
             ->with('status', $user->is_payment_tester
                 ? 'Payment tester enabled for this parent user.'
                 : 'Payment tester disabled for this parent user.');
+    }
+
+    public function sendWhatsappTest(Request $request, WhatsAppTacSender $whatsAppTacSender): RedirectResponse
+    {
+        $validated = $request->validate([
+            'phone' => ['required', 'string', 'max:25'],
+            'mode' => ['required', 'string', 'in:message,tac'],
+            'message' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $phone = trim((string) $validated['phone']);
+        $mode = (string) $validated['mode'];
+        $message = trim((string) ($validated['message'] ?? ''));
+
+        try {
+            $result = $mode === 'tac'
+                ? $whatsAppTacSender->sendTac($phone, (string) random_int(100000, 999999), 'TEST-FAMILY')
+                : $whatsAppTacSender->sendMessage(
+                    $phone,
+                    $message !== '' ? $message : 'Ini mesej ujian WhatsApp dari Portal PIBG.'
+                );
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'WhatsApp test failed: '.$exception->getMessage());
+        }
+
+        $statusText = (string) ($result['status'] ?? 'sent');
+        $messageId = (string) ($result['message_id'] ?? '');
+
+        return redirect()
+            ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+            ->with('status', 'WhatsApp test sent successfully. Status: '.$statusText.($messageId !== '' ? ' | Message ID: '.$messageId : ''));
     }
 }

@@ -158,6 +158,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/system/payment-testers/{user}', [PaymentTesterUserController::class, 'update'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.update');
+    Route::post('/system/payment-testers/whatsapp-test', [PaymentTesterUserController::class, 'sendWhatsappTest'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.whatsapp-test');
 
     Route::get('/super-teacher/teachers', [TeacherUserManagementController::class, 'index'])
         ->middleware('role:super_teacher,system_admin')

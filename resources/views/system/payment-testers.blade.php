@@ -32,6 +32,52 @@
         @endif
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">WhatsApp Test Utility</h2>
+            <p class="mt-1 text-sm text-zinc-500">Send a TAC/message test immediately from this panel.</p>
+
+            <form method="POST" action="{{ route('system.payment-testers.whatsapp-test', ['q' => $keyword]) }}" class="mt-4 grid gap-3 md:grid-cols-3">
+                @csrf
+                <label class="text-sm font-medium text-zinc-700">
+                    Phone Number
+                    <input
+                        name="phone"
+                        type="text"
+                        value="{{ old('phone', $defaultWhatsappTestPhone) }}"
+                        placeholder="60123456789"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <label class="text-sm font-medium text-zinc-700">
+                    Mode
+                    <select name="mode" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <option value="message" @selected(old('mode') === 'message')>Message</option>
+                        <option value="tac" @selected(old('mode') === 'tac')>TAC</option>
+                    </select>
+                </label>
+                <label class="text-sm font-medium text-zinc-700 md:col-span-3">
+                    Message (used when mode = Message)
+                    <input
+                        name="message"
+                        type="text"
+                        value="{{ old('message', $defaultWhatsappTestMessage) }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <div class="md:col-span-3">
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                        Send WhatsApp Test
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+                <p class="font-semibold text-zinc-900">One-liner artisan commands</p>
+                <p class="mt-2 font-mono">php artisan whatsapp:test 60123456789 --message="Ini mesej ujian dari super admin"</p>
+                <p class="mt-1 font-mono">php artisan whatsapp:test 60123456789 --tac --family-code=TEST-FAMILY</p>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('system.payment-testers.index') }}" class="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <label class="text-sm font-medium text-zinc-700">
                     Search Parent User

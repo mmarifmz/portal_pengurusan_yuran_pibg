@@ -31,7 +31,9 @@ class PublicParentSearchController extends Controller
             $hasSearched = true;
 
             /** @var Collection<int, Student> $students */
-            $normalizedContact = isset($validated['contact']) ? preg_replace('/\D+/', '', (string) $validated['contact']) : null;
+            $contactInput = trim((string) ($validated['contact'] ?? ''));
+            $normalizedContact = ParentPhone::normalizeForMatch($contactInput);
+            $contactVariants = $contactInput !== '' ? ParentPhone::variants($contactInput) : [];
 
             $students = Student::query()
                 ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
@@ -44,21 +46,24 @@ class PublicParentSearchController extends Controller
                 ->when($validated['class_name'] ?? null, function ($query, $className) {
                     $query->where('class_name', $className);
                 })
+                ->when($contactInput !== '', function ($query) use ($contactVariants, $normalizedContact): void {
+                    $query->where(function ($nested) use ($contactVariants, $normalizedContact): void {
+                        if ($contactVariants !== []) {
+                            $nested->whereIn('parent_phone', $contactVariants);
+                        }
+
+                        if ($normalizedContact !== '') {
+                            $nested->orWhereIn('family_code', FamilyBilling::query()
+                                ->whereHas('phones', fn ($phoneQuery) => $phoneQuery->where('normalized_phone', $normalizedContact))
+                                ->select('family_code'));
+                        }
+                    });
+                })
                 ->orderByRaw('CASE WHEN family_code IS NULL OR family_code = "" THEN 1 ELSE 0 END')
                 ->orderBy('family_code')
                 ->orderBy('full_name')
                 ->take(300)
                 ->get();
-
-            if ($normalizedContact) {
-                $students = $students
-                    ->filter(function (Student $student) use ($normalizedContact): bool {
-                        $studentPhone = preg_replace('/\D+/', '', (string) $student->parent_phone) ?? '';
-
-                        return $studentPhone !== '' && $studentPhone === $normalizedContact;
-                    })
-                    ->values();
-            }
 
             $searchBillings = FamilyBilling::query()
                 ->whereIn('family_code', $students->pluck('family_code')->filter()->unique())

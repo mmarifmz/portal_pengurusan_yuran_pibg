@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\LegacyFamilyBillingImporter;
+use App\Services\WhatsAppTacSender;
 use App\Models\AdminProvisionAudit;
 use App\Models\User;
 use Illuminate\Foundation\Inspiring;
@@ -200,3 +201,40 @@ Artisan::command('system:admin:provision
 
     return self::SUCCESS;
 })->purpose('Provision or promote a system_admin account via CLI with privileged authorization.');
+
+Artisan::command('whatsapp:test
+    {phone : Target phone number (e.g. 60123456789)}
+    {--message= : Custom message text}
+    {--tac : Send TAC template instead of custom message}
+    {--family-code=TEST-FAMILY : Family code shown in TAC template}', function (WhatsAppTacSender $whatsAppTacSender) {
+    $phone = trim((string) $this->argument('phone'));
+    $message = trim((string) ($this->option('message') ?? ''));
+    $sendTac = (bool) $this->option('tac');
+    $familyCode = trim((string) ($this->option('family-code') ?? 'TEST-FAMILY'));
+
+    if ($phone === '') {
+        $this->error('Phone number is required.');
+
+        return self::FAILURE;
+    }
+
+    try {
+        $result = $sendTac
+            ? $whatsAppTacSender->sendTac($phone, (string) random_int(100000, 999999), $familyCode !== '' ? $familyCode : 'TEST-FAMILY')
+            : $whatsAppTacSender->sendMessage(
+                $phone,
+                $message !== '' ? $message : 'Ini mesej ujian WhatsApp dari Portal PIBG.'
+            );
+    } catch (\Throwable $exception) {
+        $this->error('WhatsApp test failed: '.$exception->getMessage());
+
+        return self::FAILURE;
+    }
+
+    $this->info('WhatsApp test sent.');
+    $this->line('Provider: '.(string) ($result['provider'] ?? 'unknown'));
+    $this->line('Status: '.(string) ($result['status'] ?? 'unknown'));
+    $this->line('Message ID: '.(string) ($result['message_id'] ?? '-'));
+
+    return self::SUCCESS;
+})->purpose('Send a WhatsApp TAC/message test to verify provider delivery.');

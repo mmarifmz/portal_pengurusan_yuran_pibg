@@ -40,7 +40,14 @@
                     <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
                         @forelse ($rows as $row)
                             <tr>
-                                <td class="px-4 py-3 font-semibold text-zinc-900">{{ $row['family_code'] }}</td>
+                                <td class="px-4 py-3 font-semibold text-zinc-900">
+                                    <a
+                                        href="{{ route('teacher.records.family', ['familyCode' => $row['family_code'], 'payment_status' => 'all']) }}"
+                                        class="inline-flex items-center rounded-md px-1.5 py-0.5 text-emerald-700 underline decoration-emerald-300 underline-offset-2 transition hover:text-emerald-800 hover:decoration-emerald-500"
+                                    >
+                                        {{ $row['family_code'] }}
+                                    </a>
+                                </td>
                                 <td class="px-4 py-3">{{ $row['phones_display'] !== '' ? $row['phones_display'] : '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ number_format($row['login_count']) }}</td>
                                 <td class="px-4 py-3">{{ $row['latest_login_at'] ? $row['latest_login_at']->format('d M Y H:i:s') : '-' }}</td>
