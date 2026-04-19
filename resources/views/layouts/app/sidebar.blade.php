@@ -63,6 +63,12 @@
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
 
+                    @if (! auth()->user()->isParent())
+                        <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
+                            {{ __('School Calendar') }}
+                        </flux:sidebar.item>
+                    @endif
+
                     @if (auth()->user()->canAccessTeacherRecords())
                         <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
                             {{ __('Student Directory') }}

@@ -1,4 +1,4 @@
-﻿<x-layouts::app :title="__('Dashboard')" class="space-y-6">
+<x-layouts::app :title="__('Dashboard')" class="space-y-6">
     @if ($role !== 'parent')
         <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
             <form method="GET" action="{{ route('dashboard') }}#collection-by-class-section" class="flex flex-wrap items-end justify-between gap-3">
@@ -20,15 +20,6 @@
             </form>
         </div>
 
-        <div class="grid gap-4">
-            @include('partials.parent-calendar', [
-                'calendarEvents' => $calendarEvents,
-                'paidCountByDate' => $calendarPaidCountByDate,
-                'calendarBlockLabel' => 'Takwim sekolah',
-                'calendarBlockTitle' => "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})",
-                'calendarBlockDescription' => 'Angka hijau dalam hari menunjukkan jumlah keluarga yang sudah bayar pada tarikh tersebut.',
-            ])
-        </div>
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
