@@ -161,7 +161,6 @@
                             type="text"
                             name="parent_name"
                             value="{{ old('parent_name', $parentProfileName ?? '') }}"
-                            required
                             class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         />
                         @error('parent_name')
@@ -174,13 +173,13 @@
                             type="email"
                             name="parent_email"
                             value="{{ old('parent_email', $parentProfileEmail ?? '') }}"
-                            required
                             class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         />
                         @error('parent_email')
                             <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
                         @enderror
                     </label>
+                    <p class="sm:col-span-2 text-[11px] text-zinc-500">Boleh kemas kini satu medan sahaja (nama atau email), atau kedua-duanya sekali.</p>
                     <div class="sm:col-span-2">
                         <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
                             Save Parent Profile

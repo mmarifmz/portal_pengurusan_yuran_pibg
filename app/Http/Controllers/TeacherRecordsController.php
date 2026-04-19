@@ -201,7 +201,12 @@ class TeacherRecordsController extends Controller
                 $studentPhone = $this->normalizePhoneForMatch((string) ($student->parent_phone ?? ''));
 
                 $resolvedParentName = null;
-                if ($studentEmail !== '' && $parentNameByEmail->has($studentEmail)) {
+                $studentParentName = trim((string) ($student->parent_name ?? ''));
+                $studentParentNameIsPlaceholder = preg_match('/^parent\s+ssp-/i', $studentParentName) === 1;
+
+                if ($studentParentName !== '' && ! $studentParentNameIsPlaceholder) {
+                    $resolvedParentName = $studentParentName;
+                } elseif ($studentEmail !== '' && $parentNameByEmail->has($studentEmail)) {
                     $resolvedParentName = $parentNameByEmail->get($studentEmail);
                 } elseif ($studentPhone !== '' && $parentNameByPhone->has($studentPhone)) {
                     $resolvedParentName = $parentNameByPhone->get($studentPhone);
@@ -597,19 +602,34 @@ class TeacherRecordsController extends Controller
         abort_if($students->isEmpty(), 404);
 
         $validated = $request->validate([
-            'parent_name' => ['required', 'string', 'max:255'],
-            'parent_email' => ['required', 'email', 'max:255'],
+            'parent_name' => ['nullable', 'string', 'max:255', 'required_without:parent_email'],
+            'parent_email' => ['nullable', 'email', 'max:255', 'required_without:parent_name'],
         ]);
 
-        $parentName = trim((string) $validated['parent_name']);
-        $parentEmail = mb_strtolower(trim((string) $validated['parent_email']));
+        $parentName = array_key_exists('parent_name', $validated)
+            ? trim((string) $validated['parent_name'])
+            : null;
+        $parentEmail = array_key_exists('parent_email', $validated)
+            ? mb_strtolower(trim((string) $validated['parent_email']))
+            : null;
+
+        $updates = [];
+        if ($parentName !== null && $parentName !== '') {
+            $updates['parent_name'] = $parentName;
+        }
+        if ($parentEmail !== null && $parentEmail !== '') {
+            $updates['parent_email'] = $parentEmail;
+        }
+
+        if ($updates === []) {
+            return redirect()
+                ->route('teacher.records.family', ['familyCode' => $familyCode])
+                ->withErrors(['parent_name' => 'Sila isi sekurang-kurangnya nama atau email untuk dikemas kini.']);
+        }
 
         Student::query()
             ->where('family_code', $familyCode)
-            ->update([
-                'parent_name' => $parentName,
-                'parent_email' => $parentEmail,
-            ]);
+            ->update($updates);
 
         return redirect()
             ->route('teacher.records.family', ['familyCode' => $familyCode])
