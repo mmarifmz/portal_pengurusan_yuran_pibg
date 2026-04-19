@@ -210,19 +210,30 @@
                         type: 'bar',
                         data: {
                             labels: @json($classChartLabels),
-                            datasets: [{
-                                label: 'Collected (RM)',
-                                data: @json($classChartCollected),
-                                backgroundColor: 'rgba(16, 185, 129, 0.65)',
-                                borderColor: 'rgba(16, 185, 129, 1)',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                            }],
+                            datasets: [
+                                {
+                                    label: 'Yuran (RM)',
+                                    data: @json($classChartYuran ?? []),
+                                    backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                                    borderColor: 'rgba(16, 185, 129, 1)',
+                                    borderWidth: 1,
+                                    borderRadius: 6,
+                                },
+                                {
+                                    label: 'Sumbangan (RM)',
+                                    data: @json($classChartSumbangan ?? []),
+                                    backgroundColor: 'rgba(245, 158, 11, 0.75)',
+                                    borderColor: 'rgba(245, 158, 11, 1)',
+                                    borderWidth: 1,
+                                    borderRadius: 6,
+                                },
+                            ],
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
                             interaction: { intersect: false, mode: 'index' },
+                            plugins: { legend: { position: 'top' } },
                             scales: {
                                 y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
                             },

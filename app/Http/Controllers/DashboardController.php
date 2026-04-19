@@ -97,6 +97,7 @@ class DashboardController extends Controller
         }
         if (! $useLegacyKpiSource) {
             $selectedYearTransactions = FamilyPaymentTransaction::query()
+                ->with('familyBilling:id,family_code')
                 ->where('status', 'success')
                 ->whereYear('paid_at', $selectedDashboardYear)
                 ->whereNotNull('paid_at')
@@ -138,18 +139,59 @@ class DashboardController extends Controller
         if ($useLegacyKpiSource) {
             $classCollection = $legacyPaymentTransactions
                 ->groupBy(fn (array $payment) => (string) ($payment['class_name'] ?? 'Unassigned'))
-                ->map(fn ($group, string $className) => [
-                    'class_name' => $className,
-                    'collected' => round((float) $group->sum('amount_paid'), 2),
-                ])
+                ->map(function ($group, string $className) use ($yuranThreshold) {
+                    $yuran = (float) $group->sum(fn (array $payment): float => min((float) ($payment['amount_paid'] ?? 0), $yuranThreshold));
+                    $sumbangan = (float) $group->sum(fn (array $payment): float => max(0, (float) ($payment['amount_paid'] ?? 0) - $yuranThreshold));
+                    return [
+                        'class_name' => $className,
+                        'yuran' => round($yuran, 2),
+                        'sumbangan' => round($sumbangan, 2),
+                        'collected' => round($yuran + $sumbangan, 2),
+                    ];
+                })
                 ->sortByDesc('collected')
                 ->values();
         } else {
-            $classCollection = $students->groupBy(fn (Student $student) => $student->class_name ?: 'Unassigned')
-                ->map(fn ($group, string $className) => [
-                    'class_name' => $className,
-                    'collected' => round((float) $group->sum('paid_amount'), 2),
-                ])
+            $dominantClassByFamily = $students
+                ->filter(fn (Student $student): bool => filled($student->family_code))
+                ->groupBy(fn (Student $student) => (string) $student->family_code)
+                ->map(function ($familyStudents): string {
+                    /** @var \Illuminate\Support\Collection<int, \App\Models\Student> $familyStudents */
+                    return (string) ($familyStudents
+                        ->pluck('class_name')
+                        ->map(fn ($className) => trim((string) $className))
+                        ->filter()
+                        ->countBy()
+                        ->sortDesc()
+                        ->keys()
+                        ->first() ?? 'Unassigned');
+                });
+
+            $classCollection = $selectedYearTransactions
+                ->map(function (FamilyPaymentTransaction $transaction) use ($dominantClassByFamily, $yuranThreshold): array {
+                    $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+                    $className = $dominantClassByFamily->get($familyCode, 'Unassigned');
+                    $amount = (float) $transaction->amount;
+
+                    return [
+                        'class_name' => (string) ($className !== '' ? $className : 'Unassigned'),
+                        'yuran' => min($amount, $yuranThreshold),
+                        'sumbangan' => max(0, $amount - $yuranThreshold),
+                        'collected' => $amount,
+                    ];
+                })
+                ->groupBy('class_name')
+                ->map(function ($group, string $className): array {
+                    /** @var \Illuminate\Support\Collection<int, array<string, float|string>> $group */
+                    $yuran = (float) $group->sum('yuran');
+                    $sumbangan = (float) $group->sum('sumbangan');
+                    return [
+                        'class_name' => $className,
+                        'yuran' => round($yuran, 2),
+                        'sumbangan' => round($sumbangan, 2),
+                        'collected' => round($yuran + $sumbangan, 2),
+                    ];
+                })
                 ->sortByDesc('collected')
                 ->values();
         }
@@ -178,6 +220,8 @@ class DashboardController extends Controller
 
         $classChartLabels = $filteredClassCollection->pluck('class_name')->map(fn ($label) => (string) $label)->toArray();
         $classChartCollected = $filteredClassCollection->pluck('collected')->toArray();
+        $classChartYuran = $filteredClassCollection->pluck('yuran')->toArray();
+        $classChartSumbangan = $filteredClassCollection->pluck('sumbangan')->toArray();
 
         $trendMonthLabels = collect(range(1, 12))
             ->map(fn (int $month): string => Carbon::create($selectedDashboardYear, $month, 1)->format('M'))
@@ -341,6 +385,8 @@ class DashboardController extends Controller
             'paymentCompletion' => $paymentCompletion,
             'classChartLabels' => $classChartLabels,
             'classChartCollected' => $classChartCollected,
+            'classChartYuran' => $classChartYuran,
+            'classChartSumbangan' => $classChartSumbangan,
             'classYearOptions' => $classYearOptions->toArray(),
             'selectedClassYearFilter' => $selectedClassYearFilter,
             'dailyTrendLabels' => $dailyTrendLabels,
