@@ -104,6 +104,43 @@
                     <span class="mt-1 block text-xs text-zinc-500">Digunakan sebagai suffix Order ID ringkas. Contoh: <span class="font-semibold">PBG-260417-A1B2-{{ old('order_id_shortform', $settings['order_id_shortform'] ?? 'PBG') }}</span></span>
                 </label>
 
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Student Social Tags</p>
+                    <p class="mt-1 text-xs text-zinc-500">Kosongkan mana-mana label jika tidak mahu dipaparkan dalam mod edit profile.</p>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                        <label class="text-sm font-medium text-zinc-700">
+                            Tag 1 label
+                            <input
+                                name="social_tag_label_b40"
+                                type="text"
+                                maxlength="30"
+                                value="{{ old('social_tag_label_b40', $settings['social_tag_label_b40'] ?? 'B40') }}"
+                                class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            />
+                        </label>
+                        <label class="text-sm font-medium text-zinc-700">
+                            Tag 2 label
+                            <input
+                                name="social_tag_label_kwap"
+                                type="text"
+                                maxlength="30"
+                                value="{{ old('social_tag_label_kwap', $settings['social_tag_label_kwap'] ?? 'KWAP') }}"
+                                class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            />
+                        </label>
+                        <label class="text-sm font-medium text-zinc-700">
+                            Tag 3 label
+                            <input
+                                name="social_tag_label_rmt"
+                                type="text"
+                                maxlength="30"
+                                value="{{ old('social_tag_label_rmt', $settings['social_tag_label_rmt'] ?? 'RMT') }}"
+                                class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            />
+                        </label>
+                    </div>
+                </div>
+
                 <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Current Logo Preview</p>
                     <img src="{{ $settings['school_logo_url'] ?? asset('images/sksp-logo.png') }}" alt="Current school logo" class="mt-2 h-14 w-14 rounded-full border border-zinc-200 bg-white p-1" />

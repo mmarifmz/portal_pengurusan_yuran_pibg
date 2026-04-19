@@ -26,6 +26,9 @@ class PortalSeoSettingsController extends Controller
             'school_logo_url' => ['nullable', 'string', 'max:400'],
             'school_logo_file' => ['nullable', 'image', 'max:2048'],
             'order_id_shortform' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z0-9]{3}$/'],
+            'social_tag_label_b40' => ['nullable', 'string', 'max:30'],
+            'social_tag_label_kwap' => ['nullable', 'string', 'max:30'],
+            'social_tag_label_rmt' => ['nullable', 'string', 'max:30'],
         ]);
 
         $schoolLogoUrl = trim((string) ($validated['school_logo_url'] ?? ''));
@@ -47,6 +50,9 @@ class PortalSeoSettingsController extends Controller
             'seo_favicon_url' => $schoolLogoUrl,
             'school_logo_url' => $schoolLogoUrl,
             'order_id_shortform' => strtoupper((string) $validated['order_id_shortform']),
+            'social_tag_label_b40' => $this->sanitizeSocialTagLabel($validated['social_tag_label_b40'] ?? null),
+            'social_tag_label_kwap' => $this->sanitizeSocialTagLabel($validated['social_tag_label_kwap'] ?? null),
+            'social_tag_label_rmt' => $this->sanitizeSocialTagLabel($validated['social_tag_label_rmt'] ?? null),
         ]);
 
         return redirect()
@@ -67,6 +73,16 @@ class PortalSeoSettingsController extends Controller
             'seo_favicon_url' => asset('images/sksp-logo.png'),
             'school_logo_url' => asset('images/sksp-logo.png'),
             'order_id_shortform' => 'PBG',
+            'social_tag_label_b40' => 'B40',
+            'social_tag_label_kwap' => 'KWAP',
+            'social_tag_label_rmt' => 'RMT',
         ];
+    }
+
+    private function sanitizeSocialTagLabel(mixed $value): string
+    {
+        $label = trim((string) $value);
+
+        return $label === '' ? '' : mb_strtoupper($label);
     }
 }

@@ -7,6 +7,7 @@ use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\ParentLoginOtp;
 use App\Models\ParentLoginAudit;
+use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -271,6 +272,7 @@ class TeacherRecordsController extends Controller
             'studentNameTooShort' => $studentNameTooShort,
             'filtersActive' => $filtersActive,
             'paidLastYearFamilyCodes' => $paidLastYearFamilyCodes,
+            'socialTagLabels' => $this->enabledSocialTagLabels(),
         ]);
     }
 
@@ -590,6 +592,7 @@ class TeacherRecordsController extends Controller
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => $legacyPaidTotal,
             'legacyDonationTotal' => $legacyDonationTotal,
+            'socialTagLabels' => $this->enabledSocialTagLabels(),
         ]);
     }
 
@@ -638,21 +641,29 @@ class TeacherRecordsController extends Controller
 
     public function updateStudentTags(Request $request, Student $student): RedirectResponse
     {
-        $validated = $request->validate([
-            'is_b40' => ['nullable', 'boolean'],
-            'is_kwap' => ['nullable', 'boolean'],
-            'is_rmt' => ['nullable', 'boolean'],
-        ]);
+        $enabledTagFields = collect(array_keys($this->enabledSocialTagLabels()));
 
-        $student->update([
-            'is_b40' => array_key_exists('is_b40', $validated),
-            'is_kwap' => array_key_exists('is_kwap', $validated),
-            'is_rmt' => array_key_exists('is_rmt', $validated),
-        ]);
+        if ($enabledTagFields->isEmpty()) {
+            return redirect()
+                ->route('teacher.records.family', ['familyCode' => (string) $student->family_code])
+                ->withErrors(['tags' => 'No social tags configured. Please set social tags in System Admin settings first.']);
+        }
+
+        $validated = $request->validate(
+            $enabledTagFields
+                ->mapWithKeys(fn (string $field): array => [$field => ['nullable', 'boolean']])
+                ->all()
+        );
+
+        $updates = $enabledTagFields
+            ->mapWithKeys(fn (string $field): array => [$field => array_key_exists($field, $validated)])
+            ->all();
+
+        $student->update($updates);
 
         return redirect()
             ->route('teacher.records.family', ['familyCode' => (string) $student->family_code])
-            ->with('status', 'Student tags updated successfully.');
+            ->with('status', 'Student social tags updated successfully.');
     }
 
     public function exportFamilyPayments(Request $request, string $familyCode): StreamedResponse
@@ -724,6 +735,37 @@ class TeacherRecordsController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+
+
+    /**
+     * @return array<string, string>
+     */
+    private function configuredSocialTagLabels(): array
+    {
+        $settings = SiteSetting::getMany([
+            'social_tag_label_b40' => 'B40',
+            'social_tag_label_kwap' => 'KWAP',
+            'social_tag_label_rmt' => 'RMT',
+        ]);
+
+        return [
+            'is_b40' => trim((string) ($settings['social_tag_label_b40'] ?? '')),
+            'is_kwap' => trim((string) ($settings['social_tag_label_kwap'] ?? '')),
+            'is_rmt' => trim((string) ($settings['social_tag_label_rmt'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function enabledSocialTagLabels(): array
+    {
+        return collect($this->configuredSocialTagLabels())
+            ->filter(fn (string $label): bool => $label !== '')
+            ->map(fn (string $label): string => mb_strtoupper($label))
+            ->all();
     }
 
     private function normalizePhoneForMatch(string $phone): string
