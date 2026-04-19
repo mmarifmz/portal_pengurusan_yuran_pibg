@@ -66,6 +66,7 @@ class PublicParentSearchController extends Controller
                 ->get();
 
             $searchBillings = FamilyBilling::query()
+                ->with(['phones' => fn ($query) => $query->orderBy('id')])
                 ->whereIn('family_code', $students->pluck('family_code')->filter()->unique())
                 ->orderByDesc('billing_year')
                 ->orderByDesc('id')
@@ -80,16 +81,25 @@ class PublicParentSearchController extends Controller
                     $primaryStudent = $group->first();
                     $familyCode = $groupKey !== '' && ! str_starts_with($groupKey, 'NO_FAMILY::') ? $groupKey : null;
                     $billing = $familyCode ? ($searchBillings[$familyCode] ?? null) : null;
+                    $registeredPhones = $billing
+                        ? $billing->phones
+                            ->pluck('phone')
+                            ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone))
+                            ->filter()
+                            ->unique()
+                            ->values()
+                        : collect();
+                    $primaryRegisteredPhone = $registeredPhones->first();
 
                     return [
                         'group_key' => $groupKey,
                         'family_code' => $familyCode,
                         'billing' => $billing,
-                        'parent_phone' => $group->pluck('parent_phone')->filter()->first(),
+                        'parent_phone' => $primaryRegisteredPhone,
                         'masked_parent_phone' => $this->maskParentPhonePrefix(
-                            $group->pluck('parent_phone')->filter()->first()
+                            $primaryRegisteredPhone
                         ),
-                        'has_registered_phone' => $group->pluck('parent_phone')->filter()->isNotEmpty(),
+                        'has_registered_phone' => $registeredPhones->isNotEmpty(),
                         'student_count' => $group->count(),
                         'classes' => $group->pluck('class_name')->filter()->unique()->values(),
                         'students' => $group

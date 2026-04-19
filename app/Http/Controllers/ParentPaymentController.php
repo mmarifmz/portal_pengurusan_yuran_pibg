@@ -208,8 +208,8 @@ class ParentPaymentController extends Controller
 
         if ($isPlaceholderName || $isPlaceholderEmail) {
             return back()->withErrors([
-                'payer_name' => 'Sila masukkan nama ibu/bapa/penjaga sebenar sebelum membuat bayaran.',
-                'payer_email' => 'Sila gunakan emel sebenar (bukan emel placeholder).',
+                'payer_name' => 'Sila pastikan nama ibu/bapa/penjaga yang dimasukkan adalah tepat dan sebenar sebelum meneruskan pembayaran.',
+                'payer_email' => 'Sila gunakan alamat email yang sah dan aktif.',
             ])->withInput();
         }
 
