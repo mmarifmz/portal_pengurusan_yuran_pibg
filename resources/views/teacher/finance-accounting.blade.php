@@ -101,10 +101,10 @@
                                 </td>
                                 <td class="px-5 py-4 font-semibold text-zinc-900">{{ $row['name'] }}</td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['class_name'] }}</td>
-                                <td class="px-5 py-4 text-right">{{ number_format((float) $row["yuran_{$yearA}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right">{{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right">{{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right">{{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearA}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
                             </tr>
                         @empty
                             <tr>
@@ -117,10 +117,10 @@
                             <td class="px-5 py-3">TOTAL</td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
-                            <td class="px-5 py-3 text-right">{{ number_format((float) $totals["yuran_{$yearA}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right">{{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right">{{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right">{{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearA}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
                         </tr>
                     </tfoot>
                 </table>
