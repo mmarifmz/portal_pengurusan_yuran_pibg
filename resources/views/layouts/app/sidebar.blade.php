@@ -76,6 +76,9 @@
                         <flux:sidebar.item icon="banknotes" :href="route('teacher.finance-accounting')" :current="request()->routeIs('teacher.finance-accounting*')" wire:navigate>
                             {{ __('Finance Accounting') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
+                            {{ __('Payment Funnel') }}
+                        </flux:sidebar.item>
                     @endif
 
                     @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
@@ -102,9 +105,6 @@
                             </flux:sidebar.item>
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
                                 {{ __('Tester Zone') }}
-                            </flux:sidebar.item>
-                            <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
-                                {{ __('Payment Funnel') }}
                             </flux:sidebar.item>
 
                         @endif

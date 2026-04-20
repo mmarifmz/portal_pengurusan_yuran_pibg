@@ -67,6 +67,9 @@
                         </select>
                     </label>
 
+                    <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                    <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
+
                     <div class="md:col-span-2 xl:col-span-4 flex items-center gap-2">
                         <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
                             Apply Filters
@@ -83,13 +86,33 @@
                     <thead class="bg-zinc-50">
                         <tr class="text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
                             <th class="px-4 py-3">Family Code</th>
-                            <th class="px-4 py-3">Parent Name</th>
+                            <th class="px-4 py-3">
+                                @php
+                                    $nextNameDir = $sortBy === 'parent_name' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                @endphp
+                                <a href="{{ route('system.payment-funnel-monitor.index', array_merge(request()->query(), ['sort_by' => 'parent_name', 'sort_dir' => $nextNameDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                    Parent Name
+                                    @if ($sortBy === 'parent_name')
+                                        <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                    @endif
+                                </a>
+                            </th>
                             <th class="px-4 py-3">Phone Number</th>
                             <th class="px-4 py-3">Billing Year</th>
                             <th class="px-4 py-3">Payment Gateway Status</th>
                             <th class="px-4 py-3">Gateway Return Status</th>
                             <th class="px-4 py-3">Gateway Reason</th>
-                            <th class="px-4 py-3">Timestamp (GMT+8)</th>
+                            <th class="px-4 py-3">
+                                @php
+                                    $nextTsDir = $sortBy === 'timestamp' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                @endphp
+                                <a href="{{ route('system.payment-funnel-monitor.index', array_merge(request()->query(), ['sort_by' => 'timestamp', 'sort_dir' => $nextTsDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                    Timestamp (GMT+8)
+                                    @if ($sortBy === 'timestamp')
+                                        <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                    @endif
+                                </a>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">

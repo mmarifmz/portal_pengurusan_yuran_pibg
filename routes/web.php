@@ -180,7 +180,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:system_admin')
         ->name('system.payment-testers.index');
     Route::get('/system/payment-funnel-monitor', [PaymentFunnelMonitorController::class, 'index'])
-        ->middleware('role:system_admin')
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('system.payment-funnel-monitor.index');
     Route::patch('/system/payment-testers/{user}', [PaymentTesterUserController::class, 'update'])
         ->middleware('role:system_admin')
@@ -216,5 +216,4 @@ Route::middleware(['auth'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
-
 

@@ -21,8 +21,16 @@ class PaymentFunnelMonitorController extends Controller
 
         $search = trim((string) $request->query('q', ''));
         $statusFilter = trim((string) $request->query('gateway_status', 'all'));
+        $sortBy = trim((string) $request->query('sort_by', 'timestamp'));
+        $sortDir = trim((string) $request->query('sort_dir', 'desc'));
         if (! in_array($statusFilter, ['all', 'not_started', 'pending', 'failed', 'success'], true)) {
             $statusFilter = 'all';
+        }
+        if (! in_array($sortBy, ['parent_name', 'timestamp'], true)) {
+            $sortBy = 'timestamp';
+        }
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'desc';
         }
 
         $yearOptions = FamilyBilling::query()
@@ -132,12 +140,40 @@ class PaymentFunnelMonitorController extends Controller
                 ->values();
         }
 
+        $rows = $rows
+            ->sort(function (array $a, array $b) use ($sortBy, $sortDir): int {
+                if ($sortBy === 'parent_name') {
+                    $aName = mb_strtolower((string) ($a['parent_name'] ?? ''));
+                    $bName = mb_strtolower((string) ($b['parent_name'] ?? ''));
+
+                    if ($aName !== $bName) {
+                        return $sortDir === 'asc'
+                            ? strcmp($aName, $bName)
+                            : strcmp($bName, $aName);
+                    }
+                } else {
+                    $aTs = $a['timestamp']?->timestamp ?? 0;
+                    $bTs = $b['timestamp']?->timestamp ?? 0;
+
+                    if ($aTs !== $bTs) {
+                        return $sortDir === 'asc'
+                            ? ($aTs <=> $bTs)
+                            : ($bTs <=> $aTs);
+                    }
+                }
+
+                return strcmp((string) ($a['family_code'] ?? ''), (string) ($b['family_code'] ?? ''));
+            })
+            ->values();
+
         return view('system.payment-funnel-monitor', [
             'rows' => $rows,
             'billingYear' => $billingYear,
             'yearOptions' => $yearOptions,
             'search' => $search,
             'statusFilter' => $statusFilter,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
             'totalFamilies' => $rows->count(),
             'successCount' => $rows->where('gateway_status', 'success')->count(),
             'pendingCount' => $rows->where('gateway_status', 'pending')->count(),
