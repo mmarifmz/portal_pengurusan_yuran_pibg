@@ -8,6 +8,7 @@
                 </div>
                 <div class="flex items-end gap-2">
                     <input type="hidden" name="class_tahun" value="{{ $selectedClassYearFilter ?? 'all' }}">
+                    <input type="hidden" name="week_key" value="{{ $selectedWeekKey ?? '' }}">
                     <label class="text-xs font-semibold text-zinc-600">
                         Tahun data
                         <select name="dashboard_year" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
@@ -54,6 +55,7 @@
                     <div class="flex items-end gap-2">
                         <form method="GET" action="{{ route('dashboard') }}#collection-by-class-section">
                             <input type="hidden" name="dashboard_year" value="{{ $selectedDashboardYear }}">
+                            <input type="hidden" name="week_key" value="{{ $selectedWeekKey ?? '' }}">
                             <label class="text-xs font-semibold text-zinc-600">
                                 Tahun
                                 <select name="class_tahun" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
@@ -107,6 +109,60 @@
             </div>
             <div class="mt-5 h-64">
                 <canvas id="dailyCollectionChart" class="h-full w-full"></canvas>
+            </div>
+        </div>
+
+        <div id="weekly-top-classes-section" class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-zinc-500">Weekly leaderboard</p>
+                    <h3 class="text-lg font-semibold text-zinc-900">Top 3 kutipan kelas mingguan</h3>
+                    <p class="mt-1 text-xs text-zinc-500">{{ $selectedWeekLabel ?? 'Tiada data minggu' }} · Jumlah RM {{ number_format((float) ($selectedWeekTotalCollection ?? 0), 2) }}</p>
+                </div>
+                <form method="GET" action="{{ route('dashboard') }}#weekly-top-classes-section" class="flex items-end gap-2">
+                    <input type="hidden" name="dashboard_year" value="{{ $selectedDashboardYear }}">
+                    <input type="hidden" name="class_tahun" value="{{ $selectedClassYearFilter ?? 'all' }}">
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Pilih minggu
+                        <select name="week_key" onchange="this.form.submit()" class="mt-1 rounded-xl border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            @forelse (($weekOptions ?? []) as $weekOption)
+                                <option value="{{ $weekOption['key'] }}" @selected(($selectedWeekKey ?? '') === $weekOption['key'])>{{ $weekOption['label'] }}</option>
+                            @empty
+                                <option value="">Tiada data mingguan</option>
+                            @endforelse
+                        </select>
+                    </label>
+                </form>
+            </div>
+
+            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Tahap 1 (Tahun 1 - 3)</p>
+                    <div class="mt-3 space-y-2">
+                        @forelse (($tahap1TopClasses ?? collect()) as $index => $row)
+                            <div class="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2">
+                                <p class="text-sm font-semibold text-zinc-900">{{ $index + 1 }}. {{ $row['class_name'] }}</p>
+                                <p class="text-sm font-bold text-emerald-700">RM {{ number_format((float) $row['collected'], 2) }}</p>
+                            </div>
+                        @empty
+                            <p class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-500">Tiada kutipan untuk Tahap 1 pada minggu ini.</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Tahap 2 (Tahun 4 - 6)</p>
+                    <div class="mt-3 space-y-2">
+                        @forelse (($tahap2TopClasses ?? collect()) as $index => $row)
+                            <div class="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2">
+                                <p class="text-sm font-semibold text-zinc-900">{{ $index + 1 }}. {{ $row['class_name'] }}</p>
+                                <p class="text-sm font-bold text-emerald-700">RM {{ number_format((float) $row['collected'], 2) }}</p>
+                            </div>
+                        @empty
+                            <p class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-500">Tiada kutipan untuk Tahap 2 pada minggu ini.</p>
+                        @endforelse
+                    </div>
+                </div>
             </div>
         </div>
     @elseif ($role === 'parent')

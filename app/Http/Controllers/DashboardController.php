@@ -40,6 +40,7 @@ class DashboardController extends Controller
             $selectedDashboardYear = (int) $yearOptions->first();
         }
         $selectedClassYearFilter = trim((string) $request->query('class_tahun', 'all'));
+        $selectedWeekKey = trim((string) $request->query('week_key', ''));
 
         $familyBillings = FamilyBilling::with('students')
             ->where('billing_year', $selectedDashboardYear)
@@ -136,6 +137,8 @@ class DashboardController extends Controller
 
         $paymentCompletion = $totalFamilies > 0 ? (int) round(($familiesPaid / $totalFamilies) * 100) : 0;
 
+        $dominantClassByFamily = collect();
+
         if ($useLegacyKpiSource) {
             $classCollection = $legacyPaymentTransactions
                 ->groupBy(fn (array $payment) => (string) ($payment['class_name'] ?? 'Unassigned'))
@@ -195,6 +198,93 @@ class DashboardController extends Controller
                 ->sortByDesc('collected')
                 ->values();
         }
+
+        $weeklyTransactionRows = $useLegacyKpiSource
+            ? $legacyPaymentTransactions
+                ->filter(fn (array $payment): bool => ($payment['paid_at'] ?? null) !== null)
+                ->map(function (array $payment): array {
+                    $paidAt = Carbon::parse((string) $payment['paid_at'])->timezone(config('app.timezone', 'Asia/Kuala_Lumpur'));
+
+                    return [
+                        'paid_at' => $paidAt,
+                        'class_name' => (string) ($payment['class_name'] ?? 'Unassigned'),
+                        'collected' => (float) ($payment['amount_paid'] ?? 0),
+                    ];
+                })
+                ->values()
+            : $selectedYearTransactions
+                ->map(function (FamilyPaymentTransaction $transaction) use ($dominantClassByFamily): array {
+                    $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+                    $className = (string) ($dominantClassByFamily->get($familyCode, 'Unassigned') ?: 'Unassigned');
+                    $paidAt = $transaction->paid_at
+                        ? Carbon::parse((string) $transaction->paid_at)->timezone(config('app.timezone', 'Asia/Kuala_Lumpur'))
+                        : null;
+
+                    return [
+                        'paid_at' => $paidAt,
+                        'class_name' => $className,
+                        'collected' => (float) $transaction->amount,
+                    ];
+                })
+                ->filter(fn (array $row): bool => $row['paid_at'] !== null)
+                ->values();
+
+        $weeklyRowsByWeek = $weeklyTransactionRows
+            ->groupBy(fn (array $row): string => $row['paid_at']->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d'));
+
+        $weekOptions = $weeklyRowsByWeek
+            ->map(function ($rows, string $weekStart): array {
+                $start = Carbon::parse($weekStart)->startOfWeek(Carbon::MONDAY);
+                $end = $start->copy()->endOfWeek(Carbon::SUNDAY);
+
+                return [
+                    'key' => $weekStart,
+                    'label' => sprintf(
+                        'Minggu %d (%s - %s)',
+                        (int) $start->isoWeek(),
+                        $start->format('d M'),
+                        $end->format('d M Y')
+                    ),
+                    'total' => round((float) collect($rows)->sum('collected'), 2),
+                ];
+            })
+            ->sortByDesc('key')
+            ->values();
+
+        if ($selectedWeekKey === '' || ! $weeklyRowsByWeek->has($selectedWeekKey)) {
+            $selectedWeekKey = (string) ($weekOptions->first()['key'] ?? '');
+        }
+
+        $selectedWeekRows = $selectedWeekKey !== ''
+            ? collect($weeklyRowsByWeek->get($selectedWeekKey, collect()))
+            : collect();
+
+        $selectedWeekMeta = $weekOptions->firstWhere('key', $selectedWeekKey);
+        $selectedWeekLabel = (string) ($selectedWeekMeta['label'] ?? 'Tiada data minggu');
+        $selectedWeekTotalCollection = (float) ($selectedWeekMeta['total'] ?? 0);
+
+        $weeklyClassTotals = $selectedWeekRows
+            ->groupBy(fn (array $row): string => (string) ($row['class_name'] ?? 'Unassigned'))
+            ->map(function ($rows, string $className): array {
+                return [
+                    'class_name' => $className,
+                    'class_year' => $this->extractClassYear($className),
+                    'collected' => round((float) collect($rows)->sum('collected'), 2),
+                ];
+            })
+            ->values();
+
+        $tahap1TopClasses = $weeklyClassTotals
+            ->filter(fn (array $row): bool => ($row['class_year'] ?? null) !== null && (int) $row['class_year'] >= 1 && (int) $row['class_year'] <= 3)
+            ->sortByDesc('collected')
+            ->take(3)
+            ->values();
+
+        $tahap2TopClasses = $weeklyClassTotals
+            ->filter(fn (array $row): bool => ($row['class_year'] ?? null) !== null && (int) $row['class_year'] >= 4 && (int) $row['class_year'] <= 6)
+            ->sortByDesc('collected')
+            ->take(3)
+            ->values();
 
         $classYearOptions = collect(range(1, 6));
         $isValidClassYearFilter = $selectedClassYearFilter === 'all'
@@ -389,6 +479,12 @@ class DashboardController extends Controller
             'classChartSumbangan' => $classChartSumbangan,
             'classYearOptions' => $classYearOptions->toArray(),
             'selectedClassYearFilter' => $selectedClassYearFilter,
+            'weekOptions' => $weekOptions,
+            'selectedWeekKey' => $selectedWeekKey,
+            'selectedWeekLabel' => $selectedWeekLabel,
+            'selectedWeekTotalCollection' => $selectedWeekTotalCollection,
+            'tahap1TopClasses' => $tahap1TopClasses,
+            'tahap2TopClasses' => $tahap2TopClasses,
             'dailyTrendLabels' => $dailyTrendLabels,
             'dailyTrendValues' => $dailyTrendValues,
             'calendarPaidCountByDate' => $calendarPaidCountByDate,
