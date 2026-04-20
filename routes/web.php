@@ -14,6 +14,7 @@ use App\Http\Controllers\TeacherReconciliationController;
 use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\TeacherUserManagementController;
 use App\Http\Controllers\TeacherFamilyLoginMonitorController;
+use App\Http\Controllers\TeacherFinanceAccountingController;
 use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\DashboardController;
@@ -96,6 +97,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/family-login-monitor', [TeacherFamilyLoginMonitorController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin')
         ->name('teacher.family-login-monitor');
+    Route::get('/teacher/finance-accounting', [TeacherFinanceAccountingController::class, 'index'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.finance-accounting');
+    Route::get('/teacher/finance-accounting/export', [TeacherFinanceAccountingController::class, 'export'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.finance-accounting.export');
     Route::get('/teacher/records/duplicates/{student}/review', [TeacherRecordsController::class, 'reviewDuplicate'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.duplicates.review');
