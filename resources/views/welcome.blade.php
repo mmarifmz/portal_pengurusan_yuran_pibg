@@ -67,6 +67,18 @@
             color: #9ca3af;
             line-height: 3.5rem;
         }
+
+        /* Toast polish for public portal: visible but less disruptive. */
+        #toaster {
+            z-index: 40;
+        }
+
+        @media (max-width: 640px) {
+            #toaster {
+                align-items: center !important;
+                padding: 0 0.75rem 0.9rem !important;
+            }
+        }
     </style>
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
@@ -202,5 +214,59 @@
             <p>Demi kemudahan Semakan keluarga & bayaran yuran tahunan</p>
         </div>
     </footer>
+
+    @fluxScripts
+    <x-toaster-hub />
+    @if (($recentPaymentToasts ?? collect())->isNotEmpty())
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const desktopMessages = @js(($recentPaymentToasts ?? collect())->values()->all());
+                const mobileMessages = desktopMessages.map((message) =>
+                    String(message).replace('Yuran + Sumbangan Tambahan', 'Yuran + Sumbangan')
+                );
+
+                const isMobile = window.matchMedia('(max-width: 640px)').matches;
+                const messages = isMobile ? mobileMessages : desktopMessages;
+                if (!Array.isArray(messages) || messages.length === 0) {
+                    return;
+                }
+
+                const pushToast = (message) => {
+                    if (window.Toaster && typeof window.Toaster.success === 'function') {
+                        window.Toaster.success(message);
+                    }
+                };
+
+                const shouldPause = () => {
+                    if (document.hidden) {
+                        return true;
+                    }
+
+                    const active = document.activeElement;
+                    if (!active) {
+                        return false;
+                    }
+
+                    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+                };
+
+                let index = 0;
+                const intervalMs = isMobile ? 9000 : 5500;
+                const initialDelayMs = isMobile ? 1200 : 500;
+
+                const cycle = () => {
+                    if (shouldPause()) {
+                        return;
+                    }
+
+                    pushToast(messages[index]);
+                    index = (index + 1) % messages.length;
+                };
+
+                window.setTimeout(cycle, initialDelayMs);
+                window.setInterval(cycle, intervalMs);
+            });
+        </script>
+    @endif
 </body>
 </html>
