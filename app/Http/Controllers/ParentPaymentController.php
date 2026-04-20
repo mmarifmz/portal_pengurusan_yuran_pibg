@@ -29,18 +29,14 @@ class ParentPaymentController extends Controller
     ) {
     }
 
-    public function checkout(Request $request, FamilyBilling $familyBilling): View
+    public function checkout(Request $request, FamilyBilling $familyBilling): View|RedirectResponse
     {
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
-        $isCurrentYearBilling = (int) $familyBilling->billing_year === (int) now()->year;
-        $hasSuccessfulCurrentYearPayment = (float) $familyBilling->outstanding_amount <= 0
-            || (string) $familyBilling->status === 'paid';
-
-        if ($isCurrentYearBilling && $hasSuccessfulCurrentYearPayment) {
+        if ($this->familyHasCompletedCurrentYearPayment($familyBilling)) {
             return redirect()
                 ->route('parent.dashboard')
-                ->with('status', "Bayaran yuran {$familyBilling->billing_year} untuk keluarga {$familyBilling->family_code} telah berjaya. Tiada semakan checkout diperlukan.");
+                ->with('status', 'Bayaran yuran tahun semasa untuk keluarga '.$familyBilling->family_code.' telah berjaya. Tiada semakan checkout diperlukan.');
         }
 
         $children = Student::query()
@@ -185,6 +181,37 @@ class ParentPaymentController extends Controller
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
 
         return trim((string) $value);
+    }
+
+    private function familyHasCompletedCurrentYearPayment(FamilyBilling $familyBilling): bool
+    {
+        $currentYear = (int) now()->year;
+        $billingYear = (int) $familyBilling->billing_year;
+        $billingOutstanding = (float) $familyBilling->outstanding_amount;
+        $billingStatus = (string) $familyBilling->status;
+
+        if ($billingYear === $currentYear && ($billingOutstanding <= 0 || $billingStatus === 'paid')) {
+            return true;
+        }
+
+        $familyCode = (string) $familyBilling->family_code;
+
+        $hasPaidCurrentYearBilling = FamilyBilling::query()
+            ->where('family_code', $familyCode)
+            ->where('billing_year', $currentYear)
+            ->where('status', 'paid')
+            ->exists();
+
+        if ($hasPaidCurrentYearBilling) {
+            return true;
+        }
+
+        return FamilyPaymentTransaction::query()
+            ->where('status', 'success')
+            ->whereHas('familyBilling', fn ($query) => $query
+                ->where('family_code', $familyCode)
+                ->where('billing_year', $currentYear))
+            ->exists();
     }
 
     public function create(Request $request, FamilyBilling $familyBilling): RedirectResponse

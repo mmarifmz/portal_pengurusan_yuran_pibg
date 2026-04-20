@@ -103,6 +103,31 @@ class ParentOtpAuthController extends Controller
             ])->withInput();
         }
 
+        if ($this->isParentAccessDisabled($parent)) {
+            return back()->withErrors([
+                'phone' => 'Akses portal untuk nombor ini telah dinyahaktifkan. Sila hubungi pentadbir sekolah.',
+            ])->withInput();
+        }
+
+        if ($selectedBilling) {
+            session([
+                'parent_login_intended_checkout' => $selectedBilling->id,
+            ]);
+        } else {
+            $request->session()->forget('parent_login_intended_checkout');
+        }
+
+        // One-time TAC activation: once this number has logged in successfully before,
+        // skip TAC and let parent enter straight to dashboard/checkout.
+        if ($this->hasCompletedTacActivation($parent, $phone)) {
+            return $this->finalizeParentLogin(
+                $request,
+                $parent,
+                $phone,
+                'Log masuk berjaya. TAC tidak diperlukan kerana nombor ini sudah disahkan.'
+            );
+        }
+
         ParentLoginOtp::query()
             ->where('phone', $phone)
             ->whereNull('used_at')
@@ -140,14 +165,6 @@ class ParentOtpAuthController extends Controller
             'parent_otp_return_url' => $this->sanitizeReturnUrl((string) ($validated['return_url'] ?? ''), $request),
             'parent_otp_preview' => $this->buildOtpPreview($selectedBilling, $phone),
         ]);
-
-        if ($selectedBilling) {
-            session([
-                'parent_login_intended_checkout' => $selectedBilling->id,
-            ]);
-        } else {
-            $request->session()->forget('parent_login_intended_checkout');
-        }
 
         if (app()->environment('testing') || config('services.whatsapp.debug_show_tac')) {
             session(['parent_otp_debug_code' => $code]);
@@ -253,40 +270,18 @@ class ParentOtpAuthController extends Controller
             ]);
         }
 
-        Auth::login($user, false);
-        $request->session()->regenerate();
-
-        ParentLoginAudit::query()->create([
-            'user_id' => $user->id,
-            'phone' => $phone,
-            'normalized_phone' => ParentPhone::normalizeForMatch($phone),
-            'logged_in_at' => now(),
-        ]);
-        $intendedCheckoutId = $request->session()->pull('parent_login_intended_checkout');
-        $request->session()->forget([
-            'parent_otp_phone',
-            'parent_otp_debug_code',
-            'parent_otp_expires_at',
-            'parent_otp_return_url',
-            'parent_otp_preview',
-        ]);
-
-        if ($intendedCheckoutId) {
-            $familyBilling = FamilyBilling::query()->find($intendedCheckoutId);
-
-            if ($familyBilling && ($this->userCanAccessFamilyBilling($user, $familyBilling) || $user->isParentTester())) {
-                $request->session()->put('parent_child_selection_completed', true);
-                $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
-
-                return redirect()->route('parent.payments.checkout', $familyBilling);
-            }
+        if ($this->isParentAccessDisabled($user)) {
+            return back()->withErrors([
+                'pin' => 'Akses portal untuk nombor ini telah dinyahaktifkan. Sila hubungi pentadbir sekolah.',
+            ]);
         }
 
-        $request->session()->put('parent_child_selection_completed', false);
-        $request->session()->forget('parent_selected_family_billing_id');
-
-        return redirect()->route('parent.search')
-            ->with('status', 'Log masuk berjaya. Sila cari nama anak dan pilih rekod keluarga untuk teruskan.');
+        return $this->finalizeParentLogin(
+            $request,
+            $user,
+            $phone,
+            'Log masuk berjaya. Nombor telefon anda telah disahkan.'
+        );
     }
 
     private function dispatchTac(User $parent, string $code, ?FamilyBilling $selectedBilling = null): void
@@ -540,6 +535,70 @@ class ParentOtpAuthController extends Controller
         $query = isset($parts['query']) && $parts['query'] !== '' ? '?'.$parts['query'] : '';
 
         return $request->getSchemeAndHttpHost().$path.$query;
+    }
+
+    private function isParentAccessDisabled(User $user): bool
+    {
+        return $user->role === 'parent'
+            && $user->is_active !== null
+            && (bool) $user->is_active === false;
+    }
+
+    private function hasCompletedTacActivation(User $user, string $phone): bool
+    {
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return false;
+        }
+
+        return ParentLoginAudit::query()
+            ->where('user_id', $user->id)
+            ->where('normalized_phone', $normalizedPhone)
+            ->exists();
+    }
+
+    private function finalizeParentLogin(
+        Request $request,
+        User $user,
+        string $phone,
+        string $defaultStatusMessage
+    ): RedirectResponse {
+        Auth::login($user, false);
+        $request->session()->regenerate();
+
+        ParentLoginAudit::query()->create([
+            'user_id' => $user->id,
+            'phone' => $phone,
+            'normalized_phone' => ParentPhone::normalizeForMatch($phone),
+            'logged_in_at' => now(),
+        ]);
+
+        $intendedCheckoutId = $request->session()->pull('parent_login_intended_checkout');
+        $request->session()->forget([
+            'parent_otp_phone',
+            'parent_otp_debug_code',
+            'parent_otp_expires_at',
+            'parent_otp_return_url',
+            'parent_otp_preview',
+        ]);
+
+        if ($intendedCheckoutId) {
+            $familyBilling = FamilyBilling::query()->find($intendedCheckoutId);
+
+            if ($familyBilling && ($this->userCanAccessFamilyBilling($user, $familyBilling) || $user->isParentTester())) {
+                $request->session()->put('parent_child_selection_completed', true);
+                $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
+
+                return redirect()->route('parent.payments.checkout', $familyBilling);
+            }
+        }
+
+        $request->session()->put('parent_child_selection_completed', false);
+        $request->session()->forget('parent_selected_family_billing_id');
+
+        return redirect()->route('parent.search')
+            ->with('status', $defaultStatusMessage);
     }
 }
 

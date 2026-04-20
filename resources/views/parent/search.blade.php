@@ -120,7 +120,7 @@
                 @auth
                     <a href="{{ route('dashboard') }}" class="rounded-lg border border-[color:var(--brand-green)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--brand-green)] transition hover:bg-[color:var(--brand-green)] hover:text-white sm:text-sm">Back to Dashboard</a>
                 @else
-                    <a href="{{ route('parent.login.form') }}" class="rounded-lg border border-[color:var(--brand-green)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--brand-green)] transition hover:bg-[color:var(--brand-green)] hover:text-white sm:text-sm">Log Masuk Penjaga</a>
+                    <a href="{{ route('parent.login.form') }}" class="rounded-lg border border-[color:var(--brand-green)] px-3 py-2 text-center text-xs font-semibold text-[color:var(--brand-green)] transition hover:bg-[color:var(--brand-green)] hover:text-white sm:text-sm">Log Masuk Ibu Bapa</a>
                 @endauth
                 <a href="{{ route('login') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Guru / Admin</a>
             </div>
@@ -147,7 +147,7 @@
                             Portal Utama
                         </a>
                         <a href="{{ route('parent.login.form') }}" class="inline-flex items-center rounded-full bg-[color:var(--brand-green)] px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-[color:var(--brand-forest)] sm:text-xs">
-                            Login TAC
+                            Log Masuk Ibu Bapa
                         </a>
                     </div>
                     <h1 class="section-title mt-3 text-2xl font-extrabold tracking-tight text-zinc-900 sm:text-3xl">

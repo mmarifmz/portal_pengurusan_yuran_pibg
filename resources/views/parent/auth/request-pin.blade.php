@@ -82,7 +82,7 @@
                                 You are starting payment onboarding for family code <span class="font-semibold">{{ $selectedBilling->family_code }}</span> ({{ $selectedBilling->billing_year }}).
                             </p>
                             <p class="mt-2 text-emerald-800">
-                                If you want to register a new parent phone number for this family, type the new number in the <span class="font-semibold">Phone number</span> field and click <span class="font-semibold">Send TAC</span>.
+                                If you want to register a new parent phone number for this family, type the new number in the <span class="font-semibold">Phone number</span> field and click <span class="font-semibold">Log Masuk Ibu Bapa / Penjaga</span>.
                             </p>
                         </div>
                     @endif
@@ -146,7 +146,7 @@
                             type="submit"
                             class="mt-1 inline-flex w-full items-center justify-center rounded-xl bg-[color:var(--brand-forest)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(23,74,52,0.18)] transition hover:bg-[color:var(--brand-green)] hover:shadow-[0_16px_30px_rgba(23,74,52,0.22)]"
                         >
-                            {{ __('Send TAC') }}
+                            {{ __('Log Masuk Ibu Bapa / Penjaga') }}
                         </button>
                     </form>
 

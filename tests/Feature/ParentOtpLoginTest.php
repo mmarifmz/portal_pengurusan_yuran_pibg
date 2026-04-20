@@ -2,6 +2,7 @@
 
 use App\Models\FamilyBilling;
 use App\Models\FamilyBillingPhone;
+use App\Models\ParentLoginAudit;
 use App\Models\Student;
 use App\Models\User;
 
@@ -50,6 +51,48 @@ it('logs parent in using valid tac', function () {
 
     $this->assertAuthenticated();
     expect(auth()->user()->role)->toBe('parent');
+});
+
+it('skips tac and logs parent in directly after first successful activation', function () {
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0133434086',
+        'email' => 'parent.activated@example.test',
+        'is_active' => true,
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'user_id' => $parent->id,
+        'phone' => '0133434086',
+        'normalized_phone' => '60133434086',
+        'logged_in_at' => now(),
+    ]);
+
+    $response = $this->post(route('parent.login.request'), [
+        'phone' => '0133434086',
+    ]);
+
+    $response->assertRedirect(route('parent.search'));
+    $response->assertSessionHas('status');
+    $this->assertAuthenticatedAs($parent);
+    $this->assertDatabaseCount('parent_login_otps', 0);
+});
+
+it('blocks login when parent account is disabled even before sending tac', function () {
+    User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0133000000',
+        'email' => 'parent.disabled@example.test',
+        'is_active' => false,
+    ]);
+
+    $response = $this->from(route('parent.login.form'))->post(route('parent.login.request'), [
+        'phone' => '0133000000',
+    ]);
+
+    $response->assertRedirect(route('parent.login.form'));
+    $response->assertSessionHasErrors(['phone']);
+    $this->assertGuest();
 });
 
 it('stores intended checkout when tac is requested from bayar yuran flow', function () {
