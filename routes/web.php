@@ -18,6 +18,7 @@ use App\Http\Controllers\TeacherFinanceAccountingController;
 use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\Student;
 use Illuminate\Support\Facades\Route;
@@ -178,6 +179,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/system/payment-testers', [PaymentTesterUserController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.index');
+    Route::get('/system/payment-funnel-monitor', [PaymentFunnelMonitorController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-funnel-monitor.index');
     Route::patch('/system/payment-testers/{user}', [PaymentTesterUserController::class, 'update'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.update');

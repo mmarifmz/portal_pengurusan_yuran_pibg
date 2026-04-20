@@ -103,6 +103,10 @@
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
                                 {{ __('Tester Zone') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
+                                {{ __('Payment Funnel') }}
+                            </flux:sidebar.item>
+
                         @endif
 
                         @if (auth()->user()->canManageTeacherUsers())

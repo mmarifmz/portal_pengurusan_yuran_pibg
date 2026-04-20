@@ -1,0 +1,137 @@
+<x-layouts::app :title="__('Payment Funnel Monitor')">
+    <div class="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <section class="rounded-2xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-2xl font-extrabold tracking-tight text-zinc-900">Payment Funnel Monitor</h1>
+                    <p class="mt-1 text-sm text-zinc-600">Track payment progress and gateway outcomes by family.</p>
+                </div>
+                <p class="text-xs font-medium text-zinc-500">Timezone: GMT+8 (Asia/Kuala_Lumpur)</p>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Families</p>
+                    <p class="mt-1 text-2xl font-bold text-zinc-900">{{ number_format($totalFamilies) }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Success</p>
+                    <p class="mt-1 text-2xl font-bold text-emerald-700">{{ number_format($successCount) }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pending</p>
+                    <p class="mt-1 text-2xl font-bold text-amber-700">{{ number_format($pendingCount) }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Failed</p>
+                    <p class="mt-1 text-2xl font-bold text-rose-700">{{ number_format($failedCount) }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Not Started</p>
+                    <p class="mt-1 text-2xl font-bold text-zinc-700">{{ number_format($notStartedCount) }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-4">
+                <form method="GET" action="{{ route('system.payment-funnel-monitor.index') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 xl:col-span-2">
+                        Search
+                        <input
+                            type="search"
+                            name="q"
+                            value="{{ $search }}"
+                            placeholder="Family code / parent / phone / status / reason"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Billing Year
+                        <select name="billing_year" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            @foreach ($yearOptions as $year)
+                                <option value="{{ $year }}" @selected((int) $billingYear === (int) $year)>{{ $year }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Gateway Status
+                        <select name="gateway_status" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                            <option value="all" @selected($statusFilter === 'all')>All</option>
+                            <option value="not_started" @selected($statusFilter === 'not_started')>Not Started</option>
+                            <option value="pending" @selected($statusFilter === 'pending')>Pending</option>
+                            <option value="failed" @selected($statusFilter === 'failed')>Failed</option>
+                            <option value="success" @selected($statusFilter === 'success')>Success</option>
+                        </select>
+                    </label>
+
+                    <div class="md:col-span-2 xl:col-span-4 flex items-center gap-2">
+                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                            Apply Filters
+                        </button>
+                        <a href="{{ route('system.payment-funnel-monitor.index', ['billing_year' => $billingYear]) }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                            Reset
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                            <th class="px-4 py-3">Family Code</th>
+                            <th class="px-4 py-3">Parent Name</th>
+                            <th class="px-4 py-3">Phone Number</th>
+                            <th class="px-4 py-3">Billing Year</th>
+                            <th class="px-4 py-3">Payment Gateway Status</th>
+                            <th class="px-4 py-3">Gateway Return Status</th>
+                            <th class="px-4 py-3">Gateway Reason</th>
+                            <th class="px-4 py-3">Timestamp (GMT+8)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                        @forelse ($rows as $row)
+                            <tr>
+                                <td class="px-4 py-3 font-semibold text-zinc-900">
+                                    <a
+                                        href="{{ route('teacher.records.family', ['familyCode' => $row['family_code'], 'payment_status' => 'all']) }}"
+                                        class="inline-flex items-center rounded-md px-1.5 py-0.5 text-emerald-700 underline decoration-emerald-300 underline-offset-2 transition hover:text-emerald-800 hover:decoration-emerald-500"
+                                    >
+                                        {{ $row['family_code'] }}
+                                    </a>
+                                </td>
+                                <td class="px-4 py-3">{{ $row['parent_name'] }}</td>
+                                <td class="px-4 py-3">{{ $row['phone_number'] }}</td>
+                                <td class="px-4 py-3">{{ $row['billing_year'] }}</td>
+                                <td class="px-4 py-3">
+                                    @php
+                                        $status = $row['gateway_status'];
+                                    @endphp
+                                    @if ($status === 'success')
+                                        <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Success</span>
+                                    @elseif ($status === 'failed')
+                                        <span class="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">Failed</span>
+                                    @elseif ($status === 'pending')
+                                        <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Pending</span>
+                                    @else
+                                        <span class="inline-flex rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">Not Started</span>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3">{{ $row['return_status'] }}</td>
+                                <td class="px-4 py-3">{{ $row['gateway_reason'] }}</td>
+                                <td class="px-4 py-3">{{ $row['timestamp'] ? $row['timestamp']->format('d M Y H:i:s') : '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="px-4 py-10 text-center text-zinc-500">No records found for this filter.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</x-layouts::app>
