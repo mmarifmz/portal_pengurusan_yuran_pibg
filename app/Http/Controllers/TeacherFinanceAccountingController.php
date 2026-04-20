@@ -23,6 +23,9 @@ class TeacherFinanceAccountingController extends Controller
             'classOptions' => $dataset['classOptions'],
             'yearA' => $dataset['yearA'],
             'yearB' => $dataset['yearB'],
+            'currentYear' => $dataset['currentYear'],
+            'sortBy' => $dataset['sortBy'],
+            'sortDir' => $dataset['sortDir'],
         ]);
     }
 
@@ -85,8 +88,7 @@ class TeacherFinanceAccountingController extends Controller
      *   search: string,
      *   classFilter: string,
      *   classOptions: \Illuminate\Support\Collection<int, string>,
-     *   yearA: int,
-     *   yearB: int
+     *   yearA: int, yearB: int, currentYear: int, sortBy: string, sortDir: string
      * }
      */
     private function buildDataset(Request $request): array
@@ -95,6 +97,8 @@ class TeacherFinanceAccountingController extends Controller
         $yearB = (int) $request->integer('year_b', 2026);
         $search = trim((string) $request->query('search', ''));
         $classFilter = trim((string) $request->query('class_name', ''));
+        $sortBy = trim((string) $request->query('sort_by', 'current_year'));
+        $sortDir = trim((string) $request->query('sort_dir', 'desc'));
 
         if ($yearA < 2000 || $yearA > 2100) {
             $yearA = 2025;
@@ -103,6 +107,15 @@ class TeacherFinanceAccountingController extends Controller
         if ($yearB < 2000 || $yearB > 2100) {
             $yearB = 2026;
         }
+        if (! in_array($sortBy, ['name', 'current_year'], true)) {
+            $sortBy = 'current_year';
+        }
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'desc';
+        }
+
+        $nowYear = (int) now()->year;
+        $currentYear = in_array($nowYear, [$yearA, $yearB], true) ? $nowYear : $yearB;
 
         $studentsByFamily = Student::query()
             ->whereNotNull('family_code')
@@ -126,7 +139,7 @@ class TeacherFinanceAccountingController extends Controller
             ->values();
 
         $rows = $studentsByFamily
-            ->map(function (Collection $familyStudents, string $familyCode) use ($billingByYearAndFamily, $yearA, $yearB): array {
+            ->map(function (Collection $familyStudents, string $familyCode) use ($billingByYearAndFamily, $yearA, $yearB, $currentYear): array {
                 $billingA = $billingByYearAndFamily->get($yearA)?->get($familyCode);
                 $billingB = $billingByYearAndFamily->get($yearB)?->get($familyCode);
 
@@ -139,7 +152,7 @@ class TeacherFinanceAccountingController extends Controller
                     (float) ($billingB?->fee_amount ?? 0)
                 );
 
-                return [
+                $row = [
                     'family_code' => $familyCode,
                     'name' => $this->resolveDisplayName($familyStudents),
                     'class_name' => $this->resolveClassName($familyStudents),
@@ -148,6 +161,10 @@ class TeacherFinanceAccountingController extends Controller
                     "yuran_{$yearB}" => $yuranB,
                     "sumbangan_{$yearB}" => $sumbanganB,
                 ];
+
+                $row['current_year_total'] = (float) ($row["yuran_{$currentYear}"] + $row["sumbangan_{$currentYear}"]);
+
+                return $row;
             })
             ->values();
 
@@ -168,6 +185,32 @@ class TeacherFinanceAccountingController extends Controller
                 ->values();
         }
 
+        $rows = $rows
+            ->sort(function (array $a, array $b) use ($sortBy, $sortDir): int {
+                if ($sortBy === 'name') {
+                    $aName = mb_strtolower((string) ($a['name'] ?? ''));
+                    $bName = mb_strtolower((string) ($b['name'] ?? ''));
+
+                    if ($aName !== $bName) {
+                        return $sortDir === 'asc'
+                            ? strcmp($aName, $bName)
+                            : strcmp($bName, $aName);
+                    }
+                } else {
+                    $aVal = (float) ($a['current_year_total'] ?? 0);
+                    $bVal = (float) ($b['current_year_total'] ?? 0);
+
+                    if ($aVal !== $bVal) {
+                        return $sortDir === 'asc'
+                            ? ($aVal <=> $bVal)
+                            : ($bVal <=> $aVal);
+                    }
+                }
+
+                return strcmp((string) ($a['family_code'] ?? ''), (string) ($b['family_code'] ?? ''));
+            })
+            ->values();
+
         $totals = [
             "yuran_{$yearA}" => (float) $rows->sum("yuran_{$yearA}"),
             "sumbangan_{$yearA}" => (float) $rows->sum("sumbangan_{$yearA}"),
@@ -183,6 +226,9 @@ class TeacherFinanceAccountingController extends Controller
             'classOptions' => $classOptions,
             'yearA' => $yearA,
             'yearB' => $yearB,
+            'currentYear' => $currentYear,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
         ];
     }
 

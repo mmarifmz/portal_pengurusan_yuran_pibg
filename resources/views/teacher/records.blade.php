@@ -1,36 +1,43 @@
 <x-layouts::app :title="__('Student & Family Records')">
     @php
-        $allRecordsUrl = route('teacher.records');
-        $duplicateRecordsUrl = route('teacher.records', array_filter([
-            'record_filter' => 'duplicates',
-            'class_name' => $selectedClass ?: null,
-            'family_code' => $familyCodeQuery ?: null,
-            'student_name' => $studentNameQuery ?: null,
-        ]));
-        $paidThisYearUrl = route('teacher.records', array_filter([
-            'record_filter' => 'paid-this-year',
-            'class_name' => $selectedClass ?: null,
-            'family_code' => $familyCodeQuery ?: null,
-            'student_name' => $studentNameQuery ?: null,
-        ]));
-        $registeredParentUrl = route('teacher.records', array_filter([
-            'record_filter' => 'registered-parent',
-            'class_name' => $selectedClass ?: null,
-            'family_code' => $familyCodeQuery ?: null,
-            'student_name' => $studentNameQuery ?: null,
-        ]));
-        $paidLastYearUrl = route('teacher.records', array_filter([
-            'record_filter' => 'paid-last-year',
-            'class_name' => $selectedClass ?: null,
-            'family_code' => $familyCodeQuery ?: null,
-            'student_name' => $studentNameQuery ?: null,
-        ]));
-        $paidLastYearLabel = 'Paid last year ('.$lastYear.')';
-        $allClassesUrl = route('teacher.records', array_filter([
+        $baseQuery = [
             'record_filter' => $recordFilter ?: null,
+            'class_name' => $selectedClass ?: null,
             'family_code' => $familyCodeQuery ?: null,
             'student_name' => $studentNameQuery ?: null,
+            'sort_by' => $sortBy,
+            'sort_dir' => $sortDir,
+        ];
+        $allRecordsUrl = route('teacher.records', array_filter([
+            'sort_by' => $sortBy,
+            'sort_dir' => $sortDir,
         ]));
+        $duplicateRecordsUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'duplicates',
+        ])));
+        $paidThisYearUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'paid-this-year',
+        ])));
+        $registeredParentUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'registered-parent',
+        ])));
+        $paidLastYearUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'paid-last-year',
+        ])));
+        $paidLastYearLabel = 'Paid last year ('.$lastYear.')';
+        $allClassesUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'class_name' => null,
+        ])));
+        $nextNameSortDir = $sortBy === 'name' && $sortDir === 'asc' ? 'desc' : 'asc';
+        $nextClassSortDir = $sortBy === 'class' && $sortDir === 'asc' ? 'desc' : 'asc';
+        $nameSortUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'sort_by' => 'name',
+            'sort_dir' => $nextNameSortDir,
+        ])));
+        $classSortUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'sort_by' => 'class',
+            'sort_dir' => $nextClassSortDir,
+        ])));
     @endphp
 
     <div class="space-y-8">
@@ -77,7 +84,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Full Student Directory</h2>
-                    <p class="text-sm text-gray-500">Sorted by family code, then name.</p>
+                    <p class="text-sm text-gray-500">Default sort: latest paid yuran timestamp (newest first).</p>
                 </div>
                 <span class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ $students->count() }} students</span>
             </div>
@@ -90,6 +97,8 @@
                     @if ($selectedClass !== '')
                         <input type="hidden" name="class_name" value="{{ $selectedClass }}">
                     @endif
+                    <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                    <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
 
                     <label class="text-xs font-semibold text-zinc-600">
                         Search family code
@@ -126,6 +135,8 @@
                             <a href="{{ route('teacher.records', array_filter([
                                 'record_filter' => $recordFilter ?: null,
                                 'class_name' => $selectedClass ?: null,
+                                'sort_by' => $sortBy,
+                                'sort_dir' => $sortDir,
                             ])) }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
                                 Clear search
                             </a>
@@ -184,12 +195,9 @@
                     </a>
                     @foreach ($availableClasses as $className)
                         <a
-                            href="{{ route('teacher.records', array_filter([
-                                'record_filter' => $recordFilter ?: null,
+                            href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
                                 'class_name' => $className,
-                                'family_code' => $familyCodeQuery ?: null,
-                                'student_name' => $studentNameQuery ?: null,
-                            ])) }}"
+                            ]))) }}"
                             class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedClass === $className ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' }}"
                         >
                             {{ $className }}
@@ -211,8 +219,22 @@
                         <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                             <tr>
                                 <th class="px-5 py-3">Family Code</th>
-                                <th class="px-5 py-3">Name</th>
-                                <th class="px-5 py-3">Class</th>
+                                <th class="px-5 py-3">
+                                    <a href="{{ $nameSortUrl }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Name
+                                        @if ($sortBy === 'name')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                </th>
+                                <th class="px-5 py-3">
+                                    <a href="{{ $classSortUrl }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Class
+                                        @if ($sortBy === 'class')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                </th>
                                 <th class="px-5 py-3">Parent</th>
                                 <th class="px-5 py-3 text-right">Balance (RM)</th>
                                 <th class="px-5 py-3">Status</th>

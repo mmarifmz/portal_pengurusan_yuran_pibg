@@ -55,6 +55,9 @@
                     />
                 </label>
 
+                <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
+
                 <div class="md:col-span-4 flex flex-wrap items-center gap-2">
                     <button type="submit" class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
                         Apply Filters
@@ -83,11 +86,49 @@
                     <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                         <tr>
                             <th class="px-5 py-3">Family Code</th>
-                            <th class="px-5 py-3">Name</th>
+                            <th class="px-5 py-3">
+                                @php
+                                    $nextNameDir = $sortBy === 'name' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                @endphp
+                                <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'name', 'sort_dir' => $nextNameDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                    Name
+                                    @if ($sortBy === 'name')
+                                        <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                    @endif
+                                </a>
+                            </th>
                             <th class="px-5 py-3">Class Name</th>
-                            <th class="px-5 py-3 text-right">Yuran {{ $yearA }}</th>
+                            <th class="px-5 py-3 text-right">
+                                @if ($currentYear === $yearA)
+                                    @php
+                                        $nextCurrentDir = $sortBy === 'current_year' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                    @endphp
+                                    <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year', 'sort_dir' => $nextCurrentDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Yuran {{ $yearA }}
+                                        @if ($sortBy === 'current_year')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                @else
+                                    Yuran {{ $yearA }}
+                                @endif
+                            </th>
                             <th class="px-5 py-3 text-right">Sumbangan {{ $yearA }}</th>
-                            <th class="px-5 py-3 text-right">Yuran {{ $yearB }}</th>
+                            <th class="px-5 py-3 text-right">
+                                @if ($currentYear === $yearB)
+                                    @php
+                                        $nextCurrentDir = $sortBy === 'current_year' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                    @endphp
+                                    <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year', 'sort_dir' => $nextCurrentDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Yuran {{ $yearB }}
+                                        @if ($sortBy === 'current_year')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                @else
+                                    Yuran {{ $yearB }}
+                                @endif
+                            </th>
                             <th class="px-5 py-3 text-right">Sumbangan {{ $yearB }}</th>
                         </tr>
                     </thead>

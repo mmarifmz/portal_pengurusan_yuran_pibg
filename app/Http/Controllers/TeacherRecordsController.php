@@ -27,8 +27,16 @@ class TeacherRecordsController extends Controller
         $selectedClass = trim((string) $request->string('class_name')->toString());
         $familyCodeQuery = trim((string) $request->string('family_code')->toString());
         $studentNameQuery = trim((string) $request->string('student_name')->toString());
+        $sortBy = trim((string) $request->string('sort_by', 'paid_latest')->toString());
+        $requestedSortDir = trim((string) $request->string('sort_dir')->toString());
         $studentNameSearchQuery = mb_strlen($studentNameQuery) >= 3 ? $studentNameQuery : '';
         $studentNameTooShort = $studentNameQuery !== '' && mb_strlen($studentNameQuery) < 3;
+        if (! in_array($sortBy, ['paid_latest', 'name', 'class'], true)) {
+            $sortBy = 'paid_latest';
+        }
+        $sortDir = in_array($requestedSortDir, ['asc', 'desc'], true)
+            ? $requestedSortDir
+            : ($sortBy === 'paid_latest' ? 'desc' : 'asc');
 
         $students = Student::query()
             ->orderBy('family_code')
@@ -99,6 +107,14 @@ class TeacherRecordsController extends Controller
             )
             ->unique()
             ->values();
+
+        $latestPaidTimestampByFamily = FamilyPaymentTransaction::query()
+            ->selectRaw('family_billings.family_code as family_code, MAX(COALESCE(family_payment_transactions.paid_at, family_payment_transactions.created_at)) as latest_paid_at')
+            ->join('family_billings', 'family_billings.id', '=', 'family_payment_transactions.family_billing_id')
+            ->where('family_billings.billing_year', $billingYear)
+            ->where('family_payment_transactions.status', 'success')
+            ->groupBy('family_billings.family_code')
+            ->pluck('latest_paid_at', 'family_code');
 
         $filteredStudents = $students
             ->when($recordFilter === 'duplicates', fn ($collection) => $collection->filter(fn (Student $student) => $student->is_duplicate))
@@ -198,7 +214,7 @@ class TeacherRecordsController extends Controller
         }
 
         $studentsWithResolvedParents = $filteredStudents
-            ->map(function (Student $student) use ($parentNameByEmail, $parentNameByPhone): Student {
+            ->map(function (Student $student) use ($parentNameByEmail, $parentNameByPhone, $latestPaidTimestampByFamily): Student {
                 $studentEmail = mb_strtolower(trim((string) ($student->parent_email ?? '')));
                 $studentPhone = $this->normalizePhoneForMatch((string) ($student->parent_phone ?? ''));
 
@@ -215,8 +231,65 @@ class TeacherRecordsController extends Controller
                 }
 
                 $student->setAttribute('resolved_parent_name', $resolvedParentName ?: $student->parent_name);
+                $student->setAttribute(
+                    'latest_paid_yuran_at',
+                    filled($student->family_code)
+                        ? $latestPaidTimestampByFamily->get((string) $student->family_code)
+                        : null
+                );
 
                 return $student;
+            })
+            ->values();
+
+        $studentsWithResolvedParents = $studentsWithResolvedParents
+            ->sort(function (Student $a, Student $b) use ($sortBy, $sortDir): int {
+                if ($sortBy === 'name') {
+                    $aName = mb_strtolower(trim((string) ($a->full_name ?? '')));
+                    $bName = mb_strtolower(trim((string) ($b->full_name ?? '')));
+
+                    if ($aName !== $bName) {
+                        return $sortDir === 'asc'
+                            ? strcmp($aName, $bName)
+                            : strcmp($bName, $aName);
+                    }
+                } elseif ($sortBy === 'class') {
+                    $aClass = mb_strtolower(trim((string) ($a->class_name ?? '')));
+                    $bClass = mb_strtolower(trim((string) ($b->class_name ?? '')));
+
+                    if ($aClass !== $bClass) {
+                        return $sortDir === 'asc'
+                            ? strcmp($aClass, $bClass)
+                            : strcmp($bClass, $aClass);
+                    }
+
+                    $aName = mb_strtolower(trim((string) ($a->full_name ?? '')));
+                    $bName = mb_strtolower(trim((string) ($b->full_name ?? '')));
+                    if ($aName !== $bName) {
+                        return strcmp($aName, $bName);
+                    }
+                } else {
+                    $aTs = $a->latest_paid_yuran_at ? strtotime((string) $a->latest_paid_yuran_at) : 0;
+                    $bTs = $b->latest_paid_yuran_at ? strtotime((string) $b->latest_paid_yuran_at) : 0;
+
+                    if ($aTs !== $bTs) {
+                        return $sortDir === 'asc'
+                            ? ($aTs <=> $bTs)
+                            : ($bTs <=> $aTs);
+                    }
+                }
+
+                $aFamily = mb_strtolower((string) ($a->family_code ?? ''));
+                $bFamily = mb_strtolower((string) ($b->family_code ?? ''));
+
+                if ($aFamily !== $bFamily) {
+                    return strcmp($aFamily, $bFamily);
+                }
+
+                $aName = mb_strtolower(trim((string) ($a->full_name ?? '')));
+                $bName = mb_strtolower(trim((string) ($b->full_name ?? '')));
+
+                return strcmp($aName, $bName);
             })
             ->values();
 
@@ -273,6 +346,8 @@ class TeacherRecordsController extends Controller
             'studentNameTooShort' => $studentNameTooShort,
             'filtersActive' => $filtersActive,
             'paidLastYearFamilyCodes' => $paidLastYearFamilyCodes,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
             'socialTagLabels' => $this->enabledSocialTagLabels(),
         ]);
     }
