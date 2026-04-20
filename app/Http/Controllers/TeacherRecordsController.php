@@ -11,6 +11,7 @@ use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -639,11 +640,17 @@ class TeacherRecordsController extends Controller
             ->with('status', 'Family parent profile updated successfully.');
     }
 
-    public function updateStudentTags(Request $request, Student $student): RedirectResponse
+    public function updateStudentTags(Request $request, Student $student): RedirectResponse|JsonResponse
     {
         $enabledTagFields = collect(array_keys($this->enabledSocialTagLabels()));
 
         if ($enabledTagFields->isEmpty()) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'No social tags configured. Please set social tags in System Admin settings first.',
+                ], 422);
+            }
+
             return redirect()
                 ->route('teacher.records.family', ['familyCode' => (string) $student->family_code])
                 ->withErrors(['tags' => 'No social tags configured. Please set social tags in System Admin settings first.']);
@@ -660,6 +667,14 @@ class TeacherRecordsController extends Controller
             ->all();
 
         $student->update($updates);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => 'Student social tags updated successfully.',
+                'student_id' => $student->id,
+                'updated_tags' => $updates,
+            ]);
+        }
 
         return redirect()
             ->route('teacher.records.family', ['familyCode' => (string) $student->family_code])

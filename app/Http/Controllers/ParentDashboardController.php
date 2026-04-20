@@ -15,11 +15,6 @@ class ParentDashboardController extends Controller
 {
     public function index(Request $request): View|RedirectResponse
     {
-        if (! (bool) $request->session()->get('parent_child_selection_completed', false)) {
-            return redirect()->route('parent.search')
-                ->with('status', 'Sila cari nama anak dan pilih rekod keluarga terlebih dahulu.');
-        }
-
         $parentUser = $request->user();
         $parentPhone = $parentUser?->phone;
         $billingYear = now()->year;

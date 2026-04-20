@@ -202,7 +202,7 @@
                         @enderror
                         <div class="mt-3 space-y-2">
                             @foreach ($students as $student)
-                                <form method="POST" action="{{ route('teacher.records.students.tags.update', ['student' => $student]) }}" class="rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                                <form method="POST" action="{{ route('teacher.records.students.tags.update', ['student' => $student]) }}" class="js-tag-form rounded-lg border border-zinc-200 bg-zinc-50 p-2" data-student-id="{{ $student->id }}">
                                     @csrf
                                     @method('PATCH')
                                     <div class="flex flex-wrap items-center justify-between gap-2">
@@ -217,7 +217,8 @@
                                                     {{ $tagLabel }}
                                                 </label>
                                             @endforeach
-                                            <button type="submit" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                                            <span class="js-tag-status text-[11px] font-medium text-zinc-500" aria-live="polite"></span>
+                                            <button type="submit" class="js-tag-submit inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
                                                 Save Tags
                                             </button>
                                         </div>
@@ -381,4 +382,90 @@
             </div>
         </section>
     </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const forms = Array.from(document.querySelectorAll('.js-tag-form'));
+    if (!forms.length) {
+        return;
+    }
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    const setStatus = (form, message, tone = 'neutral') => {
+        const status = form.querySelector('.js-tag-status');
+        if (!status) return;
+
+        status.textContent = message;
+        status.classList.remove('text-zinc-500', 'text-emerald-600', 'text-rose-600');
+        if (tone === 'success') status.classList.add('text-emerald-600');
+        else if (tone === 'error') status.classList.add('text-rose-600');
+        else status.classList.add('text-zinc-500');
+    };
+
+    const toggleBusy = (form, busy) => {
+        const submit = form.querySelector('.js-tag-submit');
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+
+        if (submit) {
+            submit.disabled = busy;
+            submit.textContent = busy ? 'Saving...' : 'Save Tags';
+        }
+
+        checkboxes.forEach((checkbox) => {
+            checkbox.disabled = busy;
+        });
+    };
+
+    const saveForm = async (form) => {
+        try {
+            toggleBusy(form, true);
+            setStatus(form, 'Saving...', 'neutral');
+
+            const formData = new FormData(form);
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: formData,
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || 'Unable to save tags.');
+            }
+
+            setStatus(form, payload.message || 'Saved', 'success');
+            window.setTimeout(() => setStatus(form, ''), 1400);
+        } catch (error) {
+            setStatus(form, error.message || 'Save failed', 'error');
+        } finally {
+            toggleBusy(form, false);
+        }
+    };
+
+    forms.forEach((form) => {
+        let debounceTimer = null;
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            window.clearTimeout(debounceTimer);
+            saveForm(form);
+        });
+
+        form.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                window.clearTimeout(debounceTimer);
+                debounceTimer = window.setTimeout(() => saveForm(form), 220);
+            });
+        });
+    });
+});
+</script>
+@endpush
+
 </x-layouts::app>

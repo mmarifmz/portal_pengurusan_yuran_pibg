@@ -49,7 +49,7 @@ class ReceiptController extends Controller
             'backUrl' => $backUrl,
             'backLabel' => $isPublicReceipt ? 'Back to portal' : 'Back',
             'isPublicReceipt' => $isPublicReceipt,
-            'displayOrderId' => $transaction->external_order_display,
+            'displayOrderId' => (string) ($transaction->external_order_id ?: $transaction->external_order_display),
             'displayPayerEmail' => $isPublicReceipt
                 ? $this->maskEmail($transaction->payer_email)
                 : ($transaction->payer_email ?: '-'),
@@ -190,3 +190,4 @@ class ReceiptController extends Controller
         return $start.str_repeat('*', max(4, $length - $prefix - $suffix)).$end;
     }
 }
+

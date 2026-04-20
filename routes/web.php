@@ -56,8 +56,11 @@ Route::post('/parent/payments/callback', [ParentPaymentController::class, 'handl
 Route::get('/payment-return', [ParentPaymentController::class, 'handleReturn']);
 Route::post('/payment-webhook', [ParentPaymentController::class, 'handleCallback']);
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('teacher/dashboard', [TeacherRecordsController::class, 'index'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.dashboard');
     Route::get('school-calendar', [SchoolCalendarPageController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('school-calendar');
@@ -202,4 +205,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
 
