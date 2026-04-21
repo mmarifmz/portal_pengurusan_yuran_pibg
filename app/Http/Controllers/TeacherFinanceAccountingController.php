@@ -240,6 +240,8 @@ class TeacherFinanceAccountingController extends Controller
                 $billingByYearAndFamily,
                 $portalPaymentByYearFamily,
                 $legacyPaymentByYearFamily,
+                $parentNameByPhone,
+                $parentNameByEmail,
                 $yearA,
                 $yearB,
                 $currentYear
