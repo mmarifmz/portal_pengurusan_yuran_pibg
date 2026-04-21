@@ -71,6 +71,12 @@
                                             Ringkasan
                                         </a>
 
+                                        @if ($transaction->status === 'success')
+                                            <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="rounded-lg border border-sky-300 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50">
+                                                Muat Turun Resit
+                                            </a>
+                                        @endif
+
                                         @if ($transaction->familyBilling)
                                             <a href="{{ route('parent.payments.checkout', ['familyBilling' => $transaction->familyBilling, 'from_transaction' => $transaction->id]) }}" class="rounded-lg border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">
                                                 Bayaran Baru
