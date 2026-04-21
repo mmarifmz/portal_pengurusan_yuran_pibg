@@ -173,11 +173,15 @@
                                     @if (!empty($row['students']) && count($row['students']) > 0)
                                         <details class="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2">
                                             <summary class="cursor-pointer text-xs font-semibold text-zinc-600">Lihat murid & kelas ({{ count($row['students']) }})</summary>
-                                            <div class="mt-2 space-y-1.5 text-xs text-zinc-600">
+                                            <div class="mt-2 space-y-2 text-xs text-zinc-600">
+                                                <div class="rounded-md border border-zinc-200 bg-white px-2.5 py-2">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Payer / Parent Name</p>
+                                                    <p class="mt-1 font-semibold text-zinc-800">{{ $row['name'] }}</p>
+                                                </div>
                                                 @foreach ($row['students'] as $student)
-                                                    <div class="flex items-center justify-between gap-3">
-                                                        <span class="font-medium text-zinc-700">{{ $student['full_name'] }}</span>
-                                                        <span class="text-zinc-500">{{ $student['class_name'] }}</span>
+                                                    <div class="rounded-md border border-zinc-200 bg-white px-2.5 py-2">
+                                                        <p class="font-medium text-zinc-800">{{ $student['full_name'] }}</p>
+                                                        <p class="mt-0.5 text-zinc-500">Kelas: {{ $student['class_name'] }}</p>
                                                     </div>
                                                 @endforeach
                                             </div>
