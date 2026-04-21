@@ -8,6 +8,7 @@ use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -147,15 +148,25 @@ class TeacherFinanceAccountingController extends Controller
             ->groupBy(fn ($row): string => (string) $row->billing_year)
             ->map(fn (Collection $yearRows): Collection => $yearRows->keyBy(fn ($row): string => (string) $row->family_code));
 
-        $legacyPaymentByYearFamily = LegacyStudentPayment::query()
+        $legacyDedupeSubquery = LegacyStudentPayment::query()
             ->selectRaw('source_year')
             ->selectRaw('family_code')
-            ->selectRaw('SUM(COALESCE(amount_paid, 0)) as amount_sum')
-            ->selectRaw('SUM(COALESCE(donation_amount, 0)) as donation_sum')
+            ->selectRaw("COALESCE(NULLIF(payment_reference, ''), CONCAT('LEGACY-', id)) as dedupe_ref")
+            ->selectRaw('MAX(COALESCE(amount_paid, 0)) as amount_paid')
+            ->selectRaw('MAX(COALESCE(donation_amount, 0)) as donation_amount')
             ->where('payment_status', 'paid')
             ->whereIn('source_year', [$yearA, $yearB])
             ->whereNotNull('family_code')
             ->where('family_code', '!=', '')
+            ->groupBy('source_year', 'family_code', 'dedupe_ref');
+
+        $legacyPaymentByYearFamily = DB::query()
+            ->fromSub($legacyDedupeSubquery, 'legacy_rows')
+            ->selectRaw('source_year')
+            ->selectRaw('family_code')
+            // Legacy snapshots can be cumulative; take latest/max instead of summing across rows.
+            ->selectRaw('MAX(COALESCE(amount_paid, 0)) as amount_sum')
+            ->selectRaw('MAX(COALESCE(donation_amount, 0)) as donation_sum')
             ->groupBy('source_year', 'family_code')
             ->get()
             ->groupBy(fn ($row): string => (string) $row->source_year)
