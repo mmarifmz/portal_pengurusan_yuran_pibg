@@ -80,6 +80,7 @@
             }
         }
     </style>
+@PwaHead
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
     <header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm">
@@ -129,10 +130,10 @@
                         <p class="text-base font-semibold text-[color:var(--brand-forest)]">Kemudahan untuk Ibu Bapa</p>
                         <p class="mt-2 text-sm text-zinc-700">Nikmati akses mudah kepada:</p>
                         <div class="mt-3 space-y-2 text-sm text-zinc-700">
-                            <p>📅 Takwim sekolah untuk perancangan aktiviti anak</p>
-                            <p>🧾 Rekod dan resit pembayaran bermula 2025</p>
-                            <p>💳 Pembayaran yuran terkini secara online</p>
-                            <p>🔐 Akses selamat tanpa kata laluan (TAC OTP)</p>
+                            <p>ðŸ“… Takwim sekolah untuk perancangan aktiviti anak</p>
+                            <p>ðŸ§¾ Rekod dan resit pembayaran bermula 2025</p>
+                            <p>ðŸ’³ Pembayaran yuran terkini secara online</p>
+                            <p>ðŸ” Akses selamat tanpa kata laluan (TAC OTP)</p>
                         </div>
                     </div>
                 </div>
@@ -268,5 +269,6 @@
             });
         </script>
     @endif
+@RegisterServiceWorkerScript
 </body>
 </html>

@@ -88,6 +88,7 @@
             border-radius: 0.35rem;
         }
     </style>
+@PwaHead
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
     @php
@@ -328,5 +329,6 @@
     </footer>
 
     @fluxScripts
+@RegisterServiceWorkerScript
 </body>
 </html>

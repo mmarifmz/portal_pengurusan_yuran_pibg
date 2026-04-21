@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SiteSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
 
 class PortalSeoSettingsController extends Controller
@@ -55,6 +56,8 @@ class PortalSeoSettingsController extends Controller
             'social_tag_label_rmt' => $this->sanitizeSocialTagLabel($validated['social_tag_label_rmt'] ?? null),
         ]);
 
+        $this->syncPwaLogo($schoolLogoUrl);
+
         return redirect()
             ->route('system.portal-seo.index')
             ->with('status', 'Portal branding and SEO settings updated successfully.');
@@ -84,5 +87,40 @@ class PortalSeoSettingsController extends Controller
         $label = trim((string) $value);
 
         return $label === '' ? '' : mb_strtoupper($label);
+    }
+
+    private function syncPwaLogo(string $schoolLogoUrl): void
+    {
+        $pwaLogoPath = public_path('logo.png');
+        $logoSourcePath = SiteSetting::schoolLogoPdfSource();
+
+        if (File::exists($logoSourcePath)) {
+            File::copy($logoSourcePath, $pwaLogoPath);
+        }
+
+        $manifestPath = public_path('manifest.json');
+
+        if (! File::exists($manifestPath)) {
+            return;
+        }
+
+        $manifestData = json_decode((string) File::get($manifestPath), true);
+
+        if (! is_array($manifestData)) {
+            return;
+        }
+
+        $logoSrc = trim($schoolLogoUrl) !== '' ? $schoolLogoUrl : asset('logo.png');
+
+        $manifestData['icons'] = [[
+            'src' => $logoSrc,
+            'sizes' => '512x512',
+            'type' => 'image/png',
+        ]];
+
+        File::put(
+            $manifestPath,
+            json_encode($manifestData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
     }
 }

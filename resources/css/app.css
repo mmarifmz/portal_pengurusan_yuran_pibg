@@ -65,3 +65,35 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* PWA install prompt: move to top-right and remove pulse animation */
+#install-prompt.box-icon {
+    top: max(12px, calc(env(safe-area-inset-top, 0px) + 12px)) !important;
+    right: max(12px, calc(env(safe-area-inset-right, 0px) + 12px)) !important;
+    bottom: auto !important;
+    left: auto !important;
+}
+
+#install-prompt.box-icon .circle {
+    width: 52px !important;
+    height: 52px !important;
+    background: #ffffff !important;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+#install-prompt.box-icon .circle::after {
+    animation: none !important;
+    box-shadow: none !important;
+}
+
+#install-prompt.box-icon .circle img {
+    max-width: 26px !important;
+    max-height: 26px !important;
+}
+
+@media (max-width: 640px) {
+    #install-prompt.box-icon {
+        top: max(10px, calc(env(safe-area-inset-top, 0px) + 10px)) !important;
+        right: max(10px, calc(env(safe-area-inset-right, 0px) + 10px)) !important;
+    }
+}

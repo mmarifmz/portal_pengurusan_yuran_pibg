@@ -38,6 +38,7 @@
         .child-meta { margin-top: 4px; font-size: 12px; color: #71717a; }
         @media (min-width: 768px) { .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     </style>
+@PwaHead
 </head>
 <body>
     <header class="topbar">
@@ -92,7 +93,7 @@
                     <div>
                         <p class="label">Invoice dan masa bayar</p>
                         <p class="muted">Invoice: {{ $displayInvoiceNo ?? ($transaction->provider_invoice_no ?: 'Belum dijana') }}</p>
-                        <p class="muted">Bayar pada: {{ $transaction->paid_at?->format('d M Y H:i') ?: '–' }}</p>
+                        <p class="muted">Bayar pada: {{ $transaction->paid_at?->format('d M Y H:i') ?: 'â€“' }}</p>
                     </div>
                 </div>
 
@@ -111,5 +112,6 @@
             </div>
         </section>
     </main>
+@RegisterServiceWorkerScript
 </body>
 </html>

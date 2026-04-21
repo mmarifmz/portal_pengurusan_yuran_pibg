@@ -28,6 +28,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{{ $seoTitle }}">
 <meta name="twitter:description" content="{{ $seoDescription }}">
+<meta name="portal-school-logo" content="{{ \App\Models\SiteSetting::schoolLogoUrl() }}">
 
 <link rel="icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">
 <link rel="shortcut icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">

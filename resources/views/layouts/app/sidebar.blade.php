@@ -43,7 +43,8 @@
                 box-shadow: inset 0 0 0 1px rgba(47, 122, 85, 0.12);
             }
         </style>
-    </head>
+@PwaHead
+</head>
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
         @php
             $sidebarHomeRoute = auth()->user()?->isParent() ? route('parent.dashboard') : route('dashboard');
@@ -256,5 +257,6 @@
         @endif
         @stack('scripts')
         @fluxScripts
-    </body>
+@RegisterServiceWorkerScript
+</body>
 </html>
