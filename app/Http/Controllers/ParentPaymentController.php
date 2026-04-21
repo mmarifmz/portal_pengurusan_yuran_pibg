@@ -124,14 +124,30 @@ class ParentPaymentController extends Controller
             ->values();
 
         $legacyPaymentRows = $legacyLastYearPayments
-            ->map(fn (LegacyStudentPayment $payment): array => [
-                'id' => 'legacy-'.$payment->id,
-                'reference' => (string) ($payment->payment_reference ?: 'LEGACY-'.$payment->id),
-                'paid_amount' => round((float) ($payment->amount_paid ?? 0), 2),
-                'donation_amount' => round((float) ($payment->donation_amount ?? 0), 2),
-                'paid_at' => $payment->paid_at,
-                'source' => 'legacy',
-            ]);
+            ->groupBy(function (LegacyStudentPayment $payment): string {
+                $reference = trim((string) $payment->payment_reference);
+                if ($reference !== '') {
+                    $normalizedReference = preg_replace('/\s+/', '', mb_strtoupper($reference)) ?? '';
+                    return $normalizedReference !== '' ? $normalizedReference : $reference;
+                }
+
+                return 'LEGACY-ID-'.(string) $payment->id;
+            })
+            ->map(function (Collection $group): array {
+                /** @var LegacyStudentPayment $first */
+                $first = $group->first();
+                $displayReference = trim((string) ($first->payment_reference ?? ''));
+
+                return [
+                    'id' => 'legacy-'.$first->id,
+                    'reference' => $displayReference !== '' ? $displayReference : ('LEGACY-'.$first->id),
+                    'paid_amount' => round((float) $group->max(fn (LegacyStudentPayment $payment): float => (float) ($payment->amount_paid ?? 0)), 2),
+                    'donation_amount' => round((float) $group->max(fn (LegacyStudentPayment $payment): float => (float) ($payment->donation_amount ?? 0)), 2),
+                    'paid_at' => $group->pluck('paid_at')->filter()->sort()->first() ?? $first->paid_at,
+                    'source' => 'legacy',
+                ];
+            })
+            ->values();
 
         $lastYearPaymentHistory = $portalPaymentRows
             ->concat($legacyPaymentRows)

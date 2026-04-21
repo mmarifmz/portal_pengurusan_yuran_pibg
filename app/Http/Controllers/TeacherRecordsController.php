@@ -617,7 +617,9 @@ class TeacherRecordsController extends Controller
             ->groupBy(function (LegacyStudentPayment $payment): string {
                 $reference = trim((string) $payment->payment_reference);
                 if ($reference !== '') {
-                    return $reference;
+                    // Normalize reference key so mixed case/spacing from legacy imports still collapse to one payer detail.
+                    $normalizedReference = preg_replace('/\s+/', '', mb_strtoupper($reference)) ?? '';
+                    return $normalizedReference !== '' ? $normalizedReference : $reference;
                 }
 
                 return sprintf(
