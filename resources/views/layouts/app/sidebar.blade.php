@@ -137,6 +137,9 @@
                         <flux:sidebar.item icon="archive-box" :href="route('system.backups.index')" :current="request()->routeIs('system.backups.*')" wire:navigate>
                             {{ __('Backup DB') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="eye" :href="route('system.visitor-logs.index')" :current="request()->routeIs('system.visitor-logs.*')" wire:navigate>
+                            {{ __('Visitor Logs') }}
+                        </flux:sidebar.item>
                     </flux:sidebar.group>
                 @endif
             </flux:sidebar.nav>

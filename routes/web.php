@@ -17,6 +17,7 @@ use App\Http\Controllers\TeacherFamilyLoginMonitorController;
 use App\Http\Controllers\TeacherFinanceAccountingController;
 use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
+use App\Http\Controllers\VisitorLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\SchoolCalendarPageController;
@@ -236,6 +237,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/system/payment-testers', [PaymentTesterUserController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.index');
+    Route::get('/system/visitor-logs', [VisitorLogController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.visitor-logs.index');
+    Route::get('/system/visitor-logs/export', [VisitorLogController::class, 'export'])
+        ->middleware('role:system_admin')
+        ->name('system.visitor-logs.export');
     Route::get('/system/payment-funnel-monitor', [PaymentFunnelMonitorController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('system.payment-funnel-monitor.index');

@@ -130,10 +130,10 @@
                         <p class="text-base font-semibold text-[color:var(--brand-forest)]">Kemudahan untuk Ibu Bapa</p>
                         <p class="mt-2 text-sm text-zinc-700">Nikmati akses mudah kepada:</p>
                         <div class="mt-3 space-y-2 text-sm text-zinc-700">
-                            <p>ðŸ“… Takwim sekolah untuk perancangan aktiviti anak</p>
-                            <p>ðŸ§¾ Rekod dan resit pembayaran bermula 2025</p>
-                            <p>ðŸ’³ Pembayaran yuran terkini secara online</p>
-                            <p>ðŸ” Akses selamat tanpa kata laluan (TAC OTP)</p>
+                            <p>&#x1F4C5; Takwim sekolah untuk perancangan aktiviti anak</p>
+                            <p>&#x1F9FE; Rekod dan resit pembayaran bermula 2025</p>
+                            <p>&#x1F4B3; Pembayaran yuran terkini secara online</p>
+                            <p>&#x1F510; Akses selamat tanpa kata laluan (TAC OTP)</p>
                         </div>
                     </div>
                 </div>
