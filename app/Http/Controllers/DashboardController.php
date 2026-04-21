@@ -15,9 +15,14 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+
+        if ($user?->isParent()) {
+            return redirect()->route('parent.dashboard');
+        }
+
         $role = $user?->isParent() ? 'parent' : 'staff';
         $billingYear = now()->year;
 

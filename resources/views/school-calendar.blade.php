@@ -1,4 +1,15 @@
 <x-layouts::app :title="__('School Calendar')" class="space-y-6">
+    @php
+        $isParent = auth()->user()?->isParent();
+        $calendarTitle = $isParent
+            ? 'Aktiviti & program semasa'
+            : "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})";
+        $calendarDescription = $isParent
+            ? 'Panduan aktiviti sekolah, kurikulum, dan kokurikulum sepanjang tahun'
+            : 'Angka hijau dalam hari menunjukkan jumlah keluarga yang sudah bayar pada tarikh tersebut.';
+        $calendarPaidCounts = $isParent ? [] : $calendarPaidCountByDate;
+    @endphp
+
     <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
         <form method="GET" action="{{ route('school-calendar') }}" class="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -21,10 +32,10 @@
     <div class="grid gap-4">
         @include('partials.parent-calendar', [
             'calendarEvents' => $calendarEvents,
-            'paidCountByDate' => $calendarPaidCountByDate,
+            'paidCountByDate' => $calendarPaidCounts,
             'calendarBlockLabel' => 'Takwim sekolah',
-            'calendarBlockTitle' => "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})",
-            'calendarBlockDescription' => 'Angka hijau dalam hari menunjukkan jumlah keluarga yang sudah bayar pada tarikh tersebut.',
+            'calendarBlockTitle' => $calendarTitle,
+            'calendarBlockDescription' => $calendarDescription,
         ])
     </div>
 </x-layouts::app>

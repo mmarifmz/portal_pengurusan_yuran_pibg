@@ -200,6 +200,60 @@
         </flux:header>
 
         {{ $slot }}
+        <x-toaster-hub />
+        @if (($globalRecentPaymentToasts ?? collect())->isNotEmpty())
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const desktopMessages = @js(($globalRecentPaymentToasts ?? collect())->values()->all());
+                    const mobileMessages = desktopMessages.map((message) =>
+                        String(message).replace('Yuran + Sumbangan Tambahan', 'Yuran + Sumbangan')
+                    );
+
+                    const isMobile = window.matchMedia('(max-width: 640px)').matches;
+                    const messages = isMobile ? mobileMessages : desktopMessages;
+                    if (!Array.isArray(messages) || messages.length === 0) {
+                        return;
+                    }
+
+                    const pushToast = (message) => {
+                        if (window.Toaster && typeof window.Toaster.success === 'function') {
+                            window.Toaster.success(message);
+                        }
+                    };
+
+                    const shouldPause = () => {
+                        if (document.hidden) {
+                            return true;
+                        }
+
+                        const active = document.activeElement;
+                        if (!active) {
+                            return false;
+                        }
+
+                        return ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+                    };
+
+                    let index = 0;
+                    const intervalMs = isMobile ? 9000 : 5500;
+                    const initialDelayMs = isMobile ? 1200 : 500;
+
+                    const cycle = () => {
+                        if (shouldPause()) {
+                            return;
+                        }
+
+                        pushToast(messages[index]);
+                        index = (index + 1) % messages.length;
+                    };
+
+                    setTimeout(() => {
+                        cycle();
+                        setInterval(cycle, intervalMs);
+                    }, initialDelayMs);
+                });
+            </script>
+        @endif
         @stack('scripts')
         @fluxScripts
     </body>

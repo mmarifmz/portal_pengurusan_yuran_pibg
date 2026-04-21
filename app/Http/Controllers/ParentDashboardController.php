@@ -105,7 +105,66 @@ class ParentDashboardController extends Controller
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => (float) $legacyPayments->sum('amount_paid'),
             'legacyDonationTotal' => (float) $legacyPayments->sum('donation_amount'),
+            'recentPaymentToasts' => $this->buildRecentPaymentToasts(),
         ]);
+    }
+
+    private function buildRecentPaymentToasts(): Collection
+    {
+        $recentTransactions = FamilyPaymentTransaction::query()
+            ->with('familyBilling:id,family_code,billing_year')
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->orderByDesc('paid_at')
+            ->limit(20)
+            ->get();
+
+        $familyCodes = $recentTransactions
+            ->pluck('familyBilling.family_code')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $dominantClassByFamily = Student::query()
+            ->whereIn('family_code', $familyCodes)
+            ->select(['family_code', 'class_name'])
+            ->get()
+            ->groupBy('family_code')
+            ->map(function ($familyStudents): string {
+                return (string) ($familyStudents
+                    ->pluck('class_name')
+                    ->map(fn ($className) => trim((string) $className))
+                    ->filter()
+                    ->countBy()
+                    ->sortDesc()
+                    ->keys()
+                    ->first() ?? 'Unknown Class');
+            });
+
+        return $recentTransactions
+            ->map(function (FamilyPaymentTransaction $transaction) use ($dominantClassByFamily): ?string {
+                $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+                if ($familyCode === '') {
+                    return null;
+                }
+
+                $className = (string) ($dominantClassByFamily->get($familyCode) ?: 'Unknown Class');
+                $donation = (float) ($transaction->donation_amount ?? 0);
+
+                if ($donation <= 0) {
+                    $donation = max(0, (float) $transaction->amount - (float) ($transaction->fee_amount_paid ?? 0));
+                }
+
+                if ($donation > 0) {
+                    return "Parent in {$className} just paid Yuran + Sumbangan Tambahan";
+                }
+
+                return "Parent in {$className} just paid Yuran";
+            })
+            ->filter()
+            ->unique()
+            ->take(10)
+            ->values();
     }
 
     private function normalizeNameForLegacyMatch(string $name): string
