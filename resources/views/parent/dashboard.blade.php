@@ -46,6 +46,40 @@
             background: var(--portal-forest);
         }
 
+        .portal-pay-btn {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #b45309;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #ffffff;
+            box-shadow: 0 14px 28px rgba(217, 119, 6, 0.32);
+            isolation: isolate;
+        }
+
+        .portal-pay-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(115deg, transparent 34%, rgba(255, 255, 255, 0.32) 48%, transparent 66%);
+            transform: translateX(-130%);
+            transition: transform 0.75s ease;
+            z-index: 0;
+        }
+
+        .portal-pay-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 32px rgba(217, 119, 6, 0.38);
+        }
+
+        .portal-pay-btn:hover::before {
+            transform: translateX(130%);
+        }
+
+        .portal-pay-btn > span {
+            position: relative;
+            z-index: 1;
+        }
+
         .portal-outline-btn {
             background: #fff;
             color: #374151;
@@ -141,9 +175,9 @@
                         @if ($nextOutstandingBilling)
                             <a
                                 href="{{ route('parent.payments.checkout', $nextOutstandingBilling) }}"
-                                class="portal-primary-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                                class="portal-pay-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
                             >
-                                {{ __('Bayar Keluarga') }} {{ $nextOutstandingBilling->family_code }}
+                                <span>Bayar Yuran PIBG {{ $billingYear }}</span>
                             </a>
                         @else
                             <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">

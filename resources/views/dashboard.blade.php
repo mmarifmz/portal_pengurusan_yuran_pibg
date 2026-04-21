@@ -166,9 +166,7 @@
             </div>
         </div>
     @elseif ($role === 'parent')
-        <div class="grid gap-5 lg:grid-cols-3">
-            @include('partials.parent-calendar', ['calendarEvents' => $calendarEvents])
-
+        <div class="grid gap-5">
             <div class="rounded-3xl border border-zinc-200 bg-white px-5 pt-10 pb-5 shadow-sm">
                 <p class="mt-1 text-xs uppercase tracking-wide text-emerald-500">Recent payments</p>
                 <h3 class="text-lg font-semibold text-zinc-900">5 Recent Payment Activity</h3>
@@ -241,6 +239,60 @@
                 </form>
             </div>
         </div>
+        <x-toaster-hub />
+        @if (($recentPaymentToasts ?? collect())->isNotEmpty())
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const desktopMessages = @js(($recentPaymentToasts ?? collect())->values()->all());
+                    const mobileMessages = desktopMessages.map((message) =>
+                        String(message).replace('Yuran + Sumbangan Tambahan', 'Yuran + Sumbangan')
+                    );
+
+                    const isMobile = window.matchMedia('(max-width: 640px)').matches;
+                    const messages = isMobile ? mobileMessages : desktopMessages;
+                    if (!Array.isArray(messages) || messages.length === 0) {
+                        return;
+                    }
+
+                    const pushToast = (message) => {
+                        if (window.Toaster && typeof window.Toaster.success === 'function') {
+                            window.Toaster.success(message);
+                        }
+                    };
+
+                    const shouldPause = () => {
+                        if (document.hidden) {
+                            return true;
+                        }
+
+                        const active = document.activeElement;
+                        if (!active) {
+                            return false;
+                        }
+
+                        return ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+                    };
+
+                    let index = 0;
+                    const intervalMs = isMobile ? 9000 : 5500;
+                    const initialDelayMs = isMobile ? 1200 : 500;
+
+                    const cycle = () => {
+                        if (shouldPause()) {
+                            return;
+                        }
+
+                        pushToast(messages[index]);
+                        index = (index + 1) % messages.length;
+                    };
+
+                    setTimeout(() => {
+                        cycle();
+                        setInterval(cycle, intervalMs);
+                    }, initialDelayMs);
+                });
+            </script>
+        @endif
     @else
         <div class="rounded-3xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-600 shadow-sm">
             <p>Dashboard tersedia selepas anda log masuk.</p>

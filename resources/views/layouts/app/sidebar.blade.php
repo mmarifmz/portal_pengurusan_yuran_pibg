@@ -45,9 +45,12 @@
         </style>
     </head>
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
+        @php
+            $sidebarHomeRoute = auth()->user()?->isParent() ? route('parent.dashboard') : route('dashboard');
+        @endphp
         <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200/80 hover:bg-[color:var(--portal-soft)]" wire:navigate>
+                <a href="{{ $sidebarHomeRoute }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200/80 hover:bg-[color:var(--portal-soft)]" wire:navigate>
                     <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="SK Sri Petaling crest" class="h-10 w-10 rounded-full border border-zinc-200 bg-white p-1 shadow-sm" />
                     <div class="flex flex-col text-sm font-semibold leading-tight">
                         <span class="text-[color:var(--portal-forest)]">Portal Yuran PIBG</span>
@@ -59,9 +62,11 @@
 
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid gap-1">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
+                    @if (! auth()->user()->isParent())
+                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Dashboard') }}
+                        </flux:sidebar.item>
+                    @endif
 
                     @if (! auth()->user()->isParent())
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
@@ -89,7 +94,10 @@
 
                     @if (auth()->user()->isParent())
                         <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
-                            {{ __('Parent Dashboard') }}
+                            {{ __('Ibu / Bapa & Penjaga') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
+                            {{ __('Takwim Sekolah') }}
                         </flux:sidebar.item>
                         <flux:sidebar.item icon="clock" :href="route('parent.payments.history')" :current="request()->routeIs('parent.payments.history')" wire:navigate>
                             {{ __('Payment History') }}

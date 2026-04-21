@@ -121,7 +121,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.dashboard');
     Route::get('school-calendar', [SchoolCalendarPageController::class, 'index'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:parent,teacher,super_teacher,system_admin,pta')
         ->name('school-calendar');
     Route::post('dashboard/message', [DashboardController::class, 'submitParentMessage'])
         ->middleware(['auth', 'role:parent'])
