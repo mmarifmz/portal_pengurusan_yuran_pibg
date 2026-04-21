@@ -11,15 +11,27 @@
                 class="flex-1 rounded-3xl border p-6 shadow-lg"
                 style="border-color:#7dd3a9;background:#1f8b5d;background-image:linear-gradient(140deg,#1f8b5d 0%,#166a4c 100%);color:#ffffff;box-shadow:0 20px 44px rgba(22,106,76,0.28);"
             >
-                <h2 class="text-3xl font-extrabold tracking-tight">Bil Bayaran</h2>
+                <h2 class="text-3xl font-extrabold tracking-tight">
+                    {{ ! empty($alreadyPaidCurrentYear) ? 'Terima Kasih & Tahniah' : 'Bil Bayaran' }}
+                </h2>
                 <div class="mt-4 rounded-2xl border p-4" style="border-color:rgba(255,255,255,0.26);background:rgba(255,255,255,0.12);">
-                    <p class="text-sm" style="color:rgba(255,255,255,0.9);">Yuran PIBG {{ $familyBilling->billing_year }}</p>
-                    <p class="mt-1 text-5xl font-black tracking-tight">RM {{ number_format($baseAmount, 2) }}</p>
+                    @if (! empty($alreadyPaidCurrentYear))
+                        <p class="text-sm font-semibold" style="color:rgba(255,255,255,0.95);">Yuran PIBG {{ $familyBilling->billing_year }} telah dijelaskan.</p>
+                        <p class="mt-1 text-3xl font-black tracking-tight">Terima kasih, bayaran yuran tahunan telah selesai.</p>
+                    @else
+                        <p class="text-sm" style="color:rgba(255,255,255,0.9);">Yuran PIBG {{ $familyBilling->billing_year }}</p>
+                        <p class="mt-1 text-5xl font-black tracking-tight">RM {{ number_format($baseAmount, 2) }}</p>
+                    @endif
                 </div>
                 <div class="mt-5 space-y-2 text-sm" style="color:#ecfdf3;">
                     <p><span class="font-semibold">Kod keluarga:</span> {{ $familyBilling->family_code }}</p>
                     <p><span class="font-semibold">Jumlah anak:</span> {{ $familyChildren->count() }}</p>
-                    <p style="color:rgba(236,253,243,0.92);">Yuran asas dikenakan sekali setahun bagi setiap keluarga.</p>
+                    @if (! empty($alreadyPaidCurrentYear))
+                        <p style="color:rgba(236,253,243,0.92);">Anda boleh memberi sumbangan tambahan pada bila-bila masa sepanjang tahun.</p>
+                        <p style="color:rgba(236,253,243,0.92);">Sila nyatakan niat/tujuan sumbangan tambahan di ruangan yang disediakan.</p>
+                    @else
+                        <p style="color:rgba(236,253,243,0.92);">Yuran asas dikenakan sekali setahun bagi setiap keluarga.</p>
+                    @endif
                 </div>
             </div>
 
@@ -28,7 +40,7 @@
                 <p class="mt-2 text-sm text-zinc-600">Sistem akan memindahkan anda ke platform ToyyibPay untuk pilihan FPX atau kad.</p>
                 @if (! empty($alreadyPaidCurrentYear))
                     <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-                        Bayaran yuran tahun semasa telah selesai. Anda masih boleh buat <span class="font-extrabold">Sumbangan Tambahan</span> pada bila-bila masa.
+                        Terima kasih dan tahniah. Yuran PIBG tahun semasa telah selesai, dan anda masih boleh memberi <span class="font-extrabold">Sumbangan Tambahan</span> sepanjang tahun.
                     </div>
                 @endif
                 @if (! empty($isTesterMode))
@@ -37,8 +49,13 @@
                     </div>
                 @endif
                 <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-relaxed text-sky-900">
-                    Jumlah akhir = <span class="font-semibold">Yuran asas</span> + <span class="font-semibold">Sumbangan tambahan (pilihan)</span>.
-                    Sumbangan tambahan membantu aktiviti PIBG sekolah.
+                    @if (! empty($alreadyPaidCurrentYear))
+                        Anda boleh teruskan sumbangan tambahan pada bila-bila masa sepanjang tahun.
+                        <span class="font-semibold">Sila nyatakan niat/tujuan sumbangan tambahan</span> sebelum membuat bayaran.
+                    @else
+                        Jumlah akhir = <span class="font-semibold">Yuran asas</span> + <span class="font-semibold">Sumbangan tambahan (pilihan)</span>.
+                        Sumbangan tambahan membantu aktiviti PIBG sekolah.
+                    @endif
                 </div>
 
                 <form action="{{ route('parent.payments.create', $familyBilling) }}" method="POST" class="mt-4 space-y-4">
@@ -106,7 +123,7 @@
                                 rows="2"
                                 maxlength="500"
                                 class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
-                                placeholder="Contoh: Sumbangan tambahan untuk aktiviti kelas dan kebajikan murid."
+                                placeholder="{{ ! empty($alreadyPaidCurrentYear) ? 'Sila nyatakan niat sumbangan tambahan anda. Contoh: Sumbangan untuk aktiviti kelas dan kebajikan murid.' : 'Contoh: Sumbangan tambahan untuk aktiviti kelas dan kebajikan murid.' }}"
                             >{{ old('donation_intention') }}</textarea>
                             <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('donation_intention')" />
                         </div>
