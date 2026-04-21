@@ -192,6 +192,7 @@
                 <p>Nama: {{ $transaction->payer_name ?? '-' }}</p>
                 <p>Email: {{ $transaction->payer_email ?? '-' }}</p>
                 <p>Telefon: {{ $transaction->payer_phone ?? '-' }}</p>
+                <p>Niat sumbangan: {{ $transaction->donation_intention ?? '-' }}</p>
             </div>
         </div>
 

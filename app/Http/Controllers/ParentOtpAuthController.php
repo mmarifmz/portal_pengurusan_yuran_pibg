@@ -119,7 +119,7 @@ class ParentOtpAuthController extends Controller
 
         // One-time TAC activation: once this number has logged in successfully before,
         // skip TAC and let parent enter straight to dashboard/checkout.
-        if ($this->hasCompletedTacActivation($parent, $phone)) {
+        if ($this->hasCompletedTacActivation($phone)) {
             return $this->finalizeParentLogin(
                 $request,
                 $parent,
@@ -544,7 +544,7 @@ class ParentOtpAuthController extends Controller
             && (bool) $user->is_active === false;
     }
 
-    private function hasCompletedTacActivation(User $user, string $phone): bool
+    private function hasCompletedTacActivation(string $phone): bool
     {
         $normalizedPhone = ParentPhone::normalizeForMatch($phone);
 
@@ -553,7 +553,6 @@ class ParentOtpAuthController extends Controller
         }
 
         return ParentLoginAudit::query()
-            ->where('user_id', $user->id)
             ->where('normalized_phone', $normalizedPhone)
             ->exists();
     }

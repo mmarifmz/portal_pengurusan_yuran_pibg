@@ -45,6 +45,7 @@
                             <th class="px-4 py-3">Order ID</th>
                             <th class="px-4 py-3">Bill Code</th>
                             <th class="px-4 py-3">Nama</th>
+                            <th class="px-4 py-3">Niat Sumbangan</th>
                             <th class="px-4 py-3 text-right">Jumlah (RM)</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Return Status</th>
@@ -58,6 +59,7 @@
                                 <td class="px-4 py-3">{{ $transaction->external_order_display }}</td>
                                 <td class="px-4 py-3">{{ $transaction->provider_bill_code ?? '-' }}</td>
                                 <td class="px-4 py-3">{{ $transaction->payer_name ?? '-' }}</td>
+                                <td class="px-4 py-3">{{ $transaction->donation_intention ?: '-' }}</td>
                                 <td class="px-4 py-3 text-right font-semibold">{{ number_format((float) $transaction->amount, 2) }}</td>
                                 <td class="px-4 py-3">
                                     {{ $transaction->status === 'superseded' ? 'Dibatalkan' : ucfirst($transaction->status) }}
@@ -79,7 +81,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-zinc-500">Tiada transaksi pembayaran direkodkan lagi.</td>
+                                <td colspan="9" class="px-4 py-8 text-center text-zinc-500">Tiada transaksi pembayaran direkodkan lagi.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -1,6 +1,9 @@
 <x-layouts::app :title="__('Parent Dashboard')">
     @php
         $nextOutstandingBilling = $familyBillings->firstWhere(fn ($billing) => $billing->outstanding_amount > 0);
+        $sumbanganBilling = $familyBillings->firstWhere(fn ($billing) => $billing->outstanding_amount <= 0)
+            ?? $nextOutstandingBilling
+            ?? $familyBillings->first();
     @endphp
 
     <style>
@@ -53,6 +56,50 @@
             background: #f9fafb;
         }
 
+        .portal-donation-btn {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #0f766e;
+            background: linear-gradient(135deg, #0f766e, #0ea5a4);
+            color: #ffffff;
+            box-shadow: 0 14px 26px rgba(15, 118, 110, 0.28);
+            isolation: isolate;
+        }
+
+        .portal-donation-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.3) 48%, transparent 68%);
+            transform: translateX(-130%);
+            transition: transform 0.75s ease;
+            z-index: 0;
+        }
+
+        .portal-donation-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 30px rgba(15, 118, 110, 0.34);
+        }
+
+        .portal-donation-btn:hover::before {
+            transform: translateX(130%);
+        }
+
+        .portal-donation-btn > span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .portal-donation-btn svg {
+            position: relative;
+            z-index: 1;
+            transition: transform 0.25s ease;
+        }
+
+        .portal-donation-btn:hover svg {
+            transform: scale(1.08);
+        }
+
         .portal-positive {
             color: #047857;
         }
@@ -100,16 +147,30 @@
                             </a>
                         @else
                             <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-                                Semua bil keluarga telah selesai dibayar.
+                                @if (! empty($hasAdditionalDonationForLatestPaidYear))
+                                    Tahniah ! Anda telah membayar yuran PIBG serta memberi sumbangan tambahan bagi tahun {{ $latestPaidYear ?? $billingYear }}.
+                                @else
+                                    Tahniah ! Anda telah membayar yuran PIBG bagi tahun {{ $latestPaidYear ?? $billingYear }}.
+                                @endif
                             </div>
                         @endif
 
-                        <a
-                            href="{{ route('parent.search') }}"
-                            class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
-                        >
-                            Carian Nama Murid
-                        </a>
+                        @if ($sumbanganBilling)
+                            <a
+                                href="{{ route('parent.payments.checkout', $sumbanganBilling) }}"
+                                class="portal-donation-btn inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path d="M10 2a1 1 0 0 1 1 1v1.07a5.002 5.002 0 0 1 0 9.86V15a1 1 0 1 1-2 0v-1.07a5.002 5.002 0 0 1 0-9.86V3a1 1 0 0 1 1-1Zm-3 7a3 3 0 1 0 3-3 3 3 0 0 0-3 3Z" />
+                                    <path d="M4 10a1 1 0 0 1 1 1 5 5 0 0 0 10 0 1 1 0 1 1 2 0 7 7 0 0 1-14 0 1 1 0 0 1 1-1Z" />
+                                </svg>
+                                <span>Sumbangan Tambahan</span>
+                            </a>
+                        @else
+                            <span class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold opacity-60">
+                                Sumbangan Tambahan
+                            </span>
+                        @endif
                         <a
                             href="{{ route('parent.payments.history') }}"
                             class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"

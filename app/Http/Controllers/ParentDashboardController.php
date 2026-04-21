@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use App\Support\ParentPhone;
@@ -47,6 +48,25 @@ class ParentDashboardController extends Controller
             ->orderBy('family_code')
             ->get();
 
+        $latestPaidYear = FamilyBilling::query()
+            ->whereIn('family_code', $familyCodes)
+            ->where(function ($query) {
+                $query->where('status', 'paid')
+                    ->orWhereColumn('paid_amount', '>=', 'fee_amount');
+            })
+            ->max('billing_year');
+
+        $hasAdditionalDonationForLatestPaidYear = false;
+        if ($latestPaidYear) {
+            $hasAdditionalDonationForLatestPaidYear = FamilyPaymentTransaction::query()
+                ->where('status', 'success')
+                ->where('donation_amount', '>', 0)
+                ->whereHas('familyBilling', fn ($query) => $query
+                    ->whereIn('family_code', $familyCodes)
+                    ->where('billing_year', (int) $latestPaidYear))
+                ->exists();
+        }
+
         $legacyPayments = LegacyStudentPayment::query()
             ->where(function ($nested) use ($familyCodes, $studentIds) {
                 $nested->whereIn('family_code', $familyCodes);
@@ -80,6 +100,8 @@ class ParentDashboardController extends Controller
             'billingYear' => $billingYear,
             'isTesterMode' => $isTesterMode,
             'totalOutstanding' => (float) $familyBillings->sum(fn (FamilyBilling $billing): float => $billing->outstanding_amount),
+            'latestPaidYear' => $latestPaidYear ? (int) $latestPaidYear : null,
+            'hasAdditionalDonationForLatestPaidYear' => $hasAdditionalDonationForLatestPaidYear,
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => (float) $legacyPayments->sum('amount_paid'),
             'legacyDonationTotal' => (float) $legacyPayments->sum('donation_amount'),

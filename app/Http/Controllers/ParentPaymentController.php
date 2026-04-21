@@ -33,11 +33,7 @@ class ParentPaymentController extends Controller
     {
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
-        if ($this->familyHasCompletedCurrentYearPayment($familyBilling)) {
-            return redirect()
-                ->route('parent.dashboard')
-                ->with('status', 'Bayaran yuran tahun semasa untuk keluarga '.$familyBilling->family_code.' telah berjaya. Tiada semakan checkout diperlukan.');
-        }
+        $alreadyPaidCurrentYear = $this->familyHasCompletedCurrentYearPayment($familyBilling);
 
         $children = Student::query()
             ->where('family_code', $familyBilling->family_code)
@@ -52,7 +48,9 @@ class ParentPaymentController extends Controller
             ->values();
 
         $isTesterMode = (bool) $request->user()?->isParentTester();
-        $checkoutOutstanding = (float) $familyBilling->outstanding_amount;
+        $checkoutOutstanding = $alreadyPaidCurrentYear
+            ? 0.0
+            : (float) $familyBilling->outstanding_amount;
         $checkoutBaseAmount = $isTesterMode ? $this->testerAmount() : $checkoutOutstanding;
 
         $defaultDonation = 0.0;
@@ -156,6 +154,7 @@ class ParentPaymentController extends Controller
             'isTesterMode' => $isTesterMode,
             'testerAmount' => $this->testerAmount(),
             'checkoutBaseAmount' => $checkoutBaseAmount,
+            'alreadyPaidCurrentYear' => $alreadyPaidCurrentYear,
             'recentPaymentAttempts' => $recentPaymentAttempts,
             'lastYear' => $lastYear,
             'lastYearPaidTotal' => $lastYearPaidTotal,
@@ -224,6 +223,7 @@ class ParentPaymentController extends Controller
             'payer_phone' => ['required', 'string', 'max:25'],
             'donation_preset' => ['nullable', 'numeric', 'min:0'],
             'donation_custom' => ['nullable', 'numeric', 'min:0'],
+            'donation_intention' => ['nullable', 'string', 'max:500'],
         ]);
 
         $payerName = trim((string) ($validated['payer_name'] ?? ''));
@@ -241,8 +241,12 @@ class ParentPaymentController extends Controller
         }
 
         $isTesterMode = (bool) $request->user()?->isParentTester();
-        $outstanding = (float) $familyBilling->outstanding_amount;
+        $alreadyPaidCurrentYear = $this->familyHasCompletedCurrentYearPayment($familyBilling);
+        $outstanding = $alreadyPaidCurrentYear
+            ? 0.0
+            : (float) $familyBilling->outstanding_amount;
         $donation = (float) ($validated['donation_custom'] ?: $validated['donation_preset'] ?: 0);
+        $donationIntention = trim((string) ($validated['donation_intention'] ?? ''));
         $totalAmount = round($outstanding + $donation, 2);
 
         if ($isTesterMode) {
@@ -252,7 +256,9 @@ class ParentPaymentController extends Controller
 
         if ($totalAmount <= 0) {
             return back()->withErrors([
-                'donation_custom' => 'Tiada jumlah bayaran. Bil keluarga telah selesai.',
+                'donation_custom' => $alreadyPaidCurrentYear
+                    ? 'Sila masukkan amaun sumbangan tambahan untuk meneruskan pembayaran.'
+                    : 'Tiada jumlah bayaran. Bil keluarga telah selesai.',
             ])->withInput();
         }
 
@@ -303,12 +309,14 @@ class ParentPaymentController extends Controller
             'payer_name' => $validated['payer_name'],
             'payer_email' => $validated['payer_email'],
             'payer_phone' => $validated['payer_phone'],
+            'donation_intention' => $donationIntention !== '' ? $donationIntention : null,
             'status' => 'pending',
             'return_status' => 'pending completion',
             'raw_return' => [
                 'donation' => $donation,
                 'outstanding_at_checkout' => $outstanding,
                 'tester_mode' => $isTesterMode,
+                'donation_intention' => $donationIntention !== '' ? $donationIntention : null,
             ],
         ]);
 
@@ -531,6 +539,8 @@ class ParentPaymentController extends Controller
             $billing->refresh();
 
             $feeOutstanding = max(0, (float) $billing->fee_amount - (float) $billing->paid_amount);
+            $feeOutstandingAtCheckout = max(0, (float) data_get($transaction->raw_return, 'outstanding_at_checkout', $feeOutstanding));
+            $feeOutstanding = min($feeOutstanding, $feeOutstandingAtCheckout);
             $feePaid = min($feeOutstanding, $paidAmount);
             $donation = max(0, $paidAmount - $feePaid);
 

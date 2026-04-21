@@ -26,6 +26,7 @@ class FamilyPaymentTransaction extends Model
         'payer_name',
         'payer_email',
         'payer_phone',
+        'donation_intention',
         'status',
         'return_status',
         'status_reason',

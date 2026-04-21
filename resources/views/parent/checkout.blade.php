@@ -26,6 +26,11 @@
             <div class="flex-1 rounded-3xl border border-zinc-200 bg-white p-6 shadow-lg">
                 <h3 class="text-3xl font-extrabold tracking-tight text-zinc-800">Maklumat Pembayaran</h3>
                 <p class="mt-2 text-sm text-zinc-600">Sistem akan memindahkan anda ke platform ToyyibPay untuk pilihan FPX atau kad.</p>
+                @if (! empty($alreadyPaidCurrentYear))
+                    <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                        Bayaran yuran tahun semasa telah selesai. Anda masih boleh buat <span class="font-extrabold">Sumbangan Tambahan</span> pada bila-bila masa.
+                    </div>
+                @endif
                 @if (! empty($isTesterMode))
                     <div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                         Akaun Tester Treasury: transaksi ini akan dicipta sebagai RM {{ number_format((float) ($testerAmount ?? 1), 2) }}.
@@ -93,6 +98,17 @@
                                 placeholder="0"
                                 value="{{ old('donation_custom', $prefilledDonation > 0 ? number_format($prefilledDonation, 2, '.', '') : '') }}"
                             >
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Niat / Tujuan Sumbangan (Pilihan)</label>
+                            <textarea
+                                name="donation_intention"
+                                rows="2"
+                                maxlength="500"
+                                class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                                placeholder="Contoh: Sumbangan tambahan untuk aktiviti kelas dan kebajikan murid."
+                            >{{ old('donation_intention') }}</textarea>
+                            <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('donation_intention')" />
                         </div>
                     </div>
                     <input type="hidden" name="donation_preset" value="">

@@ -258,6 +258,7 @@
                             <th class="px-4 py-3 text-right">Sumbangan (RM)</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Return Status</th>
+                            <th class="px-4 py-3">Sumbangan Intention</th>
                             <th class="px-4 py-3">Payer</th>
                         </tr>
                     </thead>
@@ -271,6 +272,7 @@
                                 <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((float) ($portalDonationByPaymentId[$payment->id] ?? 0), 2) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ ucfirst((string) $payment->status) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $payment->return_status ? ucfirst((string) $payment->return_status) : '-' }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $payment->donation_intention ?: '-' }}</td>
                                 <td class="px-4 py-3 text-zinc-600">
                                     <div>{{ $payment->payer_name ?: '-' }}</div>
                                     <div class="text-xs">{{ $payment->payer_email ?: $payment->payer_phone ?: '-' }}</div>
@@ -278,7 +280,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-6 text-center text-zinc-500">No payment history recorded for the selected filter.</td>
+                                <td colspan="9" class="px-4 py-6 text-center text-zinc-500">No payment history recorded for the selected filter.</td>
                             </tr>
                         @endforelse
                     </tbody>
