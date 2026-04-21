@@ -91,7 +91,7 @@
                                     $nextNameDir = $sortBy === 'name' && $sortDir === 'asc' ? 'desc' : 'asc';
                                 @endphp
                                 <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'name', 'sort_dir' => $nextNameDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
-                                    Name
+                                    Payer / Parent Name
                                     @if ($sortBy === 'name')
                                         <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
                                     @endif
@@ -113,7 +113,21 @@
                                     Yuran {{ $yearA }}
                                 @endif
                             </th>
-                            <th class="px-5 py-3 text-right">Sumbangan {{ $yearA }}</th>
+                            <th class="px-5 py-3 text-right">
+                                @if ($currentYear === $yearA)
+                                    @php
+                                        $nextSumbanganDir = $sortBy === 'current_year_sumbangan' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                    @endphp
+                                    <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year_sumbangan', 'sort_dir' => $nextSumbanganDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Sumbangan {{ $yearA }}
+                                        @if ($sortBy === 'current_year_sumbangan')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                @else
+                                    Sumbangan {{ $yearA }}
+                                @endif
+                            </th>
                             <th class="px-5 py-3 text-right">
                                 @if ($currentYear === $yearB)
                                     @php
@@ -129,7 +143,21 @@
                                     Yuran {{ $yearB }}
                                 @endif
                             </th>
-                            <th class="px-5 py-3 text-right">Sumbangan {{ $yearB }}</th>
+                            <th class="px-5 py-3 text-right">
+                                @if ($currentYear === $yearB)
+                                    @php
+                                        $nextSumbanganDir = $sortBy === 'current_year_sumbangan' && $sortDir === 'asc' ? 'desc' : 'asc';
+                                    @endphp
+                                    <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year_sumbangan', 'sort_dir' => $nextSumbanganDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
+                                        Sumbangan {{ $yearB }}
+                                        @if ($sortBy === 'current_year_sumbangan')
+                                            <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        @endif
+                                    </a>
+                                @else
+                                    Sumbangan {{ $yearB }}
+                                @endif
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-200 bg-white">
@@ -140,12 +168,27 @@
                                         {{ $row['family_code'] }}
                                     </a>
                                 </td>
-                                <td class="px-5 py-4 font-semibold text-zinc-900">{{ $row['name'] }}</td>
+                                <td class="px-5 py-4">
+                                    <p class="font-semibold text-zinc-900">{{ $row['name'] }}</p>
+                                    @if (!empty($row['students']) && count($row['students']) > 0)
+                                        <details class="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/70 px-3 py-2">
+                                            <summary class="cursor-pointer text-xs font-semibold text-zinc-600">Lihat murid & kelas ({{ count($row['students']) }})</summary>
+                                            <div class="mt-2 space-y-1.5 text-xs text-zinc-600">
+                                                @foreach ($row['students'] as $student)
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="font-medium text-zinc-700">{{ $student['full_name'] }}</span>
+                                                        <span class="text-zinc-500">{{ $student['class_name'] }}</span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </details>
+                                    @endif
+                                </td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['class_name'] }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearA}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearA}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearA}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
                             </tr>
                         @empty
                             <tr>
@@ -158,10 +201,10 @@
                             <td class="px-5 py-3">TOTAL</td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
-                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearA}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearA}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
-                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0 ? "text-emerald-900" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearA}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearA}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
                         </tr>
                     </tfoot>
                 </table>

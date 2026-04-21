@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentTransaction;
+use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -83,7 +85,7 @@ class TeacherFinanceAccountingController extends Controller
 
     /**
      * @return array{
-     *   rows: \Illuminate\Support\Collection<int, array<string, float|string>>,
+     *   rows: \Illuminate\Support\Collection<int, array<string, mixed>>,
      *   totals: array<string, float>,
      *   search: string,
      *   classFilter: string,
@@ -107,7 +109,7 @@ class TeacherFinanceAccountingController extends Controller
         if ($yearB < 2000 || $yearB > 2100) {
             $yearB = 2026;
         }
-        if (! in_array($sortBy, ['name', 'current_year'], true)) {
+        if (! in_array($sortBy, ['name', 'current_year', 'current_year_sumbangan'], true)) {
             $sortBy = 'current_year';
         }
         if (! in_array($sortDir, ['asc', 'desc'], true)) {
@@ -131,6 +133,34 @@ class TeacherFinanceAccountingController extends Controller
             ->groupBy('billing_year')
             ->map(fn (Collection $yearRows): Collection => $yearRows->keyBy('family_code'));
 
+        $portalPaymentByYearFamily = FamilyPaymentTransaction::query()
+            ->selectRaw('family_billings.billing_year, family_billings.family_code')
+            ->selectRaw('COUNT(*) as row_count')
+            ->selectRaw('SUM(COALESCE(family_payment_transactions.amount, 0)) as amount_sum')
+            ->selectRaw('SUM(COALESCE(family_payment_transactions.fee_amount_paid, 0)) as fee_sum')
+            ->selectRaw('SUM(COALESCE(family_payment_transactions.donation_amount, 0)) as donation_sum')
+            ->join('family_billings', 'family_billings.id', '=', 'family_payment_transactions.family_billing_id')
+            ->where('family_payment_transactions.status', 'success')
+            ->whereIn('family_billings.billing_year', [$yearA, $yearB])
+            ->groupBy('family_billings.billing_year', 'family_billings.family_code')
+            ->get()
+            ->groupBy(fn ($row): string => (string) $row->billing_year)
+            ->map(fn (Collection $yearRows): Collection => $yearRows->keyBy(fn ($row): string => (string) $row->family_code));
+
+        $legacyPaymentByYearFamily = LegacyStudentPayment::query()
+            ->selectRaw('source_year')
+            ->selectRaw('family_code')
+            ->selectRaw('SUM(COALESCE(amount_paid, 0)) as amount_sum')
+            ->selectRaw('SUM(COALESCE(donation_amount, 0)) as donation_sum')
+            ->where('payment_status', 'paid')
+            ->whereIn('source_year', [$yearA, $yearB])
+            ->whereNotNull('family_code')
+            ->where('family_code', '!=', '')
+            ->groupBy('source_year', 'family_code')
+            ->get()
+            ->groupBy(fn ($row): string => (string) $row->source_year)
+            ->map(fn (Collection $yearRows): Collection => $yearRows->keyBy(fn ($row): string => (string) $row->family_code));
+
         $classOptions = $studentsByFamily
             ->map(fn (Collection $familyStudents): string => $this->resolveClassName($familyStudents))
             ->filter()
@@ -139,23 +169,29 @@ class TeacherFinanceAccountingController extends Controller
             ->values();
 
         $rows = $studentsByFamily
-            ->map(function (Collection $familyStudents, string $familyCode) use ($billingByYearAndFamily, $yearA, $yearB, $currentYear): array {
+            ->map(function (Collection $familyStudents, string $familyCode) use (
+                $billingByYearAndFamily,
+                $portalPaymentByYearFamily,
+                $legacyPaymentByYearFamily,
+                $yearA,
+                $yearB,
+                $currentYear
+            ): array {
                 $billingA = $billingByYearAndFamily->get($yearA)?->get($familyCode);
                 $billingB = $billingByYearAndFamily->get($yearB)?->get($familyCode);
+                $portalA = $portalPaymentByYearFamily->get((string) $yearA)?->get($familyCode);
+                $portalB = $portalPaymentByYearFamily->get((string) $yearB)?->get($familyCode);
+                $legacyA = $legacyPaymentByYearFamily->get((string) $yearA)?->get($familyCode);
+                $legacyB = $legacyPaymentByYearFamily->get((string) $yearB)?->get($familyCode);
 
-                [$yuranA, $sumbanganA] = $this->splitYuranAndSumbangan(
-                    (float) ($billingA?->paid_amount ?? 0),
-                    (float) ($billingA?->fee_amount ?? 0)
-                );
-                [$yuranB, $sumbanganB] = $this->splitYuranAndSumbangan(
-                    (float) ($billingB?->paid_amount ?? 0),
-                    (float) ($billingB?->fee_amount ?? 0)
-                );
+                [$yuranA, $sumbanganA] = $this->resolveYearBreakdown($billingA, $portalA, $legacyA);
+                [$yuranB, $sumbanganB] = $this->resolveYearBreakdown($billingB, $portalB, $legacyB);
 
                 $row = [
                     'family_code' => $familyCode,
                     'name' => $this->resolveDisplayName($familyStudents),
                     'class_name' => $this->resolveClassName($familyStudents),
+                    'students' => $this->buildStudentItems($familyStudents),
                     "yuran_{$yearA}" => $yuranA,
                     "sumbangan_{$yearA}" => $sumbanganA,
                     "yuran_{$yearB}" => $yuranB,
@@ -163,6 +199,7 @@ class TeacherFinanceAccountingController extends Controller
                 ];
 
                 $row['current_year_total'] = (float) ($row["yuran_{$currentYear}"] + $row["sumbangan_{$currentYear}"]);
+                $row['current_year_sumbangan'] = (float) $row["sumbangan_{$currentYear}"];
 
                 return $row;
             })
@@ -195,6 +232,15 @@ class TeacherFinanceAccountingController extends Controller
                         return $sortDir === 'asc'
                             ? strcmp($aName, $bName)
                             : strcmp($bName, $aName);
+                    }
+                } elseif ($sortBy === 'current_year_sumbangan') {
+                    $aVal = (float) ($a['current_year_sumbangan'] ?? 0);
+                    $bVal = (float) ($b['current_year_sumbangan'] ?? 0);
+
+                    if ($aVal !== $bVal) {
+                        return $sortDir === 'asc'
+                            ? ($aVal <=> $bVal)
+                            : ($bVal <=> $aVal);
                     }
                 } else {
                     $aVal = (float) ($a['current_year_total'] ?? 0);
@@ -276,5 +322,57 @@ class TeacherFinanceAccountingController extends Controller
             ->sortDesc()
             ->keys()
             ->first() ?? '-');
+    }
+
+    private function buildStudentItems(Collection $familyStudents): array
+    {
+        return $familyStudents
+            ->map(function (Student $student): array {
+                return [
+                    'full_name' => trim((string) $student->full_name) ?: '-',
+                    'class_name' => trim((string) $student->class_name) ?: '-',
+                ];
+            })
+            ->sortBy(fn (array $row): string => mb_strtolower($row['full_name']))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param object|null $billing
+     * @param object|null $portalAgg
+     * @param object|null $legacyAgg
+     * @return array{0: float, 1: float}
+     */
+    private function resolveYearBreakdown($billing, $portalAgg, $legacyAgg): array
+    {
+        $feeAmount = max(0, (float) ($billing->fee_amount ?? 0));
+        $billingPaid = max(0, (float) ($billing->paid_amount ?? 0));
+
+        if ($portalAgg && (int) ($portalAgg->row_count ?? 0) > 0) {
+            $amountSum = max(0, (float) ($portalAgg->amount_sum ?? 0));
+            $feeSum = max(0, (float) ($portalAgg->fee_sum ?? 0));
+            $donationSum = max(0, (float) ($portalAgg->donation_sum ?? 0));
+
+            $yuran = $feeSum > 0
+                ? min($feeSum, $feeAmount > 0 ? $feeAmount : $feeSum)
+                : min($amountSum, $feeAmount > 0 ? $feeAmount : $amountSum);
+
+            $sumbangan = $donationSum > 0
+                ? $donationSum
+                : max(0, $amountSum - $yuran);
+
+            return [round($yuran, 2), round($sumbangan, 2)];
+        }
+
+        if ($legacyAgg) {
+            $legacyAmount = max(0, (float) ($legacyAgg->amount_sum ?? 0));
+            $legacyDonation = max(0, (float) ($legacyAgg->donation_sum ?? 0));
+            $legacyYuran = max(0, $legacyAmount - $legacyDonation);
+
+            return [round($legacyYuran, 2), round($legacyDonation, 2)];
+        }
+
+        return $this->splitYuranAndSumbangan($billingPaid, $feeAmount);
     }
 }
