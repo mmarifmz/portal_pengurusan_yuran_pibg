@@ -6,6 +6,8 @@ use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\Student;
+use App\Models\User;
+use App\Support\ParentPhone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -179,6 +181,60 @@ class TeacherFinanceAccountingController extends Controller
             ->sort()
             ->values();
 
+        $studentParentPhones = $studentsByFamily
+            ->flatten(1)
+            ->pluck('parent_phone')
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter()
+            ->flatMap(fn (string $phone): array => ParentPhone::variants($phone))
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $studentParentEmails = $studentsByFamily
+            ->flatten(1)
+            ->pluck('parent_email')
+            ->map(fn ($value): string => mb_strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $parentUsers = User::query()
+            ->where('role', 'parent')
+            ->where(function ($query) use ($studentParentPhones, $studentParentEmails): void {
+                if ($studentParentPhones->isNotEmpty()) {
+                    $query->orWhereIn('phone', $studentParentPhones->all());
+                }
+
+                if ($studentParentEmails->isNotEmpty()) {
+                    $query->orWhereIn('email', $studentParentEmails->all());
+                }
+            })
+            ->get(['name', 'phone', 'email']);
+
+        $parentNameByPhone = $parentUsers
+            ->filter(fn (User $user): bool => filled($user->phone) && filled($user->name))
+            ->mapWithKeys(function (User $user): array {
+                $normalized = ParentPhone::normalizeForMatch((string) $user->phone);
+                if ($normalized === '') {
+                    return [];
+                }
+
+                return [$normalized => trim((string) $user->name)];
+            });
+
+        $parentNameByEmail = $parentUsers
+            ->filter(fn (User $user): bool => filled($user->email) && filled($user->name))
+            ->mapWithKeys(function (User $user): array {
+                $email = mb_strtolower(trim((string) $user->email));
+                if ($email === '') {
+                    return [];
+                }
+
+                return [$email => trim((string) $user->name)];
+            });
+
         $rows = $studentsByFamily
             ->map(function (Collection $familyStudents, string $familyCode) use (
                 $billingByYearAndFamily,
@@ -200,7 +256,7 @@ class TeacherFinanceAccountingController extends Controller
 
                 $row = [
                     'family_code' => $familyCode,
-                    'name' => $this->resolveDisplayName($familyStudents),
+                    'name' => $this->resolveDisplayName($familyStudents, $parentNameByPhone, $parentNameByEmail),
                     'class_name' => $this->resolveClassName($familyStudents),
                     'students' => $this->buildStudentItems($familyStudents),
                     "yuran_{$yearA}" => $yuranA,
@@ -302,7 +358,7 @@ class TeacherFinanceAccountingController extends Controller
         return [round($yuran, 2), round($sumbangan, 2)];
     }
 
-    private function resolveDisplayName(Collection $familyStudents): string
+    private function resolveDisplayName(Collection $familyStudents, Collection $parentNameByPhone, Collection $parentNameByEmail): string
     {
         $parentName = $familyStudents
             ->pluck('parent_name')
@@ -314,13 +370,31 @@ class TeacherFinanceAccountingController extends Controller
             return (string) $parentName;
         }
 
-        $studentName = $familyStudents
-            ->pluck('full_name')
-            ->map(fn ($value): string => trim((string) $value))
+        $phoneMatch = $familyStudents
+            ->pluck('parent_phone')
+            ->map(fn ($value): string => ParentPhone::normalizeForMatch((string) $value))
+            ->filter()
+            ->map(fn (string $normalized): ?string => $parentNameByPhone->get($normalized))
             ->filter()
             ->first();
 
-        return $studentName ?: '-';
+        if (filled($phoneMatch)) {
+            return (string) $phoneMatch;
+        }
+
+        $emailMatch = $familyStudents
+            ->pluck('parent_email')
+            ->map(fn ($value): string => mb_strtolower(trim((string) $value)))
+            ->filter()
+            ->map(fn (string $email): ?string => $parentNameByEmail->get($email))
+            ->filter()
+            ->first();
+
+        if (filled($emailMatch)) {
+            return (string) $emailMatch;
+        }
+
+        return '-';
     }
 
     private function resolveClassName(Collection $familyStudents): string
