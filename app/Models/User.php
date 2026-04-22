@@ -47,6 +47,17 @@ class User extends Authenticatable
             ->implode('');
     }
 
+    public function getNameAttribute(?string $value): string
+    {
+        $name = trim((string) $value);
+
+        if ($name === '') {
+            return '';
+        }
+
+        return mb_strtoupper($name);
+    }
+
     public function isTeacher(): bool
     {
         return $this->role === 'teacher';

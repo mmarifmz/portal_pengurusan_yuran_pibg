@@ -68,10 +68,20 @@ class PaymentFunnelMonitorController extends Controller
             ->groupBy('family_billing_id')
             ->map(fn (Collection $transactions): ?FamilyPaymentTransaction => $transactions->first());
 
+        $latestSuccessfulTransactionByBillingId = FamilyPaymentTransaction::query()
+            ->whereIn('family_billing_id', $familyBillings->pluck('id'))
+            ->where('status', 'success')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('family_billing_id')
+            ->map(fn (Collection $transactions): ?FamilyPaymentTransaction => $transactions->first());
+
         $rows = $familyBillings
-            ->map(function (FamilyBilling $familyBilling) use ($latestTransactionByBillingId, $studentProfilesByFamily): array {
+            ->map(function (FamilyBilling $familyBilling) use ($latestTransactionByBillingId, $latestSuccessfulTransactionByBillingId, $studentProfilesByFamily): array {
                 /** @var FamilyPaymentTransaction|null $transaction */
                 $transaction = $latestTransactionByBillingId->get($familyBilling->id);
+                /** @var FamilyPaymentTransaction|null $successfulTransaction */
+                $successfulTransaction = $latestSuccessfulTransactionByBillingId->get($familyBilling->id);
                 $students = $studentProfilesByFamily->get((string) $familyBilling->family_code, collect());
 
                 $parentName = '';
@@ -80,6 +90,13 @@ class PaymentFunnelMonitorController extends Controller
                 if ($transaction) {
                     $parentName = trim((string) $transaction->payer_name);
                     $parentPhone = trim((string) $transaction->payer_phone);
+                }
+
+                if (($parentName === '' || preg_match('/^parent\s+ssp-/i', $parentName) === 1) && $successfulTransaction) {
+                    $successfulPayerName = trim((string) $successfulTransaction->payer_name);
+                    if ($successfulPayerName !== '' && preg_match('/^parent\s+ssp-/i', $successfulPayerName) !== 1) {
+                        $parentName = $successfulPayerName;
+                    }
                 }
 
                 if ($parentName === '' || preg_match('/^parent\s+ssp-/i', $parentName) === 1) {
@@ -110,7 +127,7 @@ class PaymentFunnelMonitorController extends Controller
 
                 return [
                     'family_code' => (string) $familyBilling->family_code,
-                    'parent_name' => $parentName !== '' ? $parentName : '-',
+                    'parent_name' => $parentName !== '' ? mb_strtoupper($parentName) : '-',
                     'phone_number' => $parentPhone !== '' ? $parentPhone : '-',
                     'billing_year' => (int) $familyBilling->billing_year,
                     'gateway_status' => $gatewayStatus,

@@ -47,4 +47,25 @@ class Student extends Model
     {
         return (float) $this->total_fee - (float) $this->paid_amount;
     }
+
+    public function getFullNameAttribute(?string $value): string
+    {
+        return $this->normalizeDisplayName($value);
+    }
+
+    public function getParentNameAttribute(?string $value): string
+    {
+        return $this->normalizeDisplayName($value);
+    }
+
+    private function normalizeDisplayName(?string $value): string
+    {
+        $name = trim((string) $value);
+
+        if ($name === '') {
+            return '';
+        }
+
+        return mb_strtoupper($name);
+    }
 }

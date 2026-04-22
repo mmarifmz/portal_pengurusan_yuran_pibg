@@ -138,6 +138,17 @@ class FamilyPaymentTransaction extends Model
         return self::formatExternalOrderId((string) $this->external_order_id);
     }
 
+    public function getPayerNameAttribute(?string $value): string
+    {
+        $name = trim((string) $value);
+
+        if ($name === '') {
+            return '';
+        }
+
+        return mb_strtoupper($name);
+    }
+
     private function normalizeForDisplay(DateTimeInterface|string|null $value): ?Carbon
     {
         if (! $value) {
