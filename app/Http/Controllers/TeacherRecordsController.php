@@ -510,6 +510,47 @@ class TeacherRecordsController extends Controller
             })
             ->values();
 
+        $successfulPayerName = FamilyPaymentTransaction::query()
+            ->whereIn('family_billing_id', $familyBillings->pluck('id'))
+            ->where('status', 'success')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->get()
+            ->pluck('payer_name')
+            ->map(fn ($name): string => trim((string) $name))
+            ->first(fn (string $name): bool => $name !== '' && preg_match('/^parent\s+ssp-/i', $name) !== 1);
+
+        $anyPayerName = FamilyPaymentTransaction::query()
+            ->whereIn('family_billing_id', $familyBillings->pluck('id'))
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->get()
+            ->pluck('payer_name')
+            ->map(fn ($name): string => trim((string) $name))
+            ->first(fn (string $name): bool => $name !== '' && preg_match('/^parent\s+ssp-/i', $name) !== 1);
+
+        $linkedParentName = $linkedParents
+            ->pluck('name')
+            ->map(fn ($name): string => trim((string) $name))
+            ->first(fn (string $name): bool => $name !== '' && preg_match('/^parent\s+ssp-/i', $name) !== 1);
+
+        $familyResolvedParentName = (string) ($successfulPayerName ?: $anyPayerName ?: $linkedParentName ?: '');
+
+        $students = $students
+            ->map(function (Student $student) use ($familyResolvedParentName): Student {
+                $studentParentName = trim((string) ($student->parent_name ?? ''));
+                $resolvedParentName = $studentParentName;
+
+                if ($resolvedParentName === '' || preg_match('/^parent\s+ssp-/i', $resolvedParentName) === 1) {
+                    $resolvedParentName = $familyResolvedParentName;
+                }
+
+                $student->setAttribute('resolved_parent_name', $resolvedParentName);
+
+                return $student;
+            })
+            ->values();
+
         $accessLogsQuery = ParentLoginOtp::query();
         $linkedParentIds = $linkedParents->pluck('id')->filter()->values();
 

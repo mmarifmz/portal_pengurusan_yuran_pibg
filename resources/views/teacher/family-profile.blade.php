@@ -142,7 +142,7 @@
                                 <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $student->student_no ?: '-' }}</td>
                                 <td class="px-4 py-3 font-semibold text-zinc-900">{{ $student->full_name }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $student->class_name ?: '-' }}</td>
-                                <td class="px-4 py-3 text-zinc-700">{{ $student->parent_name ?: '-' }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $student->resolved_parent_name ?: '-' }}</td>
                                 <td class="px-4 py-3 text-zinc-600">
                                     <div>{{ $student->parent_phone ?: '-' }}</div>
                                     <div class="text-xs">{{ $student->parent_email ?: '-' }}</div>
