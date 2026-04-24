@@ -149,6 +149,102 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">Portal Test Invite Utility</h2>
+            <p class="mt-1 text-sm text-zinc-500">Generate a 24-hour parent auto-login link by phone for testing. Uses dummy family code <span class="font-mono">{{ $portalTestFamilyCode }}</span> (billing year 2099), so it does not impact normal statistics.</p>
+
+            <form method="POST" action="{{ route('system.payment-testers.portal-test-invite', ['q' => $keyword]) }}" class="mt-4 grid gap-3 md:grid-cols-3">
+                @csrf
+                <label class="text-sm font-medium text-zinc-700">
+                    Phone Number
+                    <input
+                        name="phone"
+                        type="text"
+                        value="{{ old('phone', $defaultWhatsappTestPhone) }}"
+                        placeholder="01140030076"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <label class="text-sm font-medium text-zinc-700">
+                    Delivery
+                    <select name="send_whatsapp" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <option value="1" @selected(old('send_whatsapp', '1') === '1')>Generate + Send WhatsApp</option>
+                        <option value="0" @selected(old('send_whatsapp') === '0')>Generate Link Only</option>
+                    </select>
+                </label>
+                <div class="self-end">
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                        Generate Test Invite
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-5 overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        <tr>
+                            <th class="px-4 py-3">Phone</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Time Left</th>
+                            <th class="px-4 py-3">Sent At</th>
+                            <th class="px-4 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200">
+                        @forelse ($portalTestInvites as $invite)
+                            @php
+                                $isUsed = $invite->used_at !== null;
+                                $isExpired = ! $isUsed && $invite->expires_at && $invite->expires_at->isPast();
+                            @endphp
+                            <tr>
+                                <td class="px-4 py-3 font-medium text-zinc-900">{{ $invite->phone }}</td>
+                                <td class="px-4 py-3">
+                                    @if ($isUsed)
+                                        <span class="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">Used</span>
+                                    @elseif ($isExpired)
+                                        <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Expired</span>
+                                    @else
+                                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Active</span>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-zinc-700">
+                                    @if ($isUsed)
+                                        Used
+                                    @elseif ($invite->expires_at)
+                                        <span class="js-invite-timer" data-expires-at="{{ $invite->expires_at->toIso8601String() }}">-</span>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $invite->sent_at?->format('d M Y H:i:s') ?? '-' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <a
+                                        href="{{ route('parent.invite.login', ['token' => $invite->token]) }}"
+                                        target="_blank"
+                                        class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100"
+                                    >
+                                        Open Link
+                                    </a>
+                                    <form method="POST" action="{{ route('system.payment-testers.portal-test-invite', ['q' => $keyword]) }}" class="ml-2 inline">
+                                        @csrf
+                                        <input type="hidden" name="phone" value="{{ $invite->phone }}">
+                                        <input type="hidden" name="send_whatsapp" value="1">
+                                        <button type="submit" class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100">
+                                            Re-Send Invite
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-zinc-500">No portal test invites yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <form method="GET" action="{{ route('system.payment-testers.index') }}" class="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <label class="text-sm font-medium text-zinc-700">
                     Search Parent User
@@ -222,4 +318,39 @@
             </div>
         </section>
     </div>
+
+    <script>
+        (function () {
+            const timerNodes = Array.from(document.querySelectorAll('.js-invite-timer'));
+            if (!timerNodes.length) {
+                return;
+            }
+
+            const renderTimers = () => {
+                const now = Date.now();
+
+                timerNodes.forEach((node) => {
+                    const expiry = Date.parse(node.getAttribute('data-expires-at') || '');
+                    if (!expiry) {
+                        node.textContent = '-';
+                        return;
+                    }
+
+                    const diffMs = expiry - now;
+                    if (diffMs <= 0) {
+                        node.textContent = 'Expired';
+                        return;
+                    }
+
+                    const totalMinutes = Math.floor(diffMs / 60000);
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+                    node.textContent = `${hours}h ${minutes}m`;
+                });
+            };
+
+            renderTimers();
+            window.setInterval(renderTimers, 30000);
+        }());
+    </script>
 </x-layouts::app>

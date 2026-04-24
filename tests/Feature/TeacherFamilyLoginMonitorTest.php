@@ -3,6 +3,7 @@
 use App\Models\FamilyBilling;
 use App\Models\FamilyBillingPhone;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\User;
 
@@ -163,6 +164,54 @@ it('filters tac status to show stuck families only', function () {
     $response->assertOk();
     $response->assertSee('SSP-STUCK');
     $response->assertDontSee('SSP-DONE');
+});
+
+it('shows re-send invite button when stuck family already has an invite history', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $family = FamilyBilling::query()->create([
+        'family_code' => 'SSP-RSND',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $family->id,
+        'phone' => '0187788990',
+        'normalized_phone' => '60187788990',
+    ]);
+
+    ParentLoginOtp::query()->create([
+        'user_id' => null,
+        'phone' => '0187788990',
+        'code_hash' => 'hash',
+        'channel' => 'whatsapp',
+        'expires_at' => now()->subMinutes(20),
+        'used_at' => null,
+        'attempts' => 1,
+    ]);
+
+    ParentLoginInvite::query()->create([
+        'family_billing_id' => $family->id,
+        'user_id' => null,
+        'phone' => '0187788990',
+        'normalized_phone' => '60187788990',
+        'token' => str_repeat('a', 80),
+        'expires_at' => now()->addHours(24),
+        'sent_at' => now()->subMinutes(5),
+        'used_at' => null,
+        'created_by_user_id' => $teacher->id,
+    ]);
+
+    $response = $this->actingAs($teacher)->get(route('teacher.family-login-monitor'));
+
+    $response->assertOk();
+    $response->assertSee('Re-Send Invite');
 });
 
 it('blocks parent role from viewing family login monitor', function () {

@@ -148,8 +148,18 @@
                                 <td class="px-4 py-3 text-right">{{ number_format($row['tac_expired_count']) }}</td>
                                 <td class="px-4 py-3">{{ $row['latest_tac_sent_at'] ? $row['latest_tac_sent_at']->format('d M Y H:i:s') : '-' }}</td>
                                 <td class="px-4 py-3">
-                                    @if ($row['is_tac_stuck'])
-                                        <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{{ $row['tac_status'] }} (Stuck)</span>
+                                    @if ($row['is_tac_stuck'] && $row['tac_status'] === 'Expired TAC' && filled($row['invite_phone']))
+                                        <form method="POST" action="{{ route('teacher.family-login-monitor.invite.send') }}">
+                                            @csrf
+                                            <input type="hidden" name="family_billing_id" value="{{ $row['family_billing_id'] }}">
+                                            <input type="hidden" name="phone" value="{{ $row['invite_phone'] }}">
+                                            <button
+                                                type="submit"
+                                                class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold transition {{ $row['invite_sent_count'] > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' }}"
+                                            >
+                                                {{ $row['invite_sent_count'] > 0 ? 'Re-Send Invite' : 'Expired TAC (Stuck)' }}
+                                            </button>
+                                        </form>
                                     @elseif ($row['tac_status'] === 'Completed')
                                         <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{{ $row['tac_status'] }}</span>
                                     @elseif ($row['tac_status'] === 'No TAC request')

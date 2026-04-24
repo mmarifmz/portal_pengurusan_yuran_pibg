@@ -20,6 +20,7 @@ use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\VisitorLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
+use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
@@ -106,6 +107,9 @@ Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group
     Route::post('/verify', [ParentOtpAuthController::class, 'verifyTac'])->name('verify.submit');
 });
 
+Route::get('/parent/invite/{token}', ParentInviteAuthController::class)
+    ->name('parent.invite.login');
+
 // ToyyibPay return/callback must stay public (gateway/browser call outside auth middleware).
 Route::get('/parent/payments/summary/return', [ParentPaymentController::class, 'handleReturn'])
     ->name('parent.payments.summary.return');
@@ -156,6 +160,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/family-login-monitor', [TeacherFamilyLoginMonitorController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin')
         ->name('teacher.family-login-monitor');
+    Route::post('/teacher/family-login-monitor/invite', [TeacherFamilyLoginMonitorController::class, 'sendInvite'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.family-login-monitor.invite.send');
     Route::get('/teacher/finance-accounting', [TeacherFinanceAccountingController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.finance-accounting');
@@ -258,6 +265,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-testers/parent-phone/correct', [PaymentTesterUserController::class, 'correctParentPhone'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.parent-phone.correct');
+    Route::post('/system/payment-testers/portal-test-invite', [PaymentTesterUserController::class, 'createPortalTestInvite'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.portal-test-invite');
 
     Route::get('/super-teacher/teachers', [TeacherUserManagementController::class, 'index'])
         ->middleware('role:super_teacher,system_admin')

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FamilyBilling;
 use App\Models\FamilyBillingPhone;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
@@ -13,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class PaymentTesterUserController extends Controller
@@ -43,13 +46,118 @@ class PaymentTesterUserController extends Controller
             ->paginate(30)
             ->withQueryString();
 
+        $dummyFamily = FamilyBilling::query()
+            ->where('family_code', 'TEST-DUMMY-PORTAL')
+            ->where('billing_year', 2099)
+            ->first();
+
+        $portalTestInvites = collect();
+        if ($dummyFamily) {
+            $portalTestInvites = ParentLoginInvite::query()
+                ->where('family_billing_id', $dummyFamily->id)
+                ->whereNotNull('sent_at')
+                ->latest('sent_at')
+                ->limit(30)
+                ->get();
+        }
+
         return view('system.payment-testers', [
             'parentUsers' => $parentUsers,
             'keyword' => $keyword,
             'hasPaymentTesterColumn' => $hasPaymentTesterColumn,
             'defaultWhatsappTestPhone' => (string) config('services.treasury_whatsapp_phone', ''),
             'defaultWhatsappTestMessage' => 'Ini mesej ujian WhatsApp dari Portal PIBG.',
+            'portalTestInvites' => $portalTestInvites,
+            'portalTestFamilyCode' => 'TEST-DUMMY-PORTAL',
         ]);
+    }
+
+    public function createPortalTestInvite(Request $request, WhatsAppTacSender $whatsAppTacSender): RedirectResponse
+    {
+        $validated = $request->validate([
+            'phone' => ['required', 'string', 'max:25'],
+            'send_whatsapp' => ['nullable', 'boolean'],
+        ]);
+
+        $phone = ParentPhone::sanitizeInput((string) $validated['phone']);
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Phone format is invalid for test invite.');
+        }
+
+        $dummyFamily = $this->resolvePortalTestDummyFamily();
+
+        if (! $dummyFamily->hasRegisteredPhone($phone) && ! $dummyFamily->registerPhone($phone)) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Dummy family has reached max 5 phone entries. Please clear old test phones first.');
+        }
+
+        $parent = User::query()
+            ->where('role', 'parent')
+            ->where('phone', $phone)
+            ->first();
+
+        if (! $parent) {
+            $parent = User::query()->create([
+                'name' => 'PARENT TEST '.$phone,
+                'email' => sprintf(
+                    'parent-test-%s-%s@placeholder.local',
+                    Str::lower($dummyFamily->family_code),
+                    preg_replace('/\D+/', '', $phone) ?: Str::lower((string) Str::ulid())
+                ),
+                'phone' => $phone,
+                'role' => 'parent',
+                'password' => Str::random(40),
+                'email_verified_at' => now(),
+                'is_payment_tester' => true,
+            ]);
+        } elseif (! $parent->is_payment_tester) {
+            $parent->forceFill(['is_payment_tester' => true])->save();
+        }
+
+        ParentLoginInvite::query()
+            ->where('family_billing_id', $dummyFamily->id)
+            ->where('normalized_phone', $normalizedPhone)
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
+
+        $invite = ParentLoginInvite::query()->create([
+            'family_billing_id' => $dummyFamily->id,
+            'user_id' => $parent->id,
+            'phone' => $phone,
+            'normalized_phone' => $normalizedPhone,
+            'token' => Str::random(80),
+            'expires_at' => now()->addHours(24),
+            'created_by_user_id' => $request->user()?->id,
+            'sent_at' => now(),
+        ]);
+
+        $loginLink = route('parent.invite.login', ['token' => $invite->token]);
+        $message = "Assalamualaikum & Salam Sejahtera, nombor telefon anda telah didaftarkan ke Portal PIBG SSP secara manual.\n"
+            ."Sila klik link ini untuk membuat bayaran yuran : <{$loginLink}>\n"
+            ."Pautan ini sah selama 24 jam.";
+
+        $sendWhatsapp = (bool) ($validated['send_whatsapp'] ?? true);
+
+        if ($sendWhatsapp) {
+            try {
+                $whatsAppTacSender->sendMessage($phone, $message);
+            } catch (\Throwable $exception) {
+                $invite->delete();
+
+                return redirect()
+                    ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                    ->with('error', 'Test invite created but WhatsApp send failed: '.$exception->getMessage());
+            }
+        }
+
+        return redirect()
+            ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+            ->with('status', "Portal test invite ready for {$phone}. Valid for 24 hours. Link: {$loginLink}");
     }
 
     public function update(Request $request, User $user): RedirectResponse
@@ -286,5 +394,21 @@ class PaymentTesterUserController extends Controller
                 $summary['family_phone_updated'],
                 $summary['family_phone_deleted'],
             ));
+    }
+
+    private function resolvePortalTestDummyFamily(): FamilyBilling
+    {
+        return FamilyBilling::query()->firstOrCreate(
+            [
+                'family_code' => 'TEST-DUMMY-PORTAL',
+                'billing_year' => 2099,
+            ],
+            [
+                'fee_amount' => 100.00,
+                'paid_amount' => 0,
+                'status' => 'pending',
+                'notes' => 'Dummy family for portal login invite testing. Use billing year 2099 so this record is not part of current operational statistics.',
+            ]
+        );
     }
 }

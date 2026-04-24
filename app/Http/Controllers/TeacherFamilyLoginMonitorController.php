@@ -4,16 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
+use App\Models\User;
+use App\Services\WhatsAppTacSender;
 use App\Support\ParentPhone;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class TeacherFamilyLoginMonitorController extends Controller
 {
+    public function __construct(private readonly WhatsAppTacSender $whatsAppTacSender)
+    {
+    }
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->string('q')->toString());
@@ -123,7 +132,28 @@ class TeacherFamilyLoginMonitorController extends Controller
                 return $carry;
             }, collect());
 
-        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $otpByNormalizedPhone, $familyClasses): array {
+        $inviteByFamilyPhone = ParentLoginInvite::query()
+            ->whereNotNull('sent_at')
+            ->get(['family_billing_id', 'normalized_phone', 'sent_at'])
+            ->groupBy('family_billing_id')
+            ->map(function (Collection $rowsByFamily): Collection {
+                return $rowsByFamily
+                    ->groupBy('normalized_phone')
+                    ->map(function (Collection $rowsByPhone): array {
+                        $latestSentAt = $rowsByPhone
+                            ->pluck('sent_at')
+                            ->filter()
+                            ->sort()
+                            ->last();
+
+                        return [
+                            'invite_sent_count' => $rowsByPhone->count(),
+                            'latest_invite_sent_at' => $latestSentAt,
+                        ];
+                    });
+            });
+
+        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $otpByNormalizedPhone, $inviteByFamilyPhone, $familyClasses): array {
             $phones = $familyBilling->phones
                 ->pluck('phone')
                 ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone))
@@ -144,6 +174,10 @@ class TeacherFamilyLoginMonitorController extends Controller
             $tacPendingCount = 0;
             $tacExpiredCount = 0;
             $latestTacSentAt = null;
+            $inviteSentCount = 0;
+            $latestInviteSentAt = null;
+            $suggestedInvitePhone = null;
+            $suggestedInviteScore = null;
 
             foreach ($normalizedPhones as $normalizedPhone) {
                 $loginAggregate = $loginByPhone->get($normalizedPhone);
@@ -174,6 +208,33 @@ class TeacherFamilyLoginMonitorController extends Controller
                 if ($candidateTacTimestamp && (! $latestTacSentAt || $candidateTacTimestamp->gt($latestTacSentAt))) {
                     $latestTacSentAt = $candidateTacTimestamp;
                 }
+
+                $inviteAggregate = $inviteByFamilyPhone
+                    ->get($familyBilling->id, collect())
+                    ->get($normalizedPhone);
+
+                if ($inviteAggregate) {
+                    $inviteSentCount += (int) ($inviteAggregate['invite_sent_count'] ?? 0);
+
+                    $candidateInviteTimestamp = $inviteAggregate['latest_invite_sent_at'] ?? null;
+                    if ($candidateInviteTimestamp && (! $latestInviteSentAt || Carbon::parse((string) $candidateInviteTimestamp)->gt($latestInviteSentAt))) {
+                        $latestInviteSentAt = Carbon::parse((string) $candidateInviteTimestamp);
+                    }
+                }
+
+                $shouldSuggestThisPhone = (($otpAggregate['tac_verified_count'] ?? 0) === 0)
+                    && (($otpAggregate['tac_sent_count'] ?? 0) > 0);
+
+                if ($shouldSuggestThisPhone) {
+                    $phoneScore = Carbon::parse((string) ($otpAggregate['latest_tac_sent_at'] ?? now()))->timestamp;
+                    $candidateDisplayPhone = $phones
+                        ->first(fn (string $phone) => ParentPhone::normalizeForMatch($phone) === $normalizedPhone);
+
+                    if ($candidateDisplayPhone && ($suggestedInviteScore === null || $phoneScore > $suggestedInviteScore)) {
+                        $suggestedInviteScore = $phoneScore;
+                        $suggestedInvitePhone = $candidateDisplayPhone;
+                    }
+                }
             }
 
             $tacStatus = 'No TAC request';
@@ -192,6 +253,7 @@ class TeacherFamilyLoginMonitorController extends Controller
             $isTacStuck = $tacSentCount > 0 && $loginCount === 0 && $tacVerifiedCount === 0;
 
             return [
+                'family_billing_id' => (int) $familyBilling->id,
                 'family_code' => (string) $familyBilling->family_code,
                 'phones_display' => $phones->implode(', '),
                 'classes' => $familyClasses->get((string) $familyBilling->family_code, collect()),
@@ -205,6 +267,9 @@ class TeacherFamilyLoginMonitorController extends Controller
                 'latest_tac_sent_at' => $latestTacSentAt,
                 'tac_status' => $tacStatus,
                 'is_tac_stuck' => $isTacStuck,
+                'invite_sent_count' => $inviteSentCount,
+                'latest_invite_sent_at' => $latestInviteSentAt,
+                'invite_phone' => $suggestedInvitePhone ?: $phones->first(),
                 'is_paid' => $familyBilling->outstanding_amount <= 0,
             ];
         });
@@ -269,5 +334,122 @@ class TeacherFamilyLoginMonitorController extends Controller
             'dateFromInput' => $dateFromInput,
             'dateToInput' => $dateToInput,
         ]);
+    }
+
+    public function sendInvite(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'family_billing_id' => ['required', 'integer'],
+            'phone' => ['required', 'string', 'max:25'],
+        ]);
+
+        $familyBilling = FamilyBilling::query()->find($validated['family_billing_id']);
+        if (! $familyBilling) {
+            return redirect()->route('teacher.family-login-monitor')
+                ->withErrors(['q' => 'Family billing record not found.']);
+        }
+
+        $phone = ParentPhone::sanitizeInput($validated['phone']);
+        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+
+        if ($normalizedPhone === '') {
+            return redirect()->route('teacher.family-login-monitor')
+                ->withErrors(['q' => 'Invalid phone number for invite action.']);
+        }
+
+        if (! $familyBilling->hasRegisteredPhone($phone) && ! $familyBilling->registerPhone($phone)) {
+            return redirect()->route('teacher.family-login-monitor')
+                ->withErrors(['q' => 'This family already has the maximum 5 phone numbers registered.']);
+        }
+
+        $parent = User::query()
+            ->where('role', 'parent')
+            ->where('phone', $phone)
+            ->first();
+
+        if (! $parent) {
+            $parent = $this->registerParentForFamily($phone, $familyBilling);
+        }
+
+        if ($parent->is_active !== null && (bool) $parent->is_active === false) {
+            return redirect()->route('teacher.family-login-monitor')
+                ->withErrors(['q' => 'Parent portal access for this number is disabled.']);
+        }
+
+        ParentLoginInvite::query()
+            ->where('family_billing_id', $familyBilling->id)
+            ->where('normalized_phone', $normalizedPhone)
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
+
+        $invite = ParentLoginInvite::query()->create([
+            'family_billing_id' => $familyBilling->id,
+            'user_id' => $parent->id,
+            'phone' => $phone,
+            'normalized_phone' => $normalizedPhone,
+            'token' => Str::random(80),
+            'expires_at' => now()->addHours(24),
+            'created_by_user_id' => $request->user()?->id,
+        ]);
+
+        $loginLink = route('parent.invite.login', ['token' => $invite->token]);
+
+        $message = "Assalamualaikum & Salam Sejahtera, nombor telefon anda telah didaftarkan ke Portal PIBG SSP secara manual.\n"
+            ."Sila klik link ini untuk membuat bayaran yuran : <{$loginLink}>\n"
+            ."Pautan ini sah selama 24 jam.";
+
+        try {
+            $this->whatsAppTacSender->sendMessage($phone, $message);
+        } catch (\Throwable $exception) {
+            $invite->delete();
+
+            return redirect()->route('teacher.family-login-monitor')
+                ->withErrors(['q' => 'Failed to send invite message: '.$exception->getMessage()]);
+        }
+
+        $invite->forceFill([
+            'sent_at' => now(),
+        ])->save();
+
+        return redirect()->route('teacher.family-login-monitor')
+            ->with('status', "Invite sent to {$phone}. Link valid for 24 hours.");
+    }
+
+    private function registerParentForFamily(string $phone, FamilyBilling $familyBilling): User
+    {
+        $familyStudents = Student::query()
+            ->where('family_code', $familyBilling->family_code)
+            ->orderBy('full_name')
+            ->get();
+
+        $parentName = (string) ($familyStudents->firstWhere('parent_name')?->parent_name
+            ?? $familyStudents->first()?->parent_name
+            ?? "Parent {$familyBilling->family_code}");
+
+        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
+
+        $parent = User::query()->create([
+            'name' => $parentName,
+            'email' => sprintf(
+                'parent-%s-%s@placeholder.local',
+                Str::lower($familyBilling->family_code),
+                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
+            ),
+            'phone' => $sanitizedPhone,
+            'role' => 'parent',
+            'password' => Str::random(40),
+            'email_verified_at' => now(),
+        ]);
+
+        Student::query()
+            ->where('family_code', $familyBilling->family_code)
+            ->where(function ($query) {
+                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
+            })
+            ->update([
+                'parent_phone' => $sanitizedPhone,
+            ]);
+
+        return $parent;
     }
 }
