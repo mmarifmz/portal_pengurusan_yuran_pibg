@@ -13,18 +13,21 @@ class SchoolCalendarPageController extends Controller
 {
     public function index(Request $request): View
     {
+        $currentYear = (int) now()->year;
+
         $yearOptions = collect()
             ->merge(FamilyBilling::query()->distinct()->pluck('billing_year'))
             ->merge(LegacyStudentPayment::query()->distinct()->pluck('source_year'))
-            ->merge([now()->year])
+            ->merge([$currentYear])
             ->filter(fn ($year) => is_numeric($year))
             ->map(fn ($year) => (int) $year)
+            ->filter(fn (int $year): bool => $year <= $currentYear)
             ->unique()
             ->sortDesc()
             ->values();
 
         if ($yearOptions->isEmpty()) {
-            $yearOptions = collect([now()->year]);
+            $yearOptions = collect([$currentYear]);
         }
 
         $selectedDashboardYear = (int) $request->integer('dashboard_year', (int) $yearOptions->first());

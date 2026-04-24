@@ -26,18 +26,21 @@ class DashboardController extends Controller
         $role = $user?->isParent() ? 'parent' : 'staff';
         $billingYear = now()->year;
 
+        $currentYear = (int) now()->year;
+
         $yearOptions = collect()
             ->merge(FamilyBilling::query()->distinct()->pluck('billing_year'))
             ->merge(LegacyStudentPayment::query()->distinct()->pluck('source_year'))
-            ->merge([now()->year])
+            ->merge([$currentYear])
             ->filter(fn ($year) => is_numeric($year))
             ->map(fn ($year) => (int) $year)
+            ->filter(fn (int $year): bool => $year <= $currentYear)
             ->unique()
             ->sortDesc()
             ->values();
 
         if ($yearOptions->isEmpty()) {
-            $yearOptions = collect([now()->year]);
+            $yearOptions = collect([$currentYear]);
         }
 
         $selectedDashboardYear = (int) $request->integer('dashboard_year', (int) $yearOptions->first());
@@ -352,6 +355,7 @@ class DashboardController extends Controller
 
         $familyBillingsAllYears = FamilyBilling::query()
             ->with('students')
+            ->where('billing_year', '<=', $currentYear)
             ->orderByDesc('billing_year')
             ->get();
 
@@ -397,7 +401,13 @@ class DashboardController extends Controller
         }
 
         $legacyStatusByClassByYear = [];
-        $legacyStatusYears = $legacyPayments->pluck('source_year')->map(fn ($year) => (string) $year)->unique()->values()->toArray();
+        $legacyStatusYears = $legacyPayments
+            ->pluck('source_year')
+            ->filter(fn ($year): bool => is_numeric($year) && (int) $year <= $currentYear)
+            ->map(fn ($year) => (string) $year)
+            ->unique()
+            ->values()
+            ->toArray();
 
         foreach ($legacyStatusYears as $legacyYear) {
             $rows = LegacyStudentPayment::query()

@@ -14,9 +14,10 @@ class PaymentFunnelMonitorController extends Controller
 {
     public function index(Request $request): View
     {
-        $billingYear = (int) $request->integer('billing_year', (int) now()->year);
+        $currentYear = (int) now()->year;
+        $billingYear = (int) $request->integer('billing_year', $currentYear);
         if ($billingYear < 2000 || $billingYear > 2100) {
-            $billingYear = (int) now()->year;
+            $billingYear = $currentYear;
         }
 
         $search = trim((string) $request->query('q', ''));
@@ -36,13 +37,14 @@ class PaymentFunnelMonitorController extends Controller
         $yearOptions = FamilyBilling::query()
             ->select('billing_year')
             ->distinct()
+            ->where('billing_year', '<=', $currentYear)
             ->orderByDesc('billing_year')
             ->pluck('billing_year')
             ->map(fn ($year): int => (int) $year)
             ->values();
 
         if ($yearOptions->isEmpty()) {
-            $yearOptions = collect([(int) now()->year]);
+            $yearOptions = collect([$currentYear]);
         }
 
         if (! $yearOptions->contains($billingYear)) {

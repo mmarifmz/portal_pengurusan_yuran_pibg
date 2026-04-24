@@ -97,3 +97,13 @@ select:focus[data-flux-control] {
         right: max(10px, calc(env(safe-area-inset-right, 0px) + 10px)) !important;
     }
 }
+
+/* Do not block mobile viewport with PWA install prompt */
+@media (max-width: 768px) {
+    #install-prompt,
+    #install-button {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+}
