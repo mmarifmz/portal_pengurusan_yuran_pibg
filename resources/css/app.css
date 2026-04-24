@@ -98,12 +98,23 @@ select:focus[data-flux-control] {
     }
 }
 
-/* Do not block mobile viewport with PWA install prompt */
-@media (max-width: 768px) {
-    #install-prompt,
-    #install-button {
+/* Keep iOS PWA helper away from the top nav/menu area on mobile Safari. */
+@supports (padding: max(0px)) {
+    #install-prompt.box-icon[data-mode="ios"] {
+        top: auto !important;
+        left: 12px !important;
+        right: 12px !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+        max-width: calc(100vw - 24px) !important;
+        z-index: 20 !important;
+        pointer-events: none;
+    }
+
+    #install-prompt.box-icon[data-mode="ios"] .circle {
         display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
+    }
+
+    #install-prompt.box-icon[data-mode="ios"] .ios-tip {
+        margin-top: 0;
     }
 }
