@@ -31,6 +31,20 @@
                     <p class="mt-1 text-2xl font-bold text-zinc-700">{{ number_format($notStartedCount) }}</p>
                 </div>
             </div>
+
+            <div id="gateway-check-feedback" class="mt-4 hidden rounded-xl border px-4 py-3 text-sm"></div>
+
+            @if (session('status'))
+                <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    {{ session('status') }}
+                </div>
+            @endif
+
+            @if (session('error'))
+                <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {{ session('error') }}
+                </div>
+            @endif
         </section>
 
         <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white/90 shadow-sm">
@@ -70,7 +84,7 @@
                     <input type="hidden" name="sort_by" value="{{ $sortBy }}">
                     <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
 
-                    <div class="md:col-span-2 xl:col-span-4 flex items-center gap-2">
+                    <div class="flex items-center gap-2 md:col-span-2 xl:col-span-4">
                         <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
                             Apply Filters
                         </button>
@@ -93,7 +107,7 @@
                                 <a href="{{ route('system.payment-funnel-monitor.index', array_merge(request()->query(), ['sort_by' => 'parent_name', 'sort_dir' => $nextNameDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
                                     Parent Name
                                     @if ($sortBy === 'parent_name')
-                                        <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        <span>{{ $sortDir === 'asc' ? '?' : '?' }}</span>
                                     @endif
                                 </a>
                             </th>
@@ -102,6 +116,7 @@
                             <th class="px-4 py-3">Payment Gateway Status</th>
                             <th class="px-4 py-3">Gateway Return Status</th>
                             <th class="px-4 py-3">Gateway Reason</th>
+                            <th class="px-4 py-3">Latest Bill Code</th>
                             <th class="px-4 py-3">
                                 @php
                                     $nextTsDir = $sortBy === 'timestamp' && $sortDir === 'asc' ? 'desc' : 'asc';
@@ -109,15 +124,16 @@
                                 <a href="{{ route('system.payment-funnel-monitor.index', array_merge(request()->query(), ['sort_by' => 'timestamp', 'sort_dir' => $nextTsDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
                                     Timestamp (GMT+8)
                                     @if ($sortBy === 'timestamp')
-                                        <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                        <span>{{ $sortDir === 'asc' ? '?' : '?' }}</span>
                                     @endif
                                 </a>
                             </th>
+                            <th class="px-4 py-3 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800" id="gateway-monitor-table-body">
                         @forelse ($rows as $row)
-                            <tr>
+                            <tr data-row-transaction-id="{{ $row['latest_transaction_id'] ?? '' }}" data-row-gateway-status="{{ $row['gateway_status'] }}">
                                 <td class="px-4 py-3 font-semibold text-zinc-900">
                                     <a
                                         href="{{ route('teacher.records.family', ['familyCode' => $row['family_code'], 'payment_status' => 'all']) }}"
@@ -129,7 +145,7 @@
                                 <td class="px-4 py-3">{{ $row['parent_name'] }}</td>
                                 <td class="px-4 py-3">{{ $row['phone_number'] }}</td>
                                 <td class="px-4 py-3">{{ $row['billing_year'] }}</td>
-                                <td class="px-4 py-3">
+                                <td class="px-4 py-3 js-gateway-status-cell">
                                     @php
                                         $status = $row['gateway_status'];
                                     @endphp
@@ -143,13 +159,32 @@
                                         <span class="inline-flex rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">Not Started</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3">{{ $row['return_status'] }}</td>
-                                <td class="px-4 py-3">{{ $row['gateway_reason'] }}</td>
-                                <td class="px-4 py-3">{{ $row['timestamp'] ? $row['timestamp']->format('d M Y H:i:s') : '-' }}</td>
+                                <td class="px-4 py-3 js-return-status-cell">{{ $row['return_status'] }}</td>
+                                <td class="px-4 py-3 js-gateway-reason-cell">{{ $row['gateway_reason'] }}</td>
+                                <td class="px-4 py-3 js-latest-bill-code-cell font-mono text-xs">{{ $row['latest_bill_code'] }}</td>
+                                <td class="px-4 py-3 js-timestamp-cell">{{ $row['timestamp'] ? $row['timestamp']->format('d M Y H:i:s') : '-' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    @if ($row['can_check_gateway'] && $row['latest_transaction_id'])
+                                        <form method="POST" action="{{ route('system.payment-funnel-monitor.check-gateway') }}" class="js-gateway-check-form inline-flex items-center">
+                                            @csrf
+                                            <input type="hidden" name="transaction_id" value="{{ $row['latest_transaction_id'] }}">
+                                            <input type="hidden" name="q" value="{{ $search }}">
+                                            <input type="hidden" name="billing_year" value="{{ $billingYear }}">
+                                            <input type="hidden" name="gateway_status" value="{{ $statusFilter }}">
+                                            <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                                            <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
+                                            <button type="submit" class="inline-flex items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                                                Check with Gateway
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span class="text-xs text-zinc-400">-</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr>
-                                <td colspan="8" class="px-4 py-10 text-center text-zinc-500">No records found for this filter.</td>
+                            <tr id="gateway-empty-row">
+                                <td colspan="10" class="px-4 py-10 text-center text-zinc-500">No records found for this filter.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -157,4 +192,134 @@
             </div>
         </section>
     </div>
+
+    <script>
+        (function () {
+            const forms = Array.from(document.querySelectorAll('.js-gateway-check-form'));
+            if (!forms.length) {
+                return;
+            }
+
+            const feedback = document.getElementById('gateway-check-feedback');
+            const tableBody = document.getElementById('gateway-monitor-table-body');
+            const currentFilter = @json($statusFilter);
+
+            const badgeHtml = (status) => {
+                if (status === 'success') {
+                    return '<span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Success</span>';
+                }
+                if (status === 'failed') {
+                    return '<span class="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">Failed</span>';
+                }
+                if (status === 'pending') {
+                    return '<span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Pending</span>';
+                }
+
+                return '<span class="inline-flex rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">Not Started</span>';
+            };
+
+            const showMessage = (ok, message) => {
+                if (!feedback) {
+                    return;
+                }
+
+                feedback.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'border-rose-200', 'bg-rose-50', 'text-rose-700');
+                feedback.classList.add(ok ? 'border-emerald-200' : 'border-rose-200');
+                feedback.classList.add(ok ? 'bg-emerald-50' : 'bg-rose-50');
+                feedback.classList.add(ok ? 'text-emerald-700' : 'text-rose-700');
+                feedback.textContent = message;
+            };
+
+            const ensureEmptyRow = () => {
+                if (!tableBody) {
+                    return;
+                }
+
+                const hasDataRows = Array.from(tableBody.querySelectorAll('tr')).some((row) => !row.id || row.id !== 'gateway-empty-row');
+                if (hasDataRows) {
+                    return;
+                }
+
+                const emptyRow = document.createElement('tr');
+                emptyRow.id = 'gateway-empty-row';
+                emptyRow.innerHTML = '<td colspan="10" class="px-4 py-10 text-center text-zinc-500">No records found for this filter.</td>';
+                tableBody.appendChild(emptyRow);
+            };
+
+            forms.forEach((form) => {
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+
+                    const button = form.querySelector('button[type="submit"]');
+                    if (!button) {
+                        return;
+                    }
+
+                    const originalLabel = button.textContent;
+                    button.disabled = true;
+                    button.textContent = 'Checking...';
+
+                    const row = form.closest('tr');
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            },
+                            body: new FormData(form),
+                        });
+
+                        const data = await response.json();
+                        const ok = Boolean(data?.ok);
+                        const message = String(data?.message || 'Gateway check completed.');
+                        const payload = data?.payload || null;
+
+                        showMessage(ok, message);
+
+                        if (ok && payload && row) {
+                            row.dataset.rowGatewayStatus = String(payload.gateway_status || 'pending');
+
+                            const statusCell = row.querySelector('.js-gateway-status-cell');
+                            if (statusCell) {
+                                statusCell.innerHTML = badgeHtml(String(payload.gateway_status || 'pending'));
+                            }
+
+                            const returnStatusCell = row.querySelector('.js-return-status-cell');
+                            if (returnStatusCell) {
+                                returnStatusCell.textContent = String(payload.return_status || '-');
+                            }
+
+                            const reasonCell = row.querySelector('.js-gateway-reason-cell');
+                            if (reasonCell) {
+                                reasonCell.textContent = String(payload.gateway_reason || '-');
+                            }
+
+                            const billCodeCell = row.querySelector('.js-latest-bill-code-cell');
+                            if (billCodeCell) {
+                                billCodeCell.textContent = String(payload.latest_bill_code || '-');
+                            }
+
+                            const timestampCell = row.querySelector('.js-timestamp-cell');
+                            if (timestampCell) {
+                                timestampCell.textContent = String(payload.timestamp || '-');
+                            }
+
+                            if (currentFilter === 'pending' && String(payload.gateway_status || '') !== 'pending') {
+                                row.remove();
+                                ensureEmptyRow();
+                            }
+                        }
+                    } catch (error) {
+                        showMessage(false, 'Gateway check failed due to network/server error.');
+                    } finally {
+                        button.disabled = false;
+                        button.textContent = originalLabel;
+                    }
+                });
+            });
+        }());
+    </script>
 </x-layouts::app>
