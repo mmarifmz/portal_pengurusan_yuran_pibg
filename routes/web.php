@@ -16,6 +16,7 @@ use App\Http\Controllers\TeacherUserManagementController;
 use App\Http\Controllers\TeacherFamilyLoginMonitorController;
 use App\Http\Controllers\TeacherFinanceAccountingController;
 use App\Http\Controllers\TeacherClassProgressController;
+use App\Http\Controllers\TeacherSocialTagController;
 use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\VisitorLogController;
@@ -170,6 +171,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/class-progress', [TeacherClassProgressController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress');
+    Route::get('/teacher/social-tags', [TeacherSocialTagController::class, 'index'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.social-tags.index');
     Route::get('/teacher/finance-accounting/export', [TeacherFinanceAccountingController::class, 'export'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.finance-accounting.export');

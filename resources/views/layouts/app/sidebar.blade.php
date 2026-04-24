@@ -88,6 +88,9 @@
                         <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
                             {{ __('Class Progress') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="tag" :href="route('teacher.social-tags.index')" :current="request()->routeIs('teacher.social-tags.*')" wire:navigate>
+                            {{ __('Social Tags') }}
+                        </flux:sidebar.item>
                     @endif
 
                     @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))

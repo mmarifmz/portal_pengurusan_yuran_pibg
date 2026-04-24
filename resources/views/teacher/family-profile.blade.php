@@ -195,7 +195,12 @@
 
                 @if (! empty($socialTagLabels))
                     <div class="mt-4 rounded-xl border border-zinc-200 bg-white p-3">
-                        <h4 class="text-xs font-semibold uppercase tracking-wide text-zinc-600">Student Social Tags</h4>
+                        <div class="flex items-center justify-between gap-2">
+                            <h4 class="text-xs font-semibold uppercase tracking-wide text-zinc-600">Student Social Tags</h4>
+                            <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                                Open Tag Count Page
+                            </a>
+                        </div>
                         <p class="mt-1 text-[11px] text-zinc-500">Super admin boleh ubah label tag dari menu Portal SEO & Branding.</p>
                         @error('tags')
                             <p class="mt-2 text-[11px] font-medium text-rose-600">{{ $message }}</p>
