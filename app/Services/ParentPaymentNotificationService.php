@@ -27,30 +27,8 @@ class ParentPaymentNotificationService
             throw new RuntimeException('No parent phone number available for receipt notification.');
         }
 
-        $greeting = $parentName ? "Assalamualaikum {$parentName}," : 'Assalamualaikum,';
-
-        $lines = [
-            $greeting,
-            '',
-            $transaction->status === 'success'
-                ? 'Pembayaran PIBG anda telah diterima.'
-                : 'Maklumat pembayaran PIBG anda telah dikemaskini.',
-            'Kod keluarga: '.$transaction->familyBilling->family_code,
-            'Jumlah: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_display,
-        ];
-
-        if ($transaction->provider_invoice_no) {
-            $lines[] = 'Invoice: '.$transaction->provider_invoice_no;
-        }
-
-        if ($transaction->paid_at) {
-            $lines[] = 'Tarikh bayar: '.$transaction->paid_at->format('d/m/Y h:i A');
-        }
-
-        $lines[] = 'Resit web: '.$this->receiptUrl($transaction);
-
-        $delivery = $this->whatsAppTacSender->sendMessage($targetPhone, implode("\n", $lines));
+        $message = $this->buildPaymentReceiptMessage($transaction, $parentName);
+        $delivery = $this->whatsAppTacSender->sendMessage($targetPhone, $message);
 
         $transaction->forceFill([
             'receipt_message_id' => $delivery['message_id'] ?? null,
@@ -58,6 +36,90 @@ class ParentPaymentNotificationService
         ])->save();
 
         return $delivery;
+    }
+
+    private function buildPaymentReceiptMessage(FamilyPaymentTransaction $transaction, ?string $parentName = null): string
+    {
+        $receiptUrl = $this->receiptUrl($transaction);
+        $maxChars = max(200, (int) config('services.parent_receipt_whatsapp_max_chars', 1000));
+        $familyCode = (string) ($transaction->familyBilling->family_code ?? '-');
+        $amountText = 'RM'.number_format((float) $transaction->amount, 2);
+        $orderIdText = (string) $transaction->external_order_display;
+        $invoiceText = trim((string) $transaction->provider_invoice_no);
+        $paidAtText = $transaction->paid_at_for_display?->format('d/m/Y, h:i A');
+
+        $headerLine = trim((string) $parentName) !== ''
+            ? 'Assalamualaikum dan Salam Sejahtera, '.trim((string) $parentName)
+            : 'Assalamualaikum dan Salam Sejahtera,';
+
+        $fullLines = [
+            $headerLine,
+            '',
+            'Pembayaran PIBG anda telah berjaya diterima. Terima kasih atas komitmen anda 😊',
+            '',
+            'Berikut adalah maklumat pembayaran:',
+            '',
+            '• Kod Keluarga: '.$familyCode,
+            '• Jumlah: '.$amountText,
+            '• Order ID: '.$orderIdText,
+        ];
+
+        if ($invoiceText !== '') {
+            $fullLines[] = '• Invoice: '.$invoiceText;
+        }
+
+        if ($paidAtText) {
+            $fullLines[] = '• Tarikh Bayar: '.$paidAtText;
+        }
+
+        $fullLines = array_merge($fullLines, [
+            '',
+            'Resit Web:',
+            $receiptUrl,
+            '',
+            '📱 Sila login ke dashboard ibu bapa menggunakan nombor telefon ini.',
+            'Di dalam dashboard, anda boleh:',
+            '',
+            '• Menyemak takwim sekolah',
+            '• Melihat resit pembayaran tahun lepas dan tahun semasa',
+            '• Membuat sumbangan tambahan kepada PIBG SSP',
+            '',
+            'Sekali lagi, terima kasih atas sokongan anda kepada PIBG SSP.',
+        ]);
+
+        $fullMessage = implode("\n", $fullLines);
+        if (mb_strlen($fullMessage) <= $maxChars) {
+            return $fullMessage;
+        }
+
+        $compactLines = [
+            'Assalamualaikum dan Salam Sejahtera,',
+            'Pembayaran PIBG anda telah berjaya diterima.',
+            'Kod Keluarga: '.$familyCode,
+            'Jumlah: '.$amountText,
+            'Order ID: '.$orderIdText,
+        ];
+
+        if ($invoiceText !== '') {
+            $compactLines[] = 'Invoice: '.$invoiceText;
+        }
+
+        if ($paidAtText) {
+            $compactLines[] = 'Tarikh Bayar: '.$paidAtText;
+        }
+
+        $compactLines[] = 'Resit Web: '.$receiptUrl;
+        $compactLines[] = 'Terima kasih atas sokongan anda kepada PIBG SSP.';
+
+        $compactMessage = implode("\n", $compactLines);
+        if (mb_strlen($compactMessage) <= $maxChars) {
+            return $compactMessage;
+        }
+
+        $suffix = '...';
+        $trimLength = max(1, $maxChars - mb_strlen($suffix));
+
+        return mb_substr($compactMessage, 0, $trimLength).$suffix;
     }
 
     public function receiptUrl(FamilyPaymentTransaction $transaction): string

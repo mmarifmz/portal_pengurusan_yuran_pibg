@@ -70,6 +70,8 @@ return [
     ))),
 
     'parent_tester_amount' => (float) env('PARENT_TESTER_AMOUNT', 1),
+    'parent_tac_resend_cooldown_seconds' => (int) env('PARENT_TAC_RESEND_COOLDOWN_SECONDS', 90),
+    'parent_receipt_whatsapp_max_chars' => (int) env('PARENT_RECEIPT_WHATSAPP_MAX_CHARS', 1000),
 
     'teacher_whatsapp_phone' => env('TEACHER_WHATSAPP_PHONE', '60123103205'),
 

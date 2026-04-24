@@ -128,6 +128,27 @@ class ParentOtpAuthController extends Controller
             );
         }
 
+        $cooldownSeconds = max(0, (int) config('services.parent_tac_resend_cooldown_seconds', 90));
+        if ($cooldownSeconds > 0) {
+            $latestActiveOtp = ParentLoginOtp::query()
+                ->where('phone', $phone)
+                ->whereNull('used_at')
+                ->where('expires_at', '>=', now())
+                ->latest('id')
+                ->first();
+
+            if ($latestActiveOtp?->created_at) {
+                $secondsSinceLastRequest = (int) $latestActiveOtp->created_at->diffInSeconds(now(), true);
+                if ($secondsSinceLastRequest < $cooldownSeconds) {
+                    $remainingSeconds = max(1, $cooldownSeconds - $secondsSinceLastRequest);
+
+                    return back()->withErrors([
+                        'phone' => "TAC baru sahaja dihantar. Sila tunggu {$remainingSeconds} saat sebelum minta TAC semula.",
+                    ])->withInput();
+                }
+            }
+        }
+
         ParentLoginOtp::query()
             ->where('phone', $phone)
             ->whereNull('used_at')

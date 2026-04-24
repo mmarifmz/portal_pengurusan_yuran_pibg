@@ -3,6 +3,7 @@
 use App\Models\FamilyBilling;
 use App\Models\FamilyBillingPhone;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
 
@@ -51,6 +52,62 @@ it('logs parent in using valid tac', function () {
 
     $this->assertAuthenticated();
     expect(auth()->user()->role)->toBe('parent');
+});
+
+it('blocks repeated tac request within cooldown while previous tac is still active', function () {
+    User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0191112222',
+        'email' => 'parent.cooldown.block@example.test',
+    ]);
+
+    $first = $this->post(route('parent.login.request'), [
+        'phone' => '0191112222',
+    ]);
+    $first->assertRedirect(route('parent.login.verify.form'));
+
+    $second = $this->from(route('parent.login.form'))->post(route('parent.login.request'), [
+        'phone' => '0191112222',
+    ]);
+
+    $second->assertRedirect(route('parent.login.form'));
+    $second->assertSessionHasErrors(['phone']);
+    $this->assertDatabaseCount('parent_login_otps', 1);
+    $this->assertDatabaseHas('parent_login_otps', [
+        'phone' => '0191112222',
+        'used_at' => null,
+    ]);
+});
+
+it('allows tac resend after cooldown and invalidates previous active tac', function () {
+    User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0193334444',
+        'email' => 'parent.cooldown.allow@example.test',
+    ]);
+
+    $first = $this->post(route('parent.login.request'), [
+        'phone' => '0193334444',
+    ]);
+    $first->assertRedirect(route('parent.login.verify.form'));
+
+    ParentLoginOtp::query()
+        ->where('phone', '0193334444')
+        ->whereNull('used_at')
+        ->update(['created_at' => now()->subSeconds(120)]);
+
+    $second = $this->post(route('parent.login.request'), [
+        'phone' => '0193334444',
+    ]);
+
+    $second->assertStatus(302);
+    $second->assertSessionHasNoErrors();
+    $second->assertSessionHas('parent_otp_phone', '0193334444');
+    $this->assertDatabaseCount('parent_login_otps', 2);
+    expect(ParentLoginOtp::query()
+        ->where('phone', '0193334444')
+        ->whereNull('used_at')
+        ->count())->toBe(1);
 });
 
 it('skips tac and logs parent in directly after first successful activation', function () {
