@@ -248,132 +248,187 @@
     @once
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                const barCanvas = document.getElementById('collectionByClassChart');
-                if (barCanvas) {
-                    new Chart(barCanvas, {
-                        type: 'bar',
-                        data: {
-                            labels: @json($classChartLabels),
-                            datasets: [
-                                {
-                                    label: 'Yuran (RM)',
-                                    data: @json($classChartYuran ?? []),
-                                    backgroundColor: 'rgba(16, 185, 129, 0.75)',
-                                    borderColor: 'rgba(16, 185, 129, 1)',
-                                    borderWidth: 1,
-                                    borderRadius: 6,
-                                },
-                                {
-                                    label: 'Sumbangan (RM)',
-                                    data: @json($classChartSumbangan ?? []),
-                                    backgroundColor: 'rgba(245, 158, 11, 0.75)',
-                                    borderColor: 'rgba(245, 158, 11, 1)',
-                                    borderWidth: 1,
-                                    borderRadius: 6,
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: { intersect: false, mode: 'index' },
-                            plugins: { legend: { position: 'top' } },
-                            scales: {
-                                y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
+            (function () {
+                const dashboardState = (window.__portalDashboardCharts = window.__portalDashboardCharts || {
+                    bar: null,
+                    pie: null,
+                    line: null,
+                    initialized: false,
+                });
+
+                const destroyChart = (key) => {
+                    const chart = dashboardState[key] || null;
+                    if (chart && typeof chart.destroy === 'function') {
+                        chart.destroy();
+                    }
+                    dashboardState[key] = null;
+                };
+
+                const initDashboardCharts = () => {
+                    if (typeof Chart === 'undefined') {
+                        return;
+                    }
+
+                    const barCanvas = document.getElementById('collectionByClassChart');
+                    if (barCanvas) {
+                        destroyChart('bar');
+                        dashboardState.bar = new Chart(barCanvas, {
+                            type: 'bar',
+                            data: {
+                                labels: @json($classChartLabels),
+                                datasets: [
+                                    {
+                                        label: 'Yuran (RM)',
+                                        data: @json($classChartYuran ?? []),
+                                        backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                                        borderColor: 'rgba(16, 185, 129, 1)',
+                                        borderWidth: 1,
+                                        borderRadius: 6,
+                                    },
+                                    {
+                                        label: 'Sumbangan (RM)',
+                                        data: @json($classChartSumbangan ?? []),
+                                        backgroundColor: 'rgba(245, 158, 11, 0.75)',
+                                        borderColor: 'rgba(245, 158, 11, 1)',
+                                        borderWidth: 1,
+                                        borderRadius: 6,
+                                    },
+                                ],
                             },
-                        },
-                    });
-                }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { intersect: false, mode: 'index' },
+                                plugins: { legend: { position: 'top' } },
+                                scales: {
+                                    y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
+                                },
+                            },
+                        });
+                    } else {
+                        destroyChart('bar');
+                    }
 
-                const pieCanvas = document.getElementById('familyStatusPieChart');
-                if (pieCanvas) {
-                    const familyStatusClassFilter = document.getElementById('familyStatusClassFilter');
-                    const familyStatusSummary = document.getElementById('familyStatusSummary');
-                    const familyStatusByYearClass = @json($familyStatusByYearClass);
-                    const selectedStatusFilterYear = @json($selectedStatusFilterYear);
+                    const pieCanvas = document.getElementById('familyStatusPieChart');
+                    if (pieCanvas) {
+                        destroyChart('pie');
 
-                    const pieChart = new Chart(pieCanvas, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Paid', 'Unpaid'],
-                            datasets: [{
-                                data: [0, 0],
-                                backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(244, 114, 182, 0.8)'],
-                            }],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'bottom' } },
-                        },
-                    });
+                        const familyStatusClassFilter = document.getElementById('familyStatusClassFilter');
+                        const familyStatusSummary = document.getElementById('familyStatusSummary');
+                        const familyStatusByYearClass = @json($familyStatusByYearClass);
+                        const selectedStatusFilterYear = @json($selectedStatusFilterYear);
 
-                    const updateFamilyStatusPie = () => {
-                        const selectedYear = selectedStatusFilterYear || '';
-                        const selectedClass = familyStatusClassFilter?.value || 'All';
-                        const yearData = familyStatusByYearClass[selectedYear] || {};
-                        const classData = yearData[selectedClass] || { paid: 0, unpaid: 0 };
-                        const paid = Number(classData.paid || 0);
-                        const unpaid = Number(classData.unpaid || 0);
-                        const total = paid + unpaid;
+                        dashboardState.pie = new Chart(pieCanvas, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Paid', 'Unpaid'],
+                                datasets: [{
+                                    data: [0, 0],
+                                    backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(244, 114, 182, 0.8)'],
+                                }],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'bottom' } },
+                            },
+                        });
 
-                        pieChart.data.datasets[0].data = [paid, unpaid];
-                        pieChart.update();
+                        const updateFamilyStatusPie = () => {
+                            const selectedYear = selectedStatusFilterYear || '';
+                            const selectedClass = familyStatusClassFilter?.value || 'All';
+                            const yearData = familyStatusByYearClass[selectedYear] || {};
+                            const classData = yearData[selectedClass] || { paid: 0, unpaid: 0 };
+                            const paid = Number(classData.paid || 0);
+                            const unpaid = Number(classData.unpaid || 0);
+                            const total = paid + unpaid;
 
-                        if (familyStatusSummary) {
-                            familyStatusSummary.textContent = total > 0
-                                ? `${selectedYear} Â· ${selectedClass} Â· ${paid} paid / ${unpaid} unpaid families`
-                                : `${selectedYear} Â· ${selectedClass} Â· Tiada rekod keluarga`;
+                            if (!dashboardState.pie) {
+                                return;
+                            }
+
+                            dashboardState.pie.data.datasets[0].data = [paid, unpaid];
+                            dashboardState.pie.update();
+
+                            if (familyStatusSummary) {
+                                familyStatusSummary.textContent = total > 0
+                                    ? `${selectedYear} · ${selectedClass} · ${paid} paid / ${unpaid} unpaid families`
+                                    : `${selectedYear} · ${selectedClass} · Tiada rekod keluarga`;
+                            }
+                        };
+
+                        if (familyStatusClassFilter) {
+                            familyStatusClassFilter.onchange = updateFamilyStatusPie;
                         }
-                    };
 
-                    familyStatusClassFilter?.addEventListener('change', updateFamilyStatusPie);
-                    updateFamilyStatusPie();
-                }
+                        updateFamilyStatusPie();
+                    } else {
+                        destroyChart('pie');
+                    }
 
-                const lineCanvas = document.getElementById('dailyCollectionChart');
-                if (lineCanvas) {
-                    new Chart(lineCanvas, {
-                        type: 'line',
-                        data: {
-                            labels: @json($dailyTrendLabels),
-                            datasets: [{
-                                label: 'Daily collection (RM)',
-                                data: @json($dailyTrendValues),
-                                borderColor: 'rgba(59, 130, 246, 1)',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                tension: 0.35,
-                                pointRadius: 3,
-                                pointHoverRadius: 5,
-                            }],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
+                    const lineCanvas = document.getElementById('dailyCollectionChart');
+                    if (lineCanvas) {
+                        destroyChart('line');
+                        dashboardState.line = new Chart(lineCanvas, {
+                            type: 'line',
+                            data: {
+                                labels: @json($dailyTrendLabels),
+                                datasets: [{
+                                    label: 'Daily collection (RM)',
+                                    data: @json($dailyTrendValues),
+                                    borderColor: 'rgba(59, 130, 246, 1)',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    tension: 0.35,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                }],
                             },
-                        },
-                    });
-                }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
+                                },
+                            },
+                        });
+                    } else {
+                        destroyChart('line');
+                    }
 
-                const parentMessageInput = document.getElementById('parentMessageInput');
-                const parentMessageCounter = document.getElementById('parentMessageCounter');
+                    const parentMessageInput = document.getElementById('parentMessageInput');
+                    const parentMessageCounter = document.getElementById('parentMessageCounter');
 
-                if (parentMessageInput && parentMessageCounter) {
-                    const maxLength = Number(parentMessageInput.getAttribute('maxlength') || 1000);
-                    const updateParentMessageCounter = () => {
-                        const used = parentMessageInput.value.length;
-                        const left = Math.max(0, maxLength - used);
-                        parentMessageCounter.textContent = `${left} aksara lagi (had WhatsApp)`;
-                        parentMessageCounter.classList.toggle('text-rose-600', left <= 50);
-                    };
+                    if (parentMessageInput && parentMessageCounter) {
+                        const maxLength = Number(parentMessageInput.getAttribute('maxlength') || 1000);
+                        const updateParentMessageCounter = () => {
+                            const used = parentMessageInput.value.length;
+                            const left = Math.max(0, maxLength - used);
+                            parentMessageCounter.textContent = `${left} aksara lagi (had WhatsApp)`;
+                            parentMessageCounter.classList.toggle('text-rose-600', left <= 50);
+                        };
 
-                    parentMessageInput.addEventListener('input', updateParentMessageCounter);
-                    updateParentMessageCounter();
-                }
-            });
+                        parentMessageInput.oninput = updateParentMessageCounter;
+                        updateParentMessageCounter();
+                    }
+                };
+
+                const initDashboardOnce = () => {
+                    initDashboardCharts();
+
+                    if (dashboardState.initialized) {
+                        return;
+                    }
+
+                    dashboardState.initialized = true;
+                    document.addEventListener('livewire:navigated', initDashboardCharts);
+                    window.addEventListener('pageshow', initDashboardCharts);
+                    window.setTimeout(initDashboardCharts, 50);
+                    window.setTimeout(initDashboardCharts, 250);
+                };
+
+                document.addEventListener('DOMContentLoaded', initDashboardOnce);
+                initDashboardOnce();
+            })();
         </script>
     @endonce
 </x-layouts::app>

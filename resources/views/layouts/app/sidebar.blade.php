@@ -85,6 +85,9 @@
                         <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
                             {{ __('Payment Funnel') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
+                            {{ __('Class Progress') }}
+                        </flux:sidebar.item>
                     @endif
 
                     @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
