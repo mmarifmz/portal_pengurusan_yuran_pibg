@@ -20,6 +20,8 @@ class PublicParentSearchController extends Controller
         $hasSearched = false;
         $totalFamilyResults = 0;
         $visibleLimit = max(20, min((int) $request->integer('visible_limit', 20), 200));
+        $contactFallbackMode = false;
+        $searchedContactPhone = '';
 
         if ($request->filled('student_keyword') || $request->filled('class_name') || $request->filled('contact')) {
             $validated = $request->validate([
@@ -34,36 +36,68 @@ class PublicParentSearchController extends Controller
             $contactInput = trim((string) ($validated['contact'] ?? ''));
             $normalizedContact = ParentPhone::normalizeForMatch($contactInput);
             $contactVariants = $contactInput !== '' ? ParentPhone::variants($contactInput) : [];
+            $searchedContactPhone = ParentPhone::sanitizeInput($contactInput);
 
-            $students = Student::query()
-                ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
-                    $query->where(function ($nested) use ($keyword) {
-                        $nested->where('full_name', 'like', "%{$keyword}%")
-                            ->orWhere('student_no', 'like', "%{$keyword}%")
-                            ->orWhere('class_name', 'like', "%{$keyword}%");
-                    });
-                })
-                ->when($validated['class_name'] ?? null, function ($query, $className) {
-                    $query->where('class_name', $className);
-                })
-                ->when($contactInput !== '', function ($query) use ($contactVariants, $normalizedContact): void {
-                    $query->where(function ($nested) use ($contactVariants, $normalizedContact): void {
-                        if ($contactVariants !== []) {
-                            $nested->whereIn('parent_phone', $contactVariants);
-                        }
+            $buildStudentQuery = function () use ($validated, $contactInput, $contactVariants, $normalizedContact) {
+                return Student::query()
+                    ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
+                        $query->where(function ($nested) use ($keyword) {
+                            $nested->where('full_name', 'like', "%{$keyword}%")
+                                ->orWhere('student_no', 'like', "%{$keyword}%")
+                                ->orWhere('class_name', 'like', "%{$keyword}%");
+                        });
+                    })
+                    ->when($validated['class_name'] ?? null, function ($query, $className) {
+                        $query->where('class_name', $className);
+                    })
+                    ->when($contactInput !== '', function ($query) use ($contactVariants, $normalizedContact): void {
+                        $query->where(function ($nested) use ($contactVariants, $normalizedContact): void {
+                            if ($contactVariants !== []) {
+                                $nested->whereIn('parent_phone', $contactVariants);
+                            }
 
-                        if ($normalizedContact !== '') {
-                            $nested->orWhereIn('family_code', FamilyBilling::query()
-                                ->whereHas('phones', fn ($phoneQuery) => $phoneQuery->where('normalized_phone', $normalizedContact))
-                                ->select('family_code'));
-                        }
+                            if ($normalizedContact !== '') {
+                                $nested->orWhereIn('family_code', FamilyBilling::query()
+                                    ->whereHas('phones', fn ($phoneQuery) => $phoneQuery->where('normalized_phone', $normalizedContact))
+                                    ->select('family_code'));
+                            }
+                        });
                     });
-                })
+            };
+
+            $students = $buildStudentQuery()
                 ->orderByRaw('CASE WHEN family_code IS NULL OR family_code = "" THEN 1 ELSE 0 END')
                 ->orderBy('family_code')
                 ->orderBy('full_name')
                 ->take(300)
                 ->get();
+
+            // If phone has never been registered, do not block search results by name/class.
+            // Fallback allows parent to continue selecting child and registering the new phone.
+            $hasNameOrClassFilter = filled($validated['student_keyword'] ?? null)
+                || filled($validated['class_name'] ?? null);
+            if ($students->isEmpty() && $contactInput !== '' && $hasNameOrClassFilter) {
+                $students = Student::query()
+                    ->when($validated['student_keyword'] ?? null, function ($query, $keyword) {
+                        $query->where(function ($nested) use ($keyword) {
+                            $nested->where('full_name', 'like', "%{$keyword}%")
+                                ->orWhere('student_no', 'like', "%{$keyword}%")
+                                ->orWhere('class_name', 'like', "%{$keyword}%");
+                        });
+                    })
+                    ->when($validated['class_name'] ?? null, function ($query, $className) {
+                        $query->where('class_name', $className);
+                    })
+                    ->orderByRaw('CASE WHEN family_code IS NULL OR family_code = "" THEN 1 ELSE 0 END')
+                    ->orderBy('family_code')
+                    ->orderBy('full_name')
+                    ->take(300)
+                    ->get();
+
+                if ($students->isNotEmpty()) {
+                    $contactFallbackMode = true;
+                }
+            }
 
             $searchBillings = FamilyBilling::query()
                 ->with(['phones' => fn ($query) => $query->orderBy('id')])
@@ -76,7 +110,7 @@ class PublicParentSearchController extends Controller
 
             $familyResults = $students
                 ->groupBy(fn (Student $student) => $student->family_code ?: 'NO_FAMILY::'.$student->id)
-                ->map(function (Collection $group, string $groupKey) use ($searchBillings): array {
+                ->map(function (Collection $group, string $groupKey) use ($searchBillings, $contactFallbackMode, $searchedContactPhone): array {
                     /** @var Student $primaryStudent */
                     $primaryStudent = $group->first();
                     $familyCode = $groupKey !== '' && ! str_starts_with($groupKey, 'NO_FAMILY::') ? $groupKey : null;
@@ -90,12 +124,15 @@ class PublicParentSearchController extends Controller
                             ->values()
                         : collect();
                     $primaryRegisteredPhone = $registeredPhones->first();
+                    $actionPhone = $contactFallbackMode && $searchedContactPhone !== ''
+                        ? $searchedContactPhone
+                        : $primaryRegisteredPhone;
 
                     return [
                         'group_key' => $groupKey,
                         'family_code' => $familyCode,
                         'billing' => $billing,
-                        'parent_phone' => $primaryRegisteredPhone,
+                        'parent_phone' => $actionPhone,
                         'masked_parent_phone' => $this->maskParentPhonePrefix(
                             $primaryRegisteredPhone
                         ),
@@ -141,6 +178,8 @@ class PublicParentSearchController extends Controller
             'totalFamilyResults' => $totalFamilyResults,
             'visibleLimit' => $visibleLimit,
             'availableClasses' => $availableClasses,
+            'contactFallbackMode' => $contactFallbackMode,
+            'searchedContactPhone' => $searchedContactPhone,
         ]);
     }
 

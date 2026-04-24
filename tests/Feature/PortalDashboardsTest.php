@@ -80,3 +80,32 @@ test('parent dashboard lists children and family billing for matching parent pho
     $response->assertSee('Nur Aina');
     $response->assertSee('FAM-T1');
 });
+
+test('public search falls back to name/class when contact phone is new and unregistered', function () {
+    FamilyBilling::query()->create([
+        'family_code' => 'FAM-NEWPHONE',
+        'billing_year' => now()->year,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'pending',
+    ]);
+
+    Student::query()->create([
+        'student_no' => '2B-1234',
+        'family_code' => 'FAM-NEWPHONE',
+        'full_name' => 'AYRA SOFEA',
+        'class_name' => '2 Bestari',
+        'parent_name' => 'Puan Laila',
+        'parent_phone' => '0198881111',
+        'status' => 'active',
+    ]);
+
+    $response = $this->get(route('parent.search', [
+        'student_keyword' => 'ayra',
+        'contact' => '0146364001',
+    ]));
+
+    $response->assertOk();
+    $response->assertSee('FAM-NEWPHONE');
+    $response->assertSee('belum berdaftar');
+});

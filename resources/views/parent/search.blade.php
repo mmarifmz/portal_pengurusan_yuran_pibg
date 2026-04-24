@@ -209,6 +209,12 @@
                         <p class="mt-1 text-sm text-zinc-600">
                             {{ number_format($totalFamilyResults) }} kumpulan keluarga ditemui. Paparan bermula dengan 20 kumpulan pertama.
                         </p>
+                        @if (($contactFallbackMode ?? false) && filled($searchedContactPhone ?? ''))
+                            <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                                Nombor telefon <span class="font-semibold">{{ $searchedContactPhone }}</span> belum berdaftar.
+                                Carian dipadankan ikut nama/kelas dahulu. Sila pilih anak untuk teruskan proses pendaftaran nombor & TAC.
+                            </p>
+                        @endif
                     </div>
                     <div class="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                         Dipaparkan {{ number_format($familyResults->count()) }} / {{ number_format($totalFamilyResults) }}
