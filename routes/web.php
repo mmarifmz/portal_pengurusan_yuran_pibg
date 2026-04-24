@@ -259,6 +259,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-testers/whatsapp-test', [PaymentTesterUserController::class, 'sendWhatsappTest'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.whatsapp-test');
+    Route::post('/system/payment-testers/payment-success-whatsapp-test', [PaymentTesterUserController::class, 'sendPaymentSuccessWhatsappTest'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.payment-success-whatsapp-test');
     Route::post('/system/payment-testers/parent-phone/reset', [PaymentTesterUserController::class, 'resetParentPhone'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.parent-phone.reset');

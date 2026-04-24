@@ -38,6 +38,13 @@ class ParentPaymentNotificationService
         return $delivery;
     }
 
+    public function buildPaymentReceiptMessagePreview(
+        FamilyPaymentTransaction $transaction,
+        ?string $parentName = null
+    ): string {
+        return $this->buildPaymentReceiptMessage($transaction, $parentName);
+    }
+
     private function buildPaymentReceiptMessage(FamilyPaymentTransaction $transaction, ?string $parentName = null): string
     {
         $receiptUrl = $this->receiptUrl($transaction);

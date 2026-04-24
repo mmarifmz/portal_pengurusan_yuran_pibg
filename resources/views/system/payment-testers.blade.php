@@ -78,6 +78,51 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">Payment Success WhatsApp Simulator (Test Zone)</h2>
+            <p class="mt-1 text-sm text-zinc-500">Pick any successful paid parent record, then simulate the same payment-success WhatsApp message.</p>
+
+            <form method="POST" action="{{ route('system.payment-testers.payment-success-whatsapp-test', ['q' => $keyword]) }}" class="mt-4 grid gap-3 md:grid-cols-3">
+                @csrf
+                <label class="text-sm font-medium text-zinc-700 md:col-span-2">
+                    Successful Payment Record
+                    <select name="transaction_id" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" @disabled($successfulPaymentSamples->isEmpty())>
+                        <option value="">Select successful parent payment</option>
+                        @foreach ($successfulPaymentSamples as $sample)
+                            <option value="{{ $sample->id }}" @selected((string) old('transaction_id') === (string) $sample->id)>
+                                {{ ($sample->familyBilling?->family_code ?? '-') }} | {{ $sample->payer_phone }} | RM{{ number_format((float) $sample->amount, 2) }} | {{ $sample->paid_at_for_display?->format('d M Y H:i') ?? '-' }} | {{ $sample->external_order_display }}
+                            </option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="text-sm font-medium text-zinc-700">
+                    Phone Override (Optional)
+                    <input
+                        name="phone"
+                        type="text"
+                        value="{{ old('phone') }}"
+                        placeholder="Leave empty to use selected parent phone"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <div class="md:col-span-3">
+                    <button
+                        type="submit"
+                        @disabled($successfulPaymentSamples->isEmpty())
+                        class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Send Payment Success WhatsApp (Test)
+                    </button>
+                </div>
+            </form>
+
+            @if ($successfulPaymentSamples->isEmpty())
+                <p class="mt-3 text-xs text-amber-700">No successful paid records available yet for simulation.</p>
+            @else
+                <p class="mt-3 text-xs text-zinc-600">This simulator sends message only for testing and does not update payment totals/statistics.</p>
+            @endif
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Parent Phone Repair Utility</h2>
             <p class="mt-1 text-sm text-zinc-500">Reset a phone for fresh parent testing, or correct mistyped parent phone numbers.</p>
 

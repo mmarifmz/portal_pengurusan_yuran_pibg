@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentTransaction;
 use App\Models\FamilyBillingPhone;
 use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\ParentPaymentNotificationService;
 use App\Services\WhatsAppTacSender;
 use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
@@ -61,6 +63,16 @@ class PaymentTesterUserController extends Controller
                 ->get();
         }
 
+        $successfulPaymentSamples = FamilyPaymentTransaction::query()
+            ->with('familyBilling:id,family_code,billing_year')
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->whereNotNull('payer_phone')
+            ->where('payer_phone', '!=', '')
+            ->latest('paid_at')
+            ->limit(80)
+            ->get();
+
         return view('system.payment-testers', [
             'parentUsers' => $parentUsers,
             'keyword' => $keyword,
@@ -68,6 +80,7 @@ class PaymentTesterUserController extends Controller
             'defaultWhatsappTestPhone' => (string) config('services.treasury_whatsapp_phone', ''),
             'defaultWhatsappTestMessage' => 'Ini mesej ujian WhatsApp dari Portal PIBG.',
             'portalTestInvites' => $portalTestInvites,
+            'successfulPaymentSamples' => $successfulPaymentSamples,
             'portalTestFamilyCode' => 'TEST-DUMMY-PORTAL',
         ]);
     }
@@ -216,6 +229,62 @@ class PaymentTesterUserController extends Controller
         return redirect()
             ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
             ->with('status', 'WhatsApp test sent successfully. Status: '.$statusText.($messageId !== '' ? ' | Message ID: '.$messageId : ''));
+    }
+
+    public function sendPaymentSuccessWhatsappTest(
+        Request $request,
+        ParentPaymentNotificationService $paymentNotificationService,
+        WhatsAppTacSender $whatsAppTacSender
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'transaction_id' => ['required', 'integer'],
+            'phone' => ['nullable', 'string', 'max:25'],
+        ]);
+
+        $transaction = FamilyPaymentTransaction::query()
+            ->with('familyBilling:id,family_code')
+            ->whereKey((int) $validated['transaction_id'])
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->first();
+
+        if (! $transaction) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Selected payment record is not a successful paid transaction.');
+        }
+
+        $targetPhone = trim((string) ($validated['phone'] ?? ''));
+        if ($targetPhone === '') {
+            $targetPhone = trim((string) ($transaction->payer_phone ?? ''));
+        }
+
+        if (ParentPhone::normalizeForMatch($targetPhone) === '') {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Unable to send test payment message: target phone is empty or invalid.');
+        }
+
+        try {
+            $message = $paymentNotificationService->buildPaymentReceiptMessagePreview($transaction);
+            $result = $whatsAppTacSender->sendMessage($targetPhone, $message);
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'Payment success WhatsApp test failed: '.$exception->getMessage());
+        }
+
+        $familyCode = (string) ($transaction->familyBilling?->family_code ?? '-');
+        $statusText = (string) ($result['status'] ?? 'sent');
+
+        return redirect()
+            ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+            ->with('status', sprintf(
+                'Payment success WhatsApp test sent. Family: %s | Phone: %s | Status: %s',
+                $familyCode,
+                $targetPhone,
+                $statusText
+            ));
     }
 
     public function resetParentPhone(Request $request): RedirectResponse
