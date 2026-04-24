@@ -28,6 +28,16 @@ it('sends tac for valid parent phone and stores hashed otp', function () {
     ]);
 });
 
+it('redirects unknown phone to child search flow instead of showing login error', function () {
+    $response = $this->post(route('parent.login.request'), [
+        'phone' => '0146364001',
+    ]);
+
+    $response->assertRedirect(route('parent.search', ['contact' => '0146364001']));
+    $response->assertSessionHas('status');
+    $this->assertDatabaseCount('parent_login_otps', 0);
+});
+
 it('logs parent in using valid tac', function () {
     User::factory()->create([
         'role' => 'parent',

@@ -98,9 +98,9 @@ class ParentOtpAuthController extends Controller
         }
 
         if (! $parent) {
-            return back()->withErrors([
-                'phone' => 'Phone number not found in parent records.',
-            ])->withInput();
+            return redirect()
+                ->route('parent.search', ['contact' => $phone])
+                ->with('status', 'Nombor telefon ini belum dipautkan ke akaun parent. Sila cari nama anak dahulu untuk teruskan ke TAC dan bayaran.');
         }
 
         if ($this->isParentAccessDisabled($parent)) {
