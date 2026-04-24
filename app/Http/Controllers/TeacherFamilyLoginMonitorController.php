@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Support\ParentPhone;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -18,6 +20,11 @@ class TeacherFamilyLoginMonitorController extends Controller
         $paidStatus = (string) $request->string('paid_status', 'all')->toString();
         if (! in_array($paidStatus, ['all', 'paid', 'unpaid'], true)) {
             $paidStatus = 'all';
+        }
+
+        $tacStatus = (string) $request->string('tac_status', 'all')->toString();
+        if (! in_array($tacStatus, ['all', 'stuck', 'completed', 'pending', 'expired', 'no_request'], true)) {
+            $tacStatus = 'all';
         }
 
         $selectedClass = trim((string) $request->string('class_name')->toString());
@@ -79,7 +86,44 @@ class TeacherFamilyLoginMonitorController extends Controller
             ->get()
             ->keyBy('normalized_phone');
 
-        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $familyClasses): array {
+        $otpByNormalizedPhone = ParentLoginOtp::query()
+            ->get(['phone', 'used_at', 'expires_at', 'created_at'])
+            ->reduce(function (Collection $carry, ParentLoginOtp $otp): Collection {
+                $normalizedPhone = ParentPhone::normalizeForMatch((string) $otp->phone);
+
+                if ($normalizedPhone === '') {
+                    return $carry;
+                }
+
+                $aggregate = $carry->get($normalizedPhone, [
+                    'tac_sent_count' => 0,
+                    'tac_verified_count' => 0,
+                    'tac_pending_count' => 0,
+                    'tac_expired_count' => 0,
+                    'latest_tac_sent_at' => null,
+                ]);
+
+                $aggregate['tac_sent_count']++;
+
+                if ($otp->used_at !== null) {
+                    $aggregate['tac_verified_count']++;
+                } elseif ($otp->expires_at !== null && $otp->expires_at->isPast()) {
+                    $aggregate['tac_expired_count']++;
+                } else {
+                    $aggregate['tac_pending_count']++;
+                }
+
+                $createdAt = $otp->created_at;
+                if ($createdAt !== null && (! $aggregate['latest_tac_sent_at'] || $createdAt->gt($aggregate['latest_tac_sent_at']))) {
+                    $aggregate['latest_tac_sent_at'] = $createdAt;
+                }
+
+                $carry->put($normalizedPhone, $aggregate);
+
+                return $carry;
+            }, collect());
+
+        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $otpByNormalizedPhone, $familyClasses): array {
             $phones = $familyBilling->phones
                 ->pluck('phone')
                 ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone))
@@ -95,24 +139,57 @@ class TeacherFamilyLoginMonitorController extends Controller
 
             $loginCount = 0;
             $latestLoginAt = null;
+            $tacSentCount = 0;
+            $tacVerifiedCount = 0;
+            $tacPendingCount = 0;
+            $tacExpiredCount = 0;
+            $latestTacSentAt = null;
 
             foreach ($normalizedPhones as $normalizedPhone) {
-                $aggregate = $loginByPhone->get($normalizedPhone);
+                $loginAggregate = $loginByPhone->get($normalizedPhone);
 
-                if (! $aggregate) {
+                if ($loginAggregate) {
+                    $loginCount += (int) $loginAggregate->login_count;
+
+                    $loginTimestamp = $loginAggregate->latest_login_at;
+                    if ($loginTimestamp) {
+                        $candidate = Carbon::parse((string) $loginTimestamp);
+                        if (! $latestLoginAt || $candidate->gt($latestLoginAt)) {
+                            $latestLoginAt = $candidate;
+                        }
+                    }
+                }
+
+                $otpAggregate = $otpByNormalizedPhone->get($normalizedPhone);
+                if (! $otpAggregate) {
                     continue;
                 }
 
-                $loginCount += (int) $aggregate->login_count;
+                $tacSentCount += (int) ($otpAggregate['tac_sent_count'] ?? 0);
+                $tacVerifiedCount += (int) ($otpAggregate['tac_verified_count'] ?? 0);
+                $tacPendingCount += (int) ($otpAggregate['tac_pending_count'] ?? 0);
+                $tacExpiredCount += (int) ($otpAggregate['tac_expired_count'] ?? 0);
 
-                $candidateTimestamp = $aggregate->latest_login_at;
-                if ($candidateTimestamp) {
-                    $candidate = Carbon::parse((string) $candidateTimestamp);
-                    if (! $latestLoginAt || $candidate->gt($latestLoginAt)) {
-                        $latestLoginAt = $candidate;
-                    }
+                $candidateTacTimestamp = $otpAggregate['latest_tac_sent_at'] ?? null;
+                if ($candidateTacTimestamp && (! $latestTacSentAt || $candidateTacTimestamp->gt($latestTacSentAt))) {
+                    $latestTacSentAt = $candidateTacTimestamp;
                 }
             }
+
+            $tacStatus = 'No TAC request';
+            if ($tacSentCount > 0) {
+                if ($loginCount > 0 || $tacVerifiedCount > 0) {
+                    $tacStatus = 'Completed';
+                } elseif ($tacPendingCount > 0) {
+                    $tacStatus = 'Pending TAC';
+                } elseif ($tacExpiredCount > 0) {
+                    $tacStatus = 'Expired TAC';
+                } else {
+                    $tacStatus = 'TAC requested';
+                }
+            }
+
+            $isTacStuck = $tacSentCount > 0 && $loginCount === 0 && $tacVerifiedCount === 0;
 
             return [
                 'family_code' => (string) $familyBilling->family_code,
@@ -121,6 +198,13 @@ class TeacherFamilyLoginMonitorController extends Controller
                 'class_display' => $familyClasses->get((string) $familyBilling->family_code, collect())->implode(', '),
                 'login_count' => $loginCount,
                 'latest_login_at' => $latestLoginAt,
+                'tac_sent_count' => $tacSentCount,
+                'tac_verified_count' => $tacVerifiedCount,
+                'tac_pending_count' => $tacPendingCount,
+                'tac_expired_count' => $tacExpiredCount,
+                'latest_tac_sent_at' => $latestTacSentAt,
+                'tac_status' => $tacStatus,
+                'is_tac_stuck' => $isTacStuck,
                 'is_paid' => $familyBilling->outstanding_amount <= 0,
             ];
         });
@@ -137,6 +221,11 @@ class TeacherFamilyLoginMonitorController extends Controller
             })
             ->when($paidStatus === 'paid', fn ($collection) => $collection->where('is_paid', true))
             ->when($paidStatus === 'unpaid', fn ($collection) => $collection->where('is_paid', false))
+            ->when($tacStatus === 'stuck', fn ($collection) => $collection->where('is_tac_stuck', true))
+            ->when($tacStatus === 'completed', fn ($collection) => $collection->where('tac_status', 'Completed'))
+            ->when($tacStatus === 'pending', fn ($collection) => $collection->where('tac_status', 'Pending TAC'))
+            ->when($tacStatus === 'expired', fn ($collection) => $collection->where('tac_status', 'Expired TAC'))
+            ->when($tacStatus === 'no_request', fn ($collection) => $collection->where('tac_status', 'No TAC request'))
             ->when($selectedClass !== '', fn ($collection) => $collection->filter(
                 fn (array $row) => collect($row['classes'] ?? [])->contains($selectedClass)
             ))
@@ -170,8 +259,11 @@ class TeacherFamilyLoginMonitorController extends Controller
             'generatedAt' => now(),
             'totalFamilies' => $rows->count(),
             'totalLoginCount' => $rows->sum('login_count'),
+            'totalTacSentCount' => $rows->sum('tac_sent_count'),
+            'totalTacStuckFamilies' => $rows->where('is_tac_stuck', true)->count(),
             'search' => $search,
             'paidStatus' => $paidStatus,
+            'tacStatus' => $tacStatus,
             'selectedClass' => $selectedClass,
             'classOptions' => $classOptions,
             'dateFromInput' => $dateFromInput,
