@@ -213,7 +213,7 @@
                     </a>
                     <a
                         href="{{ $paidIncompleteParentUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'paid-incomplete-parent' ? 'border-rose-700 bg-rose-700 text-white' : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100' }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'paid-incomplete-parent' ? 'border-rose-700 bg-rose-600 text-white shadow-sm ring-2 ring-rose-200' : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100' }}"
                     >
                         Paid + incomplete profile
                     </a>

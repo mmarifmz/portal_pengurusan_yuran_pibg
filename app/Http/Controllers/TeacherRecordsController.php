@@ -82,6 +82,88 @@ class TeacherRecordsController extends Controller
             $selectedSocialTag = '';
         }
 
+        $allStudentParentEmails = $students
+            ->pluck('parent_email')
+            ->filter()
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $allStudentParentPhones = $students
+            ->pluck('parent_phone')
+            ->filter()
+            ->values();
+
+        $allStudentParentPhoneVariants = $allStudentParentPhones
+            ->flatMap(fn ($phone) => $this->buildPhoneMatchVariants((string) $phone))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $linkedParentUsers = ($allStudentParentEmails->isEmpty() && $allStudentParentPhoneVariants->isEmpty())
+            ? collect()
+            : User::query()
+                ->where('role', 'parent')
+                ->where(function ($query) use ($allStudentParentEmails, $allStudentParentPhoneVariants): void {
+                    if ($allStudentParentEmails->isNotEmpty()) {
+                        $query->orWhereIn('email', $allStudentParentEmails->all());
+                    }
+
+                    if ($allStudentParentPhoneVariants->isNotEmpty()) {
+                        $query->orWhereIn('phone', $allStudentParentPhoneVariants->all());
+                    }
+                })
+                ->orderBy('name')
+                ->get(['name', 'email', 'phone']);
+
+        $parentNameByEmail = collect();
+        $parentNameByPhone = collect();
+
+        foreach ($linkedParentUsers as $parentUser) {
+            $parentName = trim((string) ($parentUser->name ?? ''));
+
+            if ($parentName === '' || $this->isPlaceholderParentName($parentName)) {
+                continue;
+            }
+
+            $emailKey = mb_strtolower(trim((string) ($parentUser->email ?? '')));
+            if ($emailKey !== '' && ! $parentNameByEmail->has($emailKey)) {
+                $parentNameByEmail->put($emailKey, $parentName);
+            }
+
+            $phoneKey = $this->normalizePhoneForMatch((string) ($parentUser->phone ?? ''));
+            if ($phoneKey !== '' && ! $parentNameByPhone->has($phoneKey)) {
+                $parentNameByPhone->put($phoneKey, $parentName);
+            }
+        }
+
+        $familyCodesWithResolvedParent = $students
+            ->filter(function (Student $student) use ($parentNameByEmail, $parentNameByPhone): bool {
+                if (! filled($student->family_code)) {
+                    return false;
+                }
+
+                $studentParentName = trim((string) ($student->parent_name ?? ''));
+                if ($studentParentName !== '' && ! $this->isPlaceholderParentName($studentParentName)) {
+                    return true;
+                }
+
+                $studentEmail = mb_strtolower(trim((string) ($student->parent_email ?? '')));
+                if ($studentEmail !== '' && $parentNameByEmail->has($studentEmail)) {
+                    return true;
+                }
+
+                $studentPhone = $this->normalizePhoneForMatch((string) ($student->parent_phone ?? ''));
+
+                return $studentPhone !== '' && $parentNameByPhone->has($studentPhone);
+            })
+            ->pluck('family_code')
+            ->filter()
+            ->map(fn ($familyCode) => (string) $familyCode)
+            ->unique()
+            ->values();
+
         $paidThisYearFamilyCodes = FamilyBilling::query()
             ->where('billing_year', $billingYear)
             ->where(function ($query): void {
@@ -131,7 +213,7 @@ class TeacherRecordsController extends Controller
             ->when($recordFilter === 'paid-incomplete-parent', fn ($collection) => $collection->filter(
                 fn (Student $student) => filled($student->family_code)
                     && $paidThisYearFamilyCodes->contains((string) $student->family_code)
-                    && $this->isPlaceholderParentName((string) ($student->parent_name ?? ''))
+                    && ! $familyCodesWithResolvedParent->contains((string) $student->family_code)
             ))
             ->when($recordFilter === 'paid-last-year', fn ($collection) => $collection->filter(
                 fn (Student $student) => filled($student->family_code) && $paidLastYearFamilyCodes->contains((string) $student->family_code)
@@ -171,62 +253,6 @@ class TeacherRecordsController extends Controller
                 });
             })
             ->values();
-
-        $studentParentEmails = $filteredStudents
-            ->pluck('parent_email')
-            ->filter()
-            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $studentParentPhones = $filteredStudents
-            ->pluck('parent_phone')
-            ->filter()
-            ->values();
-
-        $studentParentPhoneVariants = $studentParentPhones
-            ->flatMap(fn ($phone) => $this->buildPhoneMatchVariants((string) $phone))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $linkedParentUsers = ($studentParentEmails->isEmpty() && $studentParentPhoneVariants->isEmpty())
-            ? collect()
-            : User::query()
-                ->where('role', 'parent')
-                ->where(function ($query) use ($studentParentEmails, $studentParentPhoneVariants): void {
-                    if ($studentParentEmails->isNotEmpty()) {
-                        $query->orWhereIn('email', $studentParentEmails->all());
-                    }
-
-                    if ($studentParentPhoneVariants->isNotEmpty()) {
-                        $query->orWhereIn('phone', $studentParentPhoneVariants->all());
-                    }
-                })
-                ->orderBy('name')
-                ->get(['name', 'email', 'phone']);
-
-        $parentNameByEmail = collect();
-        $parentNameByPhone = collect();
-
-        foreach ($linkedParentUsers as $parentUser) {
-            $parentName = trim((string) ($parentUser->name ?? ''));
-
-            if ($parentName === '') {
-                continue;
-            }
-
-            $emailKey = mb_strtolower(trim((string) ($parentUser->email ?? '')));
-            if ($emailKey !== '' && ! $parentNameByEmail->has($emailKey)) {
-                $parentNameByEmail->put($emailKey, $parentName);
-            }
-
-            $phoneKey = $this->normalizePhoneForMatch((string) ($parentUser->phone ?? ''));
-            if ($phoneKey !== '' && ! $parentNameByPhone->has($phoneKey)) {
-                $parentNameByPhone->put($phoneKey, $parentName);
-            }
-        }
 
         $studentsWithResolvedParents = $filteredStudents
             ->map(function (Student $student) use ($parentNameByEmail, $parentNameByPhone, $latestPaidTimestampByFamily): Student {
