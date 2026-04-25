@@ -115,15 +115,72 @@ class DashboardController extends Controller
 
         $yuranThreshold = 100.0;
 
+        $dominantClassByFamily = $students
+            ->filter(fn (Student $student): bool => filled($student->family_code))
+            ->groupBy(fn (Student $student) => (string) $student->family_code)
+            ->map(function ($familyStudents): string {
+                /** @var \Illuminate\Support\Collection<int, \App\Models\Student> $familyStudents */
+                return (string) ($familyStudents
+                    ->pluck('class_name')
+                    ->map(fn ($className) => trim((string) $className))
+                    ->filter()
+                    ->countBy()
+                    ->sortDesc()
+                    ->keys()
+                    ->first() ?? 'Unassigned');
+            });
+
+        // Aggregate paid portal transactions per family, then cap yuran at RM100 per family.
+        // This prevents yuran overcount when the same family pays in multiple transactions.
+        $portalFamilyTransactionTotals = collect();
+        if (! $useLegacyKpiSource) {
+            $portalFamilyTransactionTotals = $selectedYearTransactions
+                ->values()
+                ->map(function (FamilyPaymentTransaction $transaction, int $index) use ($dominantClassByFamily): array {
+                    $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+                    $className = (string) ($dominantClassByFamily->get($familyCode, 'Unassigned') ?: 'Unassigned');
+
+                    return [
+                        'family_key' => $familyCode !== '' ? $familyCode : 'tx-'.$index,
+                        'family_code' => $familyCode,
+                        'class_name' => $className,
+                        'amount' => (float) $transaction->amount,
+                    ];
+                })
+                ->groupBy('family_key')
+                ->map(function ($group): array {
+                    $first = $group->first();
+                    return [
+                        'family_code' => (string) ($first['family_code'] ?? ''),
+                        'class_name' => (string) ($first['class_name'] ?? 'Unassigned'),
+                        'amount' => (float) $group->sum('amount'),
+                    ];
+                })
+                ->values()
+                ->map(function (array $row) use ($yuranThreshold): array {
+                    $amount = (float) ($row['amount'] ?? 0);
+                    $yuran = min($amount, $yuranThreshold);
+                    $sumbangan = max(0, $amount - $yuranThreshold);
+
+                    return [
+                        'family_code' => (string) ($row['family_code'] ?? ''),
+                        'class_name' => (string) ($row['class_name'] ?? 'Unassigned'),
+                        'amount' => $amount,
+                        'yuran' => $yuran,
+                        'sumbangan' => $sumbangan,
+                    ];
+                });
+        }
+
         $totalFamilies = $familyBillings->count();
         $totalStudents = $students->count();
         $familiesPaid = $familyBillings->filter(fn (FamilyBilling $billing) => $billing->outstanding_amount <= 0)->count();
         $tuitionCollected = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => min((float) ($payment['amount_paid'] ?? 0), $yuranThreshold))
-            : (float) $selectedYearTransactions->sum(fn (FamilyPaymentTransaction $transaction): float => min((float) $transaction->amount, $yuranThreshold));
+            : (float) $portalFamilyTransactionTotals->sum('yuran');
         $donationCollected = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => max(0, (float) ($payment['amount_paid'] ?? 0) - $yuranThreshold))
-            : (float) $selectedYearTransactions->sum(fn (FamilyPaymentTransaction $transaction): float => max(0, (float) $transaction->amount - $yuranThreshold));
+            : (float) $portalFamilyTransactionTotals->sum('sumbangan');
         $totalCollected = $tuitionCollected + $donationCollected;
         $totalBilled = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum('amount_due')
@@ -145,8 +202,6 @@ class DashboardController extends Controller
 
         $paymentCompletion = $totalFamilies > 0 ? (int) round(($familiesPaid / $totalFamilies) * 100) : 0;
 
-        $dominantClassByFamily = collect();
-
         if ($useLegacyKpiSource) {
             $classCollection = $legacyPaymentTransactions
                 ->groupBy(fn (array $payment) => (string) ($payment['class_name'] ?? 'Unassigned'))
@@ -163,34 +218,7 @@ class DashboardController extends Controller
                 ->sortByDesc('collected')
                 ->values();
         } else {
-            $dominantClassByFamily = $students
-                ->filter(fn (Student $student): bool => filled($student->family_code))
-                ->groupBy(fn (Student $student) => (string) $student->family_code)
-                ->map(function ($familyStudents): string {
-                    /** @var \Illuminate\Support\Collection<int, \App\Models\Student> $familyStudents */
-                    return (string) ($familyStudents
-                        ->pluck('class_name')
-                        ->map(fn ($className) => trim((string) $className))
-                        ->filter()
-                        ->countBy()
-                        ->sortDesc()
-                        ->keys()
-                        ->first() ?? 'Unassigned');
-                });
-
-            $classCollection = $selectedYearTransactions
-                ->map(function (FamilyPaymentTransaction $transaction) use ($dominantClassByFamily, $yuranThreshold): array {
-                    $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
-                    $className = $dominantClassByFamily->get($familyCode, 'Unassigned');
-                    $amount = (float) $transaction->amount;
-
-                    return [
-                        'class_name' => (string) ($className !== '' ? $className : 'Unassigned'),
-                        'yuran' => min($amount, $yuranThreshold),
-                        'sumbangan' => max(0, $amount - $yuranThreshold),
-                        'collected' => $amount,
-                    ];
-                })
+            $classCollection = $portalFamilyTransactionTotals
                 ->groupBy('class_name')
                 ->map(function ($group, string $className): array {
                     /** @var \Illuminate\Support\Collection<int, array<string, float|string>> $group */
