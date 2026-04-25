@@ -68,19 +68,7 @@
             line-height: 3.5rem;
         }
 
-        /* Toast polish for public portal: visible but less disruptive. */
-        #toaster {
-            top: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) !important;
-            bottom: auto !important;
-            z-index: 50;
-        }
-
-        @media (max-width: 640px) {
-            #toaster {
-                align-items: center !important;
-                padding: 0.8rem 0.75rem 0 !important;
-            }
-        }
+        /* Toast position is managed globally in resources/css/app.css */
     </style>
 @PwaHead
 </head>

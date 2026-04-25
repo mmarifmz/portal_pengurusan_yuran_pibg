@@ -116,7 +116,21 @@ select:focus[data-flux-control] {
         display: none !important;
     }
 
-    #install-prompt.box-icon[data-mode="ios"] .ios-tip {
-        margin-top: 0;
+#install-prompt.box-icon[data-mode="ios"] .ios-tip {
+    margin-top: 0;
+}
+}
+
+/* Keep toast stack at top on all pages (public + admin) */
+#toaster {
+    top: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) !important;
+    bottom: auto !important;
+    z-index: 50 !important;
+}
+
+@media (max-width: 640px) {
+    #toaster {
+        align-items: center !important;
+        padding: 0.8rem 0.75rem 0 !important;
     }
 }
