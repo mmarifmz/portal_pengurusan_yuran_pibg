@@ -118,6 +118,30 @@
                             Tidak jumpa: {{ number_format((int) data_get($bulkReport, 'unmatched_count', 0)) }} |
                             Bertindih: {{ number_format((int) data_get($bulkReport, 'ambiguous_count', 0)) }}
                         </p>
+
+                        @php($unmatchedEntries = collect(data_get($bulkReport, 'unmatched_entries', [])))
+                        @if ($unmatchedEntries->isNotEmpty())
+                            <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                                <p class="font-semibold text-rose-700">Senarai Tidak Jumpa ({{ $unmatchedEntries->count() }})</p>
+                                <ul class="mt-2 space-y-1 text-[11px] text-rose-800">
+                                    @foreach ($unmatchedEntries as $entry)
+                                        <li class="break-words">- {{ $entry }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
+                        @php($ambiguousEntries = collect(data_get($bulkReport, 'ambiguous_entries', [])))
+                        @if ($ambiguousEntries->isNotEmpty())
+                            <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                <p class="font-semibold text-amber-700">Senarai Bertindih ({{ $ambiguousEntries->count() }})</p>
+                                <ul class="mt-2 space-y-1 text-[11px] text-amber-800">
+                                    @foreach ($ambiguousEntries as $entry)
+                                        <li class="break-words">- {{ $entry }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
                     </div>
                 @endif
             </section>

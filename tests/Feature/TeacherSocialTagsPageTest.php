@@ -65,6 +65,8 @@ it('blocks parent from teacher social tags page', function () {
 });
 
 it('bulk applies selected social tag to matched student family', function () {
+    $this->withoutMiddleware();
+
     $teacher = User::factory()->create([
         'role' => 'teacher',
         'email_verified_at' => now(),

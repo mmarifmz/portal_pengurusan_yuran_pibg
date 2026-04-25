@@ -156,6 +156,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/teacher/records/students/{student}/tags', [TeacherRecordsController::class, 'updateStudentTags'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.students.tags.update');
+    Route::post('/teacher/records/parent-profile-sync', [TeacherRecordsController::class, 'syncParentProfilesFromPayments'])
+        ->middleware('role:system_admin')
+        ->name('teacher.records.parent-profile-sync');
     Route::get('/teacher/records/family/{familyCode}/payments/export', [TeacherRecordsController::class, 'exportFamilyPayments'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.payments.export');

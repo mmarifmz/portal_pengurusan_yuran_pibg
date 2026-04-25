@@ -42,6 +42,12 @@
     @endphp
 
     <div class="space-y-8">
+        @if (session('status'))
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+                {{ session('status') }}
+            </div>
+        @endif
+
         <div class="flex flex-col gap-1">
             <h1 class="text-2xl font-bold text-gray-900">Student &amp; Family Lists {{ $billingYear }}</h1>
             <p class="text-sm text-gray-500">A combined view of every student record and the families currently tracked for {{ $billingYear }}.</p>
@@ -72,13 +78,24 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <p class="text-sm text-zinc-600">Billing year: <span class="font-semibold">{{ $billingYear }}</span> | Paid families: <span class="font-semibold">{{ $familiesPaid }}</span> | Duplicate candidates: <span class="font-semibold">{{ number_format($duplicateCount) }}</span></p>
-            <form method="POST" action="{{ route('billing.setup.current-year') }}">
-                @csrf
-                <input type="hidden" name="billing_year" value="{{ $billingYear }}">
-                <button type="submit" class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
-                    Setup/Sync RM100 Family Billing
-                </button>
-            </form>
+            <div class="flex flex-wrap items-center gap-2">
+                @if (auth()->user()?->role === 'system_admin')
+                    <form method="POST" action="{{ route('teacher.records.parent-profile-sync') }}">
+                        @csrf
+                        <button type="submit" class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">
+                            Sync Parent Profile From Payments
+                        </button>
+                    </form>
+                @endif
+
+                <form method="POST" action="{{ route('billing.setup.current-year') }}">
+                    @csrf
+                    <input type="hidden" name="billing_year" value="{{ $billingYear }}">
+                    <button type="submit" class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                        Setup/Sync RM100 Family Billing
+                    </button>
+                </form>
+            </div>
         </div>
 
         <section class="space-y-4">

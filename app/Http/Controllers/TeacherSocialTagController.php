@@ -258,6 +258,8 @@ class TeacherSocialTagController extends Controller
                 'updated_students_count' => $updatedStudentsCount,
                 'unmatched_count' => $unmatchedCount,
                 'ambiguous_count' => $ambiguousCount,
+                'unmatched_entries' => $unmatchedEntries->values()->all(),
+                'ambiguous_entries' => $ambiguousEntries->values()->all(),
                 'unmatched_preview' => $unmatchedEntries->take(8)->values()->all(),
                 'ambiguous_preview' => $ambiguousEntries->take(8)->values()->all(),
                 'tag_field' => $tagField,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ParentProfileSyncFromPaymentsService;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
@@ -410,6 +411,24 @@ class TeacherRecordsController extends Controller
             'selectedFamilyStudents' => $selectedFamilyStudents,
             'keptFamilyStudents' => $keptFamilyStudents,
         ]);
+    }
+
+    public function syncParentProfilesFromPayments(
+        Request $request,
+        ParentProfileSyncFromPaymentsService $syncService
+    ): RedirectResponse {
+        $result = $syncService->run();
+
+        $status = sprintf(
+            'Parent profile sync selesai: %d families dipadankan, %d rekod murid dikemas kini, %d akaun parent dikemas kini.',
+            (int) ($result['families_matched'] ?? 0),
+            (int) ($result['students_updated'] ?? 0),
+            (int) ($result['users_updated'] ?? 0)
+        );
+
+        return redirect()
+            ->route('teacher.records')
+            ->with('status', $status);
     }
 
     public function destroyDuplicate(Student $student): RedirectResponse
