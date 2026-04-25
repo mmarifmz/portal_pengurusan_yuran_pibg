@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\FamilyBilling;
 use App\Models\Student;
 use App\Models\User;
 
@@ -41,4 +42,56 @@ it('filters full student directory by selected social tag', function () {
     $response->assertSee('By social tag');
     $response->assertSee('AINA B40');
     $response->assertDontSee('HAKIM BUKAN B40');
+});
+
+it('filters paid families with incomplete parent profile', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $billingYear = (int) now()->year;
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-INCOMPLETE1',
+        'billing_year' => $billingYear,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-COMPLETE1',
+        'billing_year' => $billingYear,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'RPF-001',
+        'family_code' => 'SSP-INCOMPLETE1',
+        'full_name' => 'Parent Default Student',
+        'class_name' => '2 Angsana',
+        'billing_year' => $billingYear,
+        'parent_name' => 'PARENT SSP-0282',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'RPF-002',
+        'family_code' => 'SSP-COMPLETE1',
+        'full_name' => 'Parent Complete Student',
+        'class_name' => '2 Angsana',
+        'billing_year' => $billingYear,
+        'parent_name' => 'NUR AISHA',
+    ]);
+
+    $response = $this->actingAs($teacher)->get(route('teacher.records', [
+        'record_filter' => 'paid-incomplete-parent',
+    ]));
+
+    $response->assertOk();
+    $response->assertSee('Paid + incomplete profile');
+    $response->assertSee('PARENT DEFAULT STUDENT');
+    $response->assertDontSee('PARENT COMPLETE STUDENT');
 });

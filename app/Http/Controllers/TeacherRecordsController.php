@@ -128,6 +128,11 @@ class TeacherRecordsController extends Controller
             ->when($recordFilter === 'paid-this-year', fn ($collection) => $collection->filter(
                 fn (Student $student) => filled($student->family_code) && $paidThisYearFamilyCodes->contains((string) $student->family_code)
             ))
+            ->when($recordFilter === 'paid-incomplete-parent', fn ($collection) => $collection->filter(
+                fn (Student $student) => filled($student->family_code)
+                    && $paidThisYearFamilyCodes->contains((string) $student->family_code)
+                    && $this->isPlaceholderParentName((string) ($student->parent_name ?? ''))
+            ))
             ->when($recordFilter === 'paid-last-year', fn ($collection) => $collection->filter(
                 fn (Student $student) => filled($student->family_code) && $paidLastYearFamilyCodes->contains((string) $student->family_code)
             ))
@@ -230,7 +235,7 @@ class TeacherRecordsController extends Controller
 
                 $resolvedParentName = null;
                 $studentParentName = trim((string) ($student->parent_name ?? ''));
-                $studentParentNameIsPlaceholder = preg_match('/^parent\s+ssp-/i', $studentParentName) === 1;
+                $studentParentNameIsPlaceholder = $this->isPlaceholderParentName($studentParentName);
 
                 if ($studentParentName !== '' && ! $studentParentNameIsPlaceholder) {
                     $resolvedParentName = $studentParentName;
@@ -1042,5 +1047,16 @@ class TeacherRecordsController extends Controller
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
 
         return trim((string) $value);
+    }
+
+    private function isPlaceholderParentName(string $name): bool
+    {
+        $value = trim($name);
+
+        if ($value === '' || $value === '-') {
+            return true;
+        }
+
+        return preg_match('/^parent\s+ssp-/i', $value) === 1;
     }
 }

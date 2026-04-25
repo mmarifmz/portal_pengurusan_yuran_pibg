@@ -22,13 +22,13 @@
         $registeredParentUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
             'record_filter' => 'registered-parent',
         ])));
+        $paidIncompleteParentUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'paid-incomplete-parent',
+        ])));
         $paidLastYearUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
             'record_filter' => 'paid-last-year',
         ])));
         $paidLastYearLabel = 'Paid last year ('.$lastYear.')';
-        $allClassesUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
-            'class_name' => null,
-        ])));
         $nextNameSortDir = $sortBy === 'name' && $sortDir === 'asc' ? 'desc' : 'asc';
         $nextClassSortDir = $sortBy === 'class' && $sortDir === 'asc' ? 'desc' : 'asc';
         $nameSortUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
@@ -108,12 +108,9 @@
             </div>
 
             <div class="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                <form method="GET" action="{{ route('teacher.records') }}" class="grid gap-3 md:grid-cols-2">
+                <form method="GET" action="{{ route('teacher.records') }}" class="grid gap-3 md:grid-cols-3">
                     @if ($recordFilter !== '')
                         <input type="hidden" name="record_filter" value="{{ $recordFilter }}">
-                    @endif
-                    @if ($selectedClass !== '')
-                        <input type="hidden" name="class_name" value="{{ $selectedClass }}">
                     @endif
                     @if ($selectedSocialTag !== '')
                         <input type="hidden" name="social_tag" value="{{ $selectedSocialTag }}">
@@ -148,15 +145,32 @@
                         @endif
                     </label>
 
-                    <div class="md:col-span-2 flex items-center gap-2">
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Class filter
+                        <input
+                            type="text"
+                            name="class_name"
+                            value="{{ $selectedClass }}"
+                            list="class-options"
+                            placeholder="Type class keyword, contoh: 3 ANG"
+                            class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
+                        <datalist id="class-options">
+                            @foreach ($availableClasses as $className)
+                                <option value="{{ $className }}"></option>
+                            @endforeach
+                        </datalist>
+                        <span class="mt-1 block text-[11px] font-medium text-zinc-500">Taip beberapa huruf untuk tapis pilihan kelas dalam dropdown.</span>
+                    </label>
+
+                    <div class="md:col-span-3 flex items-center gap-2">
                         <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
                             Search
                         </button>
-                        @if ($familyCodeQuery !== '' || $studentNameQuery !== '')
+                        @if ($familyCodeQuery !== '' || $studentNameQuery !== '' || $selectedClass !== '')
                             <a href="{{ route('teacher.records', array_filter([
                                 'record_filter' => $recordFilter ?: null,
                                 'social_tag' => $selectedSocialTag ?: null,
-                                'class_name' => $selectedClass ?: null,
                                 'sort_by' => $sortBy,
                                 'sort_dir' => $sortDir,
                             ])) }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
@@ -197,6 +211,12 @@
                     >
                         Parent is registered
                     </a>
+                    <a
+                        href="{{ $paidIncompleteParentUrl }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'paid-incomplete-parent' ? 'border-rose-700 bg-rose-700 text-white' : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100' }}"
+                    >
+                        Paid + incomplete profile
+                    </a>
                     @if ($filtersActive)
                         <a
                             href="{{ $allRecordsUrl }}"
@@ -225,26 +245,6 @@
                             class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition {{ $selectedSocialTag === $tagField ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:bg-zinc-100' }}"
                         >
                             {{ $tagLabel }}
-                        </a>
-                    @endforeach
-                </div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500">By class</span>
-                    <a
-                        href="{{ $allClassesUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedClass === '' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-emerald-300 hover:text-emerald-700' }}"
-                    >
-                        All classes
-                    </a>
-                    @foreach ($availableClasses as $className)
-                        <a
-                            href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
-                                'class_name' => $className,
-                            ]))) }}"
-                            class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedClass === $className ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' }}"
-                        >
-                            {{ $className }}
                         </a>
                     @endforeach
                 </div>
