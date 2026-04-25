@@ -65,6 +65,12 @@
                                         <a href="{{ route('system.backups.download', ['fileName' => $file['name']]) }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
                                             Download GZ
                                         </a>
+                                        <form method="POST" action="{{ route('system.backups.restore', ['fileName' => $file['name']]) }}" onsubmit="return confirm('Rollback database using this backup? This will overwrite current live data. A safety backup will be created first. Continue?')">
+                                            @csrf
+                                            <button type="submit" class="inline-flex items-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100">
+                                                Rollback
+                                            </button>
+                                        </form>
                                         <form method="POST" action="{{ route('system.backups.delete', ['fileName' => $file['name']]) }}" onsubmit="return confirm('Delete this backup permanently?')">
                                             @csrf
                                             @method('DELETE')

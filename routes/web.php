@@ -243,6 +243,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/system/backups/{fileName}', [TeacherReconciliationController::class, 'deleteBackup'])
         ->middleware('role:system_admin')
         ->name('system.backups.delete');
+    Route::post('/system/backups/{fileName}/restore', [TeacherReconciliationController::class, 'restoreBackup'])
+        ->middleware('role:system_admin')
+        ->name('system.backups.restore');
 
     Route::post('/billing/setup/current-year', [BillingSetupController::class, 'setupCurrentYear'])
         ->middleware('role:system_admin')

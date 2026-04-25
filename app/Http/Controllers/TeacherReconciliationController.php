@@ -180,57 +180,72 @@ class TeacherReconciliationController extends Controller
 
     public function createBackup(): RedirectResponse
     {
-        $connection = config('database.default');
-        $db = (array) config("database.connections.{$connection}");
-
-        $database = (string) ($db['database'] ?? '');
-        $username = (string) ($db['username'] ?? '');
-        $password = (string) ($db['password'] ?? '');
-        $host = (string) ($db['host'] ?? '127.0.0.1');
-        $port = (string) ($db['port'] ?? '3306');
-
-        if ($database === '' || $username === '') {
+        $backupResult = $this->createMysqlBackupFile();
+        if (! $backupResult['ok']) {
             return redirect()
                 ->route('system.backups.index')
-                ->withErrors(['backup' => 'Database credentials are incomplete for backup.']);
+                ->withErrors(['backup' => (string) ($backupResult['error'] ?? 'Backup failed.')]);
         }
-
-        $fileName = sprintf('pibg-backup-%s.sql.gz', now()->format('Ymd-His'));
-        $relativePath = 'backups/'.$fileName;
-
-        $process = new Process([
-            'mysqldump',
-            '--single-transaction',
-            '--quick',
-            '--routines',
-            '--triggers',
-            '--host='.$host,
-            '--port='.$port,
-            '--user='.$username,
-            $database,
-        ], null, $password !== '' ? ['MYSQL_PWD' => $password] : null);
-
-        $process->setTimeout(300);
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            return redirect()
-                ->route('system.backups.index')
-                ->withErrors(['backup' => 'Backup failed: '.trim($process->getErrorOutput())]);
-        }
-
-        $sql = $process->getOutput();
-        if (trim($sql) === '') {
-            return redirect()
-                ->route('system.backups.index')
-                ->withErrors(['backup' => 'Backup failed: mysqldump returned empty output.']);
-        }
-
-        Storage::disk('local')->put($relativePath, gzencode($sql, 9) ?: $sql);
 
         return redirect()
             ->route('system.backups.index')
-            ->with('status', "Backup created: {$fileName}");
+            ->with('status', 'Backup created: '.$backupResult['file_name']);
+    }
+
+    public function restoreBackup(string $fileName): RedirectResponse
+    {
+        abort_unless($this->isValidBackupFileName($fileName), 404);
+
+        $path = 'backups/'.$fileName;
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        $connection = $this->mysqlConnectionDetails();
+        if (($connection['ok'] ?? false) !== true) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => (string) ($connection['error'] ?? 'Database credentials are incomplete for rollback.')]);
+        }
+
+        $content = Storage::disk('local')->get($path);
+        $sql = str_ends_with($fileName, '.gz') ? gzdecode($content) : $content;
+        if ($sql === false || trim((string) $sql) === '') {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => 'Rollback failed: unable to decode backup SQL.']);
+        }
+
+        // Safety net: create a restore-point backup before modifying the live DB.
+        $safetyBackup = $this->createMysqlBackupFile();
+        if (! $safetyBackup['ok']) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => 'Rollback blocked: failed to create safety backup first. '.$safetyBackup['error']]);
+        }
+
+        $restore = new Process([
+            'mysql',
+            '--host='.(string) $connection['host'],
+            '--port='.(string) $connection['port'],
+            '--user='.(string) $connection['username'],
+            '--default-character-set=utf8mb4',
+            (string) $connection['database'],
+        ], null, (string) $connection['password'] !== '' ? ['MYSQL_PWD' => (string) $connection['password']] : null);
+
+        $restore->setInput((string) $sql);
+        $restore->setTimeout(600);
+        $restore->run();
+
+        if (! $restore->isSuccessful()) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors([
+                    'backup' => 'Rollback failed: '.trim($restore->getErrorOutput()).'. Safety backup kept as '.$safetyBackup['file_name'],
+                ]);
+        }
+
+        return redirect()
+            ->route('system.backups.index')
+            ->with('status', 'Rollback completed from '.$fileName.'. Safety backup: '.$safetyBackup['file_name']);
     }
 
     public function downloadBackup(Request $request, string $fileName): Response
@@ -683,6 +698,100 @@ class TeacherReconciliationController extends Controller
             })
             ->sortByDesc('last_modified')
             ->values();
+    }
+
+    /**
+     * @return array{ok: bool, error?: string, connection?: string, database?: string, username?: string, password?: string, host?: string, port?: string}
+     */
+    private function mysqlConnectionDetails(): array
+    {
+        $connection = (string) config('database.default');
+        $db = (array) config("database.connections.{$connection}");
+        $driver = (string) ($db['driver'] ?? '');
+
+        if ($driver !== 'mysql') {
+            return [
+                'ok' => false,
+                'error' => "Rollback supports MySQL only. Current driver: {$driver}.",
+            ];
+        }
+
+        $database = (string) ($db['database'] ?? '');
+        $username = (string) ($db['username'] ?? '');
+        $password = (string) ($db['password'] ?? '');
+        $host = (string) ($db['host'] ?? '127.0.0.1');
+        $port = (string) ($db['port'] ?? '3306');
+
+        if ($database === '' || $username === '') {
+            return [
+                'ok' => false,
+                'error' => 'Database credentials are incomplete for backup/rollback.',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'connection' => $connection,
+            'database' => $database,
+            'username' => $username,
+            'password' => $password,
+            'host' => $host,
+            'port' => $port,
+        ];
+    }
+
+    /**
+     * @return array{ok: bool, file_name?: string, error?: string}
+     */
+    private function createMysqlBackupFile(): array
+    {
+        $connection = $this->mysqlConnectionDetails();
+        if (($connection['ok'] ?? false) !== true) {
+            return [
+                'ok' => false,
+                'error' => (string) ($connection['error'] ?? 'Database credentials are incomplete for backup.'),
+            ];
+        }
+
+        $fileName = sprintf('pibg-backup-%s.sql.gz', now()->format('Ymd-His'));
+        $relativePath = 'backups/'.$fileName;
+
+        $process = new Process([
+            'mysqldump',
+            '--single-transaction',
+            '--quick',
+            '--routines',
+            '--triggers',
+            '--host='.(string) $connection['host'],
+            '--port='.(string) $connection['port'],
+            '--user='.(string) $connection['username'],
+            (string) $connection['database'],
+        ], null, (string) $connection['password'] !== '' ? ['MYSQL_PWD' => (string) $connection['password']] : null);
+
+        $process->setTimeout(300);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return [
+                'ok' => false,
+                'error' => 'Backup failed: '.trim($process->getErrorOutput()),
+            ];
+        }
+
+        $sql = $process->getOutput();
+        if (trim($sql) === '') {
+            return [
+                'ok' => false,
+                'error' => 'Backup failed: mysqldump returned empty output.',
+            ];
+        }
+
+        Storage::disk('local')->put($relativePath, gzencode($sql, 9) ?: $sql);
+
+        return [
+            'ok' => true,
+            'file_name' => $fileName,
+        ];
     }
 
     private function isValidBackupFileName(string $fileName): bool
