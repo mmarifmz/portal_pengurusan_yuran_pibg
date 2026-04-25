@@ -174,6 +174,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/social-tags', [TeacherSocialTagController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.social-tags.index');
+    Route::post('/teacher/social-tags/bulk-apply', [TeacherSocialTagController::class, 'bulkApply'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.social-tags.bulk-apply');
     Route::get('/teacher/finance-accounting/export', [TeacherFinanceAccountingController::class, 'export'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.finance-accounting.export');
