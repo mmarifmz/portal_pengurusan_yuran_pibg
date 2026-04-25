@@ -2,6 +2,7 @@
     @php
         $baseQuery = [
             'record_filter' => $recordFilter ?: null,
+            'social_tag' => $selectedSocialTag ?: null,
             'class_name' => $selectedClass ?: null,
             'family_code' => $familyCodeQuery ?: null,
             'student_name' => $studentNameQuery ?: null,
@@ -97,6 +98,9 @@
                     @if ($selectedClass !== '')
                         <input type="hidden" name="class_name" value="{{ $selectedClass }}">
                     @endif
+                    @if ($selectedSocialTag !== '')
+                        <input type="hidden" name="social_tag" value="{{ $selectedSocialTag }}">
+                    @endif
                     <input type="hidden" name="sort_by" value="{{ $sortBy }}">
                     <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
 
@@ -134,6 +138,7 @@
                         @if ($familyCodeQuery !== '' || $studentNameQuery !== '')
                             <a href="{{ route('teacher.records', array_filter([
                                 'record_filter' => $recordFilter ?: null,
+                                'social_tag' => $selectedSocialTag ?: null,
                                 'class_name' => $selectedClass ?: null,
                                 'sort_by' => $sortBy,
                                 'sort_dir' => $sortDir,
@@ -183,6 +188,28 @@
                             Clear filters
                         </a>
                     @endif
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500">By social tag</span>
+                    <a
+                        href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
+                            'social_tag' => null,
+                        ]))) }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedSocialTag === '' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-emerald-300 hover:text-emerald-700' }}"
+                    >
+                        All tags
+                    </a>
+                    @foreach ($socialTagLabels as $tagField => $tagLabel)
+                        <a
+                            href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
+                                'social_tag' => $tagField,
+                            ]))) }}"
+                            class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition {{ $selectedSocialTag === $tagField ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:bg-zinc-100' }}"
+                        >
+                            {{ $tagLabel }}
+                        </a>
+                    @endforeach
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">

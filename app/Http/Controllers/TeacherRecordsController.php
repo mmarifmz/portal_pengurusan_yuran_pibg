@@ -25,6 +25,7 @@ class TeacherRecordsController extends Controller
         $billingYear = now()->year;
         $recordFilter = (string) $request->string('record_filter')->toString();
         $selectedClass = trim((string) $request->string('class_name')->toString());
+        $selectedSocialTag = trim((string) $request->string('social_tag')->toString());
         $familyCodeQuery = trim((string) $request->string('family_code')->toString());
         $studentNameQuery = trim((string) $request->string('student_name')->toString());
         $sortBy = trim((string) $request->string('sort_by', 'paid_latest')->toString());
@@ -74,6 +75,11 @@ class TeacherRecordsController extends Controller
             ->orderBy('class_name')
             ->pluck('class_name')
             ->values();
+
+        $socialTagLabels = $this->enabledSocialTagLabels();
+        if ($selectedSocialTag !== '' && ! array_key_exists($selectedSocialTag, $socialTagLabels)) {
+            $selectedSocialTag = '';
+        }
 
         $paidThisYearFamilyCodes = FamilyBilling::query()
             ->where('billing_year', $billingYear)
@@ -140,6 +146,9 @@ class TeacherRecordsController extends Controller
                     return false;
                 });
             })
+            ->when($selectedSocialTag !== '', fn ($collection) => $collection->filter(
+                fn (Student $student) => (bool) data_get($student, $selectedSocialTag)
+            ))
             ->when($selectedClass !== '', fn ($collection) => $collection->filter(fn (Student $student) => (string) $student->class_name === $selectedClass))
             ->when($familyCodeQuery !== '', function ($collection) use ($familyCodeQuery) {
                 $needle = mb_strtolower($familyCodeQuery);
@@ -306,6 +315,7 @@ class TeacherRecordsController extends Controller
             ->values();
 
         $filtersActive = $recordFilter !== ''
+            || $selectedSocialTag !== ''
             || $selectedClass !== ''
             || $familyCodeQuery !== ''
             || $studentNameQuery !== '';
@@ -340,6 +350,7 @@ class TeacherRecordsController extends Controller
             'familiesPaid' => $familiesPaid,
             'availableClasses' => $availableClasses,
             'recordFilter' => $recordFilter,
+            'selectedSocialTag' => $selectedSocialTag,
             'selectedClass' => $selectedClass,
             'familyCodeQuery' => $familyCodeQuery,
             'studentNameQuery' => $studentNameQuery,
@@ -348,7 +359,7 @@ class TeacherRecordsController extends Controller
             'paidLastYearFamilyCodes' => $paidLastYearFamilyCodes,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
-            'socialTagLabels' => $this->enabledSocialTagLabels(),
+            'socialTagLabels' => $socialTagLabels,
         ]);
     }
 
