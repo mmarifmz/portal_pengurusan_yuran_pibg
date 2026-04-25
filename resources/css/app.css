@@ -66,12 +66,12 @@ select:focus[data-flux-control] {
     @apply size-4;
 } */
 
-/* PWA install prompt: move to top-right and remove pulse animation */
+/* PWA install prompt: keep at bottom-right so header/nav stays clickable. */
 #install-prompt.box-icon {
-    top: max(12px, calc(env(safe-area-inset-top, 0px) + 12px)) !important;
-    right: max(12px, calc(env(safe-area-inset-right, 0px) + 12px)) !important;
-    bottom: auto !important;
+    top: auto !important;
     left: auto !important;
+    right: max(12px, calc(env(safe-area-inset-right, 0px) + 12px)) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
 }
 
 #install-prompt.box-icon .circle {
@@ -93,8 +93,10 @@ select:focus[data-flux-control] {
 
 @media (max-width: 640px) {
     #install-prompt.box-icon {
-        top: max(10px, calc(env(safe-area-inset-top, 0px) + 10px)) !important;
+        top: auto !important;
+        left: auto !important;
         right: max(10px, calc(env(safe-area-inset-right, 0px) + 10px)) !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
     }
 }
 

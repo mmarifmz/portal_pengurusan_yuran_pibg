@@ -70,13 +70,15 @@
 
         /* Toast polish for public portal: visible but less disruptive. */
         #toaster {
-            z-index: 40;
+            top: max(8px, calc(env(safe-area-inset-top, 0px) + 8px)) !important;
+            bottom: auto !important;
+            z-index: 50;
         }
 
         @media (max-width: 640px) {
             #toaster {
                 align-items: center !important;
-                padding: 0 0.75rem 0.9rem !important;
+                padding: 0.8rem 0.75rem 0 !important;
             }
         }
     </style>
