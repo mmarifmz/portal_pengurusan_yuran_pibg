@@ -33,7 +33,7 @@
             box-shadow: 0 8px 24px rgba(30, 41, 59, 0.07);
         }
     </style>
-@PwaHead
+
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
     <header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm">
@@ -108,6 +108,6 @@
     </main>
 
     @fluxScripts
-@RegisterServiceWorkerScript
+
 </body>
 </html>

@@ -43,7 +43,7 @@
                 box-shadow: inset 0 0 0 1px rgba(47, 122, 85, 0.12);
             }
         </style>
-@PwaHead
+
 </head>
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
         @php
@@ -266,6 +266,6 @@
         @endif
         @stack('scripts')
         @fluxScripts
-@RegisterServiceWorkerScript
+
 </body>
 </html>

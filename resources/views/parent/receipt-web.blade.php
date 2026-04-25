@@ -38,7 +38,7 @@
         .child-meta { margin-top: 4px; font-size: 12px; color: #71717a; }
         @media (min-width: 768px) { .cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     </style>
-@PwaHead
+
 </head>
 <body>
     <header class="topbar">
@@ -112,6 +112,6 @@
             </div>
         </section>
     </main>
-@RegisterServiceWorkerScript
+
 </body>
 </html>

@@ -70,7 +70,7 @@
 
         /* Toast position is managed globally in resources/css/app.css */
     </style>
-@PwaHead
+
 </head>
 <body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
     <header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm">
@@ -259,6 +259,6 @@
             });
         </script>
     @endif
-@RegisterServiceWorkerScript
+
 </body>
 </html>
