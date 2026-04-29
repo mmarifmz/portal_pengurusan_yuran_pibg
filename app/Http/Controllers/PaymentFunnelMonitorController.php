@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
@@ -141,6 +142,9 @@ class PaymentFunnelMonitorController extends Controller
 
                 $billCode = trim((string) ($transaction?->provider_bill_code ?? ''));
 
+                $statusReason = $transaction?->status_reason ? (string) $transaction->status_reason : '-';
+                $isDeactivated = str_contains(mb_strtolower($statusReason), 'deactivated');
+
                 return [
                     'family_code' => (string) $familyBilling->family_code,
                     'parent_name' => $parentName !== '' ? mb_strtoupper($parentName) : '-',
@@ -149,11 +153,16 @@ class PaymentFunnelMonitorController extends Controller
                     'gateway_status' => $gatewayStatus,
                     'gateway_status_label' => $this->statusLabel($gatewayStatus),
                     'return_status' => $transaction?->return_status ? (string) $transaction->return_status : '-',
-                    'gateway_reason' => $transaction?->status_reason ? (string) $transaction->status_reason : '-',
+                    'gateway_reason' => $statusReason,
                     'timestamp' => $timestamp,
                     'latest_bill_code' => $billCode !== '' ? $billCode : '-',
                     'latest_transaction_id' => $transaction?->id,
-                    'can_check_gateway' => $billCode !== '' && $transaction !== null,
+                    'can_check_gateway' => $billCode !== '' && $transaction !== null && ! $isDeactivated,
+                    'can_deactivate_bill' => $transaction !== null
+                        && $billCode !== ''
+                        && $gatewayStatus === 'pending'
+                        && $transaction->created_at !== null
+                        && $transaction->created_at->lte(now()->subDays(5)),
                 ];
             })
             ->values();
@@ -217,6 +226,85 @@ class PaymentFunnelMonitorController extends Controller
             'failedCount' => $rows->where('gateway_status', 'failed')->count(),
             'notStartedCount' => $rows->where('gateway_status', 'not_started')->count(),
         ]);
+    }
+
+
+    public function deactivateBill(Request $request): RedirectResponse
+    {
+        if (! Auth::user()?->isSystemAdmin()) {
+            abort(403, 'Only system admin can deactivate bills.');
+        }
+
+        $validated = $request->validate([
+            'transaction_id' => ['required', 'integer'],
+            'q' => ['nullable', 'string', 'max:255'],
+            'billing_year' => ['nullable', 'integer'],
+            'gateway_status' => ['nullable', 'string', 'max:50'],
+            'sort_by' => ['nullable', 'string', 'max:50'],
+            'sort_dir' => ['nullable', 'string', 'max:4'],
+        ]);
+
+        $redirectQuery = [
+            'q' => (string) ($validated['q'] ?? ''),
+            'billing_year' => (int) ($validated['billing_year'] ?? now()->year),
+            'gateway_status' => (string) ($validated['gateway_status'] ?? 'all'),
+            'sort_by' => (string) ($validated['sort_by'] ?? 'timestamp'),
+            'sort_dir' => (string) ($validated['sort_dir'] ?? 'desc'),
+        ];
+
+        $transaction = FamilyPaymentTransaction::query()
+            ->with('familyBilling')
+            ->whereKey((int) $validated['transaction_id'])
+            ->first();
+
+        if (! $transaction) {
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('error', 'Transaction not found.');
+        }
+
+        $billCode = trim((string) $transaction->provider_bill_code);
+        if ($billCode === '') {
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('error', 'No bill code found on this transaction.');
+        }
+
+        if ($transaction->status !== 'pending') {
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('error', 'Only pending bills can be deactivated.');
+        }
+
+        if (! $transaction->created_at || $transaction->created_at->gt(now()->subDays(5))) {
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('error', 'Bill is not older than 5 days yet.');
+        }
+
+        try {
+            $result = $this->toyyibPayService->deactivateBill($billCode);
+        } catch (\Throwable $exception) {
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('error', 'Deactivate bill failed: '.$exception->getMessage());
+        }
+
+        $status = strtolower(trim((string) ($result['status'] ?? '')));
+        $message = trim((string) ($result['result'] ?? ($result['message'] ?? '')));
+
+        if ($status === 'success') {
+            $transaction->forceFill([
+                'status' => 'failed',
+                'return_status' => 'not successful',
+                'status_reason' => $message !== '' ? $message : 'Bill deactivated by admin after 5+ days pending.',
+            ])->save();
+
+            return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+                ->with('status', sprintf(
+                    'Bill %s for family %s deactivated successfully.',
+                    $billCode,
+                    (string) ($transaction->familyBilling?->family_code ?? '-')
+                ));
+        }
+
+        return redirect()->route('system.payment-funnel-monitor.index', $redirectQuery)
+            ->with('error', 'Deactivate bill rejected by ToyyibPay: '.($message !== '' ? $message : 'Unknown response'));
     }
 
     public function checkGatewayStatus(Request $request): JsonResponse|RedirectResponse
@@ -401,6 +489,7 @@ class PaymentFunnelMonitorController extends Controller
             'timestamp' => $timestamp,
             'latest_bill_code' => $billCode,
             'can_check_gateway' => $billCode !== '',
+            'can_deactivate_bill' => false,
         ];
     }
 

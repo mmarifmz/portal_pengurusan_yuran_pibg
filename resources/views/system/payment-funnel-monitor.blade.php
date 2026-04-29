@@ -165,6 +165,7 @@
                                 <td class="px-4 py-3 js-timestamp-cell">{{ $row['timestamp'] ? $row['timestamp']->format('d M Y H:i:s') : '-' }}</td>
                                 <td class="px-4 py-3 text-right">
                                     @if ($row['can_check_gateway'] && $row['latest_transaction_id'])
+                                        <div class="inline-flex items-center gap-2">
                                         <form method="POST" action="{{ route('system.payment-funnel-monitor.check-gateway') }}" class="js-gateway-check-form inline-flex items-center">
                                             @csrf
                                             <input type="hidden" name="transaction_id" value="{{ $row['latest_transaction_id'] }}">
@@ -177,6 +178,21 @@
                                                 Check with Gateway
                                             </button>
                                         </form>
+                                        @if (!empty($row['can_deactivate_bill']) && $row['can_deactivate_bill'] && auth()->user()?->isSystemAdmin())
+                                            <form method="POST" action="{{ route('system.payment-funnel-monitor.deactivate-bill') }}" class="inline-flex items-center" onsubmit="return confirm('Deactivate this bill in ToyyibPay? This action cannot be undone.');">
+                                                @csrf
+                                                <input type="hidden" name="transaction_id" value="{{ $row['latest_transaction_id'] }}">
+                                                <input type="hidden" name="q" value="{{ $search }}">
+                                                <input type="hidden" name="billing_year" value="{{ $billingYear }}">
+                                                <input type="hidden" name="gateway_status" value="{{ $statusFilter }}">
+                                                <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                                                <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
+                                                <button type="submit" class="inline-flex items-center rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
+                                                    Deactivate Bill
+                                                </button>
+                                            </form>
+                                        @endif
+                                        </div>
                                     @else
                                         <span class="text-xs text-zinc-400">-</span>
                                     @endif

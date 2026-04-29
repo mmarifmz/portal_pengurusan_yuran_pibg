@@ -237,6 +237,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/backups', [TeacherReconciliationController::class, 'createBackup'])
         ->middleware('role:system_admin')
         ->name('system.backups.create');
+    Route::post('/system/backups/upload', [TeacherReconciliationController::class, 'uploadBackup'])
+        ->middleware('role:system_admin')
+        ->name('system.backups.upload');
     Route::get('/system/backups/{fileName}', [TeacherReconciliationController::class, 'downloadBackup'])
         ->middleware('role:system_admin')
         ->name('system.backups.download');
@@ -273,6 +276,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-funnel-monitor/check-gateway', [PaymentFunnelMonitorController::class, 'checkGatewayStatus'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('system.payment-funnel-monitor.check-gateway');
+    Route::post('/system/payment-funnel-monitor/deactivate-bill', [PaymentFunnelMonitorController::class, 'deactivateBill'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-funnel-monitor.deactivate-bill');
     Route::patch('/system/payment-testers/{user}', [PaymentTesterUserController::class, 'update'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.update');

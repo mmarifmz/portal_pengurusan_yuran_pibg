@@ -67,6 +67,33 @@ class ToyyibPayService
         return is_array($data) ? $data : [];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function deactivateBill(string $billCode): array
+    {
+        $secretKey = (string) config('services.toyyibpay.user_secret_key');
+
+        if (blank($secretKey)) {
+            throw new RuntimeException('ToyyibPay configuration is missing. Please set TOYYIBPAY_USER_SECRET_KEY.');
+        }
+
+        $response = Http::asForm()
+            ->timeout(20)
+            ->post($this->endpoint('/index.php/api/inactiveBill'), [
+                'secretKey' => $secretKey,
+                'billCode' => $billCode,
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Unable to deactivate ToyyibPay bill: '.$response->body());
+        }
+
+        $data = $response->json();
+
+        return is_array($data) ? $data : [];
+    }
+
     public function verifyCallbackHash(string $status, string $orderId, string $refNo, string $receivedHash): bool
     {
         $secret = (string) config('services.toyyibpay.user_secret_key');
