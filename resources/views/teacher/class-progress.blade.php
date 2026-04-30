@@ -5,7 +5,7 @@
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
                     <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Progress Bayaran Yuran Mengikut Kelas</h1>
-                    <p class="mt-1 text-sm text-zinc-600">Tahun bil {{ $billingYear }} · Interaktif tanpa reload untuk tapisan dan paparan lanjut.</p>
+                    <p class="mt-1 text-sm text-zinc-600">Bagi Sesi {{ $billingYear }}</p>
                 </div>
                 <div class="w-full sm:w-auto">
                     <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">

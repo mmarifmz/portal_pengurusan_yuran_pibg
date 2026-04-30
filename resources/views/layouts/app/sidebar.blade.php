@@ -88,6 +88,9 @@
                         <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
                             {{ __('Class Progress') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
+                            {{ __('Leaderboard Sumbangan') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="tag" :href="route('teacher.social-tags.index')" :current="request()->routeIs('teacher.social-tags.*')" wire:navigate>
                             {{ __('Social Tags') }}
                         </flux:sidebar.item>

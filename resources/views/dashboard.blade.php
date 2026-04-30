@@ -41,7 +41,7 @@
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wide text-zinc-500">Keluarga berbayar</p>
                 <h3 class="mt-2 text-3xl font-bold text-zinc-900">{{ number_format((int) ($familiesPaid ?? 0)) }} / {{ number_format((int) ($totalFamilies ?? 0)) }}</h3>
-                <p class="mt-1 text-xs text-zinc-500">{{ (int) ($paymentCompletion ?? 0) }}% Â· Pelajar {{ number_format($totalStudents) }}</p>
+                <p class="mt-1 text-xs text-zinc-500">{{ (int) ($paymentCompletion ?? 0) }}% | Pelajar {{ number_format($totalStudents) }}</p>
             </article>
         </div>
 
@@ -66,7 +66,7 @@
                                 </select>
                             </label>
                         </form>
-                        <span class="text-xs text-emerald-600">{{ $selectedDashboardYear }} Â· RM {{ number_format($totalCollected, 2) }}</span>
+                        <span class="text-xs text-emerald-600">{{ $selectedDashboardYear }} | RM {{ number_format($totalCollected, 2) }}</span>
                     </div>
                 </div>
                 <p class="mt-2 text-xs text-zinc-500">Susunan kelas: tertinggi ke terendah.</p>
@@ -117,7 +117,7 @@
                 <div>
                     <p class="text-xs uppercase tracking-wide text-zinc-500">Weekly leaderboard</p>
                     <h3 class="text-lg font-semibold text-zinc-900">Top 3 kutipan kelas mingguan</h3>
-                    <p class="mt-1 text-xs text-zinc-500">{{ $selectedWeekLabel ?? 'Tiada data minggu' }} Â· Jumlah RM {{ number_format((float) ($selectedWeekTotalCollection ?? 0), 2) }}</p>
+                    <p class="mt-1 text-xs text-zinc-500">{{ $selectedWeekLabel ?? 'Tiada data minggu' }} | Jumlah RM {{ number_format((float) ($selectedWeekTotalCollection ?? 0), 2) }}</p>
                 </div>
                 <form method="GET" action="{{ route('dashboard') }}#weekly-top-classes-section" class="flex items-end gap-2">
                     <input type="hidden" name="dashboard_year" value="{{ $selectedDashboardYear }}">
@@ -318,8 +318,30 @@
                         const familyStatusByYearClass = @json($familyStatusByYearClass);
                         const selectedStatusFilterYear = @json($selectedStatusFilterYear);
 
+                        const doughnutCenterTextPlugin = {
+                            id: 'doughnutCenterText',
+                            afterDraw(chart) {
+                                const config = chart?.options?.plugins?.doughnutCenterText || {};
+                                const centerText = String(config.text || '0%');
+                                const color = String(config.color || '#111827');
+                                const meta = chart.getDatasetMeta(0);
+                                const firstArc = meta?.data?.[0];
+                                if (!firstArc) return;
+                                const { x, y } = firstArc;
+                                const ctx = chart.ctx;
+                                ctx.save();
+                                ctx.fillStyle = color;
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.font = '700 24px sans-serif';
+                                ctx.fillText(centerText, x, y);
+                                ctx.restore();
+                            },
+                        };
+
                         dashboardState.pie = new Chart(pieCanvas, {
                             type: 'doughnut',
+                            plugins: [doughnutCenterTextPlugin],
                             data: {
                                 labels: ['Paid', 'Unpaid'],
                                 datasets: [{
@@ -330,7 +352,8 @@
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: { legend: { position: 'bottom' } },
+                                cutout: '52%',
+                                plugins: { legend: { position: 'bottom' }, doughnutCenterText: { text: '0%', color: '#111827' } },
                             },
                         });
 
@@ -348,12 +371,14 @@
                             }
 
                             dashboardState.pie.data.datasets[0].data = [paid, unpaid];
+                            const paidPercentage = total > 0 ? Math.round((paid / total) * 100) : 0;
+                            dashboardState.pie.options.plugins.doughnutCenterText.text = paidPercentage + '%';
                             dashboardState.pie.update();
 
                             if (familyStatusSummary) {
                                 familyStatusSummary.textContent = total > 0
-                                    ? `${selectedYear} · ${selectedClass} · ${paid} paid / ${unpaid} unpaid families`
-                                    : `${selectedYear} · ${selectedClass} · Tiada rekod keluarga`;
+                                    ? `${selectedYear} | ${selectedClass} | ${paid} paid / ${unpaid} unpaid families`
+                                    : `${selectedYear} | ${selectedClass} | Tiada rekod keluarga`;
                             }
                         };
 
