@@ -192,6 +192,66 @@ class TeacherReconciliationController extends Controller
             ->with('status', 'Backup created: '.$backupResult['file_name']);
     }
 
+    public function uploadBackup(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'backup_file' => ['required', 'file', 'max:204800'], // 200MB
+        ]);
+
+        $file = $validated['backup_file'];
+        $originalName = (string) $file->getClientOriginalName();
+        $lowerOriginal = strtolower($originalName);
+
+        $isSqlGz = str_ends_with($lowerOriginal, '.sql.gz');
+        $isSql = str_ends_with($lowerOriginal, '.sql');
+
+        if (! $isSqlGz && ! $isSql) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => 'Upload failed: only .sql or .sql.gz files are allowed.']);
+        }
+
+        $rawContent = file_get_contents($file->getRealPath());
+        if (! is_string($rawContent) || trim($rawContent) === '') {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => 'Upload failed: file content is empty.']);
+        }
+
+        if ($isSqlGz) {
+            $decoded = gzdecode($rawContent);
+            if ($decoded === false || trim($decoded) === '') {
+                return redirect()
+                    ->route('system.backups.index')
+                    ->withErrors(['backup' => 'Upload failed: .sql.gz file cannot be decoded.']);
+            }
+            $sql = (string) $decoded;
+        } else {
+            $sql = $rawContent;
+        }
+
+        $connection = $this->mysqlConnectionDetails();
+        if (($connection['ok'] ?? false) !== true) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => (string) ($connection['error'] ?? 'Database credentials are incomplete.')]);
+        }
+
+        $sqlCheck = $this->validateBackupSqlPayload($sql, (string) $connection['database']);
+        if (! $sqlCheck['ok']) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => 'Upload blocked: '.(string) $sqlCheck['error']]);
+        }
+
+        $fileName = $this->nextUploadedBackupFileName();
+        Storage::disk('local')->put('backups/'.$fileName, gzencode($sql, 9) ?: $sql);
+
+        return redirect()
+            ->route('system.backups.index')
+            ->with('status', 'Backup uploaded: '.$fileName.'. SQL checksum: '.substr((string) ($sqlCheck['sha256'] ?? ''), 0, 12));
+    }
+
     public function restoreBackup(string $fileName): RedirectResponse
     {
         abort_unless($this->isValidBackupFileName($fileName), 404);
@@ -212,6 +272,20 @@ class TeacherReconciliationController extends Controller
             return redirect()
                 ->route('system.backups.index')
                 ->withErrors(['backup' => 'Rollback failed: unable to decode backup SQL.']);
+        }
+
+        $targetCheck = $this->validateRestoreTarget($connection);
+        if (! $targetCheck['ok']) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => (string) $targetCheck['error']]);
+        }
+
+        $sqlCheck = $this->validateBackupSqlPayload((string) $sql, (string) $connection['database']);
+        if (! $sqlCheck['ok']) {
+            return redirect()
+                ->route('system.backups.index')
+                ->withErrors(['backup' => (string) $sqlCheck['error']]);
         }
 
         // Safety net: create a restore-point backup before modifying the live DB.
@@ -243,9 +317,17 @@ class TeacherReconciliationController extends Controller
                 ]);
         }
 
+        logger()->info('backup.restore.completed', [
+            'source_file' => $fileName,
+            'target_connection' => (string) $connection['connection'],
+            'target_database' => (string) $connection['database'],
+            'sql_sha256' => (string) ($sqlCheck['sha256'] ?? ''),
+            'safety_backup' => (string) $safetyBackup['file_name'],
+        ]);
+
         return redirect()
             ->route('system.backups.index')
-            ->with('status', 'Rollback completed from '.$fileName.'. Safety backup: '.$safetyBackup['file_name']);
+            ->with('status', 'Rollback completed from '.$fileName.'. Safety backup: '.$safetyBackup['file_name'].'. SQL checksum: '.substr((string) ($sqlCheck['sha256'] ?? ''), 0, 12));
     }
 
     public function downloadBackup(Request $request, string $fileName): Response
@@ -701,6 +783,110 @@ class TeacherReconciliationController extends Controller
     }
 
     /**
+     * @param array<string, mixed> $connection
+     * @return array{ok: bool, error?: string}
+     */
+    private function validateRestoreTarget(array $connection): array
+    {
+        $environment = (string) app()->environment();
+        $allowNonLocal = (bool) config('app.allow_non_local_backup_restore', false);
+
+        if (! in_array($environment, ['local', 'testing'], true) && ! $allowNonLocal) {
+            return [
+                'ok' => false,
+                'error' => 'Rollback blocked: allowed only in local/testing environment. Set APP_ALLOW_NON_LOCAL_BACKUP_RESTORE=true to override.',
+            ];
+        }
+
+        $database = trim((string) ($connection['database'] ?? ''));
+        if ($database === '') {
+            return [
+                'ok' => false,
+                'error' => 'Rollback blocked: target database name is empty.',
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    /**
+     * @return array{ok: bool, error?: string, sha256?: string}
+     */
+    private function validateBackupSqlPayload(string $sql, string $expectedDatabase): array
+    {
+        $trimmed = trim($sql);
+        if ($trimmed === '') {
+            return ['ok' => false, 'error' => 'Rollback blocked: SQL payload is empty.'];
+        }
+
+        if (strlen($trimmed) < 1024) {
+            return ['ok' => false, 'error' => 'Rollback blocked: backup SQL looks too small (<1KB).'];
+        }
+
+        $forbiddenPatterns = [
+            '/\bDROP\s+DATABASE\b/i' => 'DROP DATABASE',
+            '/\bCREATE\s+DATABASE\b/i' => 'CREATE DATABASE',
+            '/\bALTER\s+USER\b/i' => 'ALTER USER',
+            '/\bCREATE\s+USER\b/i' => 'CREATE USER',
+            '/\bGRANT\b/i' => 'GRANT',
+            '/\bREVOKE\b/i' => 'REVOKE',
+            '/\bFLUSH\s+PRIVILEGES\b/i' => 'FLUSH PRIVILEGES',
+            '/\bSET\s+GLOBAL\b/i' => 'SET GLOBAL',
+        ];
+
+        foreach ($forbiddenPatterns as $pattern => $label) {
+            if (preg_match($pattern, $trimmed) === 1) {
+                return [
+                    'ok' => false,
+                    'error' => "Rollback blocked: backup contains forbidden statement ({$label}).",
+                ];
+            }
+        }
+
+        if (preg_match('/\bUSE\s+`?([A-Za-z0-9_\-]+)`?\s*;/i', $trimmed, $matches) === 1) {
+            $backupDatabase = strtolower((string) ($matches[1] ?? ''));
+            if ($backupDatabase !== '' && strtolower($expectedDatabase) !== $backupDatabase) {
+                return [
+                    'ok' => false,
+                    'error' => "Rollback blocked: backup targets database '{$backupDatabase}', expected '{$expectedDatabase}'.",
+                ];
+            }
+        }
+
+        $requiredTables = [
+            'users',
+            'students',
+            'family_billings',
+            'family_payment_transactions',
+        ];
+
+        foreach ($requiredTables as $table) {
+            $hasCreate = preg_match('/CREATE\s+TABLE\s+`?'.preg_quote($table, '/').'`?/i', $trimmed) === 1;
+            $hasInsert = preg_match('/INSERT\s+INTO\s+`?'.preg_quote($table, '/').'`?/i', $trimmed) === 1;
+
+            if (! $hasCreate && ! $hasInsert) {
+                return [
+                    'ok' => false,
+                    'error' => "Rollback blocked: backup missing expected table '{$table}'.",
+                ];
+            }
+        }
+
+        $statementCount = substr_count($trimmed, ';');
+        if ($statementCount < 20) {
+            return [
+                'ok' => false,
+                'error' => 'Rollback blocked: backup has too few SQL statements to be a valid full dump.',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'sha256' => hash('sha256', $trimmed),
+        ];
+    }
+
+    /**
      * @return array{ok: bool, error?: string, connection?: string, database?: string, username?: string, password?: string, host?: string, port?: string}
      */
     private function mysqlConnectionDetails(): array
@@ -792,6 +978,20 @@ class TeacherReconciliationController extends Controller
             'ok' => true,
             'file_name' => $fileName,
         ];
+    }
+
+    private function nextUploadedBackupFileName(): string
+    {
+        $disk = Storage::disk('local');
+        $cursor = now();
+
+        do {
+            $fileName = 'pibg-backup-'.$cursor->format('Ymd-His').'.sql.gz';
+            $cursor = $cursor->copy()->addSecond();
+        }
+        while ($disk->exists('backups/'.$fileName));
+
+        return $fileName;
     }
 
     private function isValidBackupFileName(string $fileName): bool

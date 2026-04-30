@@ -197,6 +197,48 @@
                 </div>
             </div>
         </section>
+
+        <section class="mt-5 box p-5 sm:p-6">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="section-title text-lg font-bold text-[color:var(--brand-forest)]">Ranking Kutipan Yuran PIBG</h2>
+                    <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
+                </div>
+                <a href="{{ route('parent.login.form') }}" class="text-sm font-semibold text-[color:var(--brand-green)] hover:opacity-80">Log masuk untuk lihat penuh</a>
+            </div>
+
+            <div class="mt-4 space-y-5">
+                @foreach (($welcomeClassCompetitionByTahap ?? collect()) as $tahapName => $rows)
+                    <div>
+                        <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-600">{{ $tahapName }}</h3>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            @forelse ($rows as $index => $row)
+                                <article class="rounded-xl border border-zinc-200 bg-white p-4">
+                                    <div class="mb-2 flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 font-semibold text-zinc-900">
+                                            @if ($index === 0) 🥇 @elseif ($index === 1) 🥈 @elseif ($index === 2) 🥉 @endif
+                                            <span class="inline-flex min-w-[2.2rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-sm font-bold text-zinc-700">#{{ $index + 1 }}</span>
+                                            <span>{{ $row['class_name'] }}</span>
+                                        </div>
+                                        <p class="text-2xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 2) }}%</p>
+                                    </div>
+                                    <div class="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+                                        <div class="flex h-3 w-full">
+                                            <div class="bg-emerald-500" style="width: {{ max(0, min(100, $row['percentage'])) }}%;"></div>
+                                            <div class="bg-zinc-300" style="width: {{ 100 - max(0, min(100, $row['percentage'])) }}%;"></div>
+                                        </div>
+                                    </div>
+                                </article>
+                            @empty
+                                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                                    Data ranking {{ $tahapName }} belum tersedia.
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
     </main>
 
     <footer class="border-t border-zinc-200/80 bg-white/80">

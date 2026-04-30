@@ -617,7 +617,7 @@ class ParentOtpAuthController extends Controller
         $request->session()->put('parent_child_selection_completed', false);
         $request->session()->forget('parent_selected_family_billing_id');
 
-        return redirect()->route('parent.search')
+        return redirect()->route('parent.dashboard')
             ->with('status', $defaultStatusMessage);
     }
 }

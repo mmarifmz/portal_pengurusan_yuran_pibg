@@ -123,4 +123,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Backup Restore Safety Switch
+    |--------------------------------------------------------------------------
+    |
+    | By default, backup rollback is allowed only in local/testing environment.
+    | Set this to true only when you intentionally need rollback in non-local
+    | environment and understand the overwrite risk.
+    |
+    */
+    'allow_non_local_backup_restore' => (bool) env('APP_ALLOW_NON_LOCAL_BACKUP_RESTORE', false),
+
 ];

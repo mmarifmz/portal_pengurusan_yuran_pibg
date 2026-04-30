@@ -27,6 +27,14 @@
                 >
                     Pending Completion
                 </a>
+                @if (! empty($latestSuccessfulTransaction))
+                    <a
+                        href="{{ route('parent.payments.receipt', $latestSuccessfulTransaction->external_order_id) }}"
+                        class="rounded-full border border-sky-300 bg-sky-50 px-4 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100"
+                    >
+                        Jana Resit Terbaru
+                    </a>
+                @endif
             </div>
         </div>
 
@@ -73,7 +81,7 @@
 
                                         @if ($transaction->status === 'success')
                                             <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="rounded-lg border border-sky-300 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50">
-                                                Muat Turun Resit
+                                                Jana Resit
                                             </a>
                                         @endif
 

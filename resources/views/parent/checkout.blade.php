@@ -174,10 +174,26 @@
             <h3 class="text-base font-bold text-[color:var(--brand-forest)]">5 Cubaan Bayaran Terkini</h3>
             <div class="mt-3 space-y-2">
                 @forelse ($recentPaymentAttempts as $attempt)
+                    @php
+                        $attemptStatus = strtolower((string) $attempt->status);
+                        $statusLabel = ucfirst((string) $attempt->status);
+                        $statusBadgeClass = 'bg-zinc-100 text-zinc-600';
+
+                        if ($attemptStatus === 'success') {
+                            $statusLabel = 'Success';
+                            $statusBadgeClass = 'bg-emerald-100 text-emerald-700';
+                        } elseif ($attemptStatus === 'pending') {
+                            $statusLabel = 'Pending';
+                            $statusBadgeClass = 'bg-amber-100 text-amber-700';
+                        } elseif (in_array($attemptStatus, ['failed', 'cancelled', 'canceled'], true)) {
+                            $statusLabel = $attemptStatus === 'failed' ? 'Failed' : 'Cancelled';
+                            $statusBadgeClass = 'bg-rose-100 text-rose-700';
+                        }
+                    @endphp
                     <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
                         <div class="flex items-center justify-between gap-3">
                             <span class="font-semibold text-zinc-900">{{ $attempt->external_order_display }}</span>
-                            <span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[0.65rem] font-semibold text-zinc-600">{{ ucfirst((string) $attempt->status) }}</span>
+                            <span class="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold {{ $statusBadgeClass }}">{{ $statusLabel }}</span>
                         </div>
                         <p class="mt-1">{{ $attempt->created_at_for_display?->format('d M Y H:i') ?? '-' }}, RM {{ number_format((float) $attempt->amount, 2) }}</p>
                     </div>
@@ -202,7 +218,7 @@
                             {{ $payment['paid_at']?->format('d M Y H:i') ?? '-' }},
                             Bayaran RM {{ number_format((float) ($payment['paid_amount'] ?? 0), 2) }}
                             @if ((float) ($payment['donation_amount'] ?? 0) > 0)
-                                · Sumbangan RM {{ number_format((float) $payment['donation_amount'], 2) }}
+                                Ã‚Â· Sumbangan RM {{ number_format((float) $payment['donation_amount'], 2) }}
                             @endif
                         </p>
                     </div>

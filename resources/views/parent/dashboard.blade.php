@@ -211,6 +211,22 @@
                         >
                             Sejarah Pembayaran
                         </a>
+                        @if (! empty($latestCurrentYearReceipt))
+                            <a
+                                href="{{ route('parent.payments.receipt', $latestCurrentYearReceipt->external_order_id) }}"
+                                class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                            >
+                                Muat Turun Resit Yuran {{ $billingYear }}
+                            </a>
+                        @endif
+                        @if (! empty($latestPastYearReceipt))
+                            <a
+                                href="{{ route('parent.payments.receipt', $latestPastYearReceipt->external_order_id) }}"
+                                class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
+                            >
+                                Jana Resit Tahun Lepas ({{ $latestPastYearReceipt->familyBilling?->billing_year }})
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -238,12 +254,68 @@
                     {{ $totalOutstanding > 0 ? 'Baki tertunggak yang masih perlu dijelaskan.' : 'Tiada baki tertunggak untuk keluarga anda.' }}
                 </p>
             </article>
+
+        </section>
+
+        <section class="portal-card p-6">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="portal-table-title text-lg font-bold">Ranking Kutipan Yuran PIBG</h2>
+                    <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
+                </div>
+                <a href="{{ route('parent.dashboard.class-progress') }}" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800">
+                    Lihat semua
+                </a>
+            </div>
+            <div class="mt-4 space-y-5">
+                @foreach (($classCompetitionByTahap ?? collect()) as $tahapName => $rows)
+                    <div>
+                        <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-600">{{ $tahapName }}</h3>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            @forelse ($rows as $index => $row)
+                                <div class="rounded-xl border border-zinc-200 bg-white p-4">
+                                    <div class="mb-2 flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 font-semibold text-zinc-900">
+                                            @if ($index === 0) 🥇 @elseif ($index === 1) 🥈 @elseif ($index === 2) 🥉 @endif
+                                            <span class="inline-flex min-w-[2.2rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-sm font-bold text-zinc-700">#{{ $index + 1 }}</span>
+                                            <span>{{ $row['class_name'] }}</span>
+                                        </div>
+                                        <p class="text-2xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 2) }}%</p>
+                                    </div>
+                                    <div class="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+                                        <div class="flex h-3 w-full">
+                                            <div class="bg-emerald-500" style="width: {{ max(0, min(100, $row['percentage'])) }}%;"></div>
+                                            <div class="bg-zinc-300" style="width: {{ 100 - max(0, min(100, $row['percentage'])) }}%;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                                    Tiada data untuk {{ $tahapName }}.
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+                @endforeach
+            </div>
         </section>
 
         <section class="portal-card overflow-hidden">
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
-                <h2 class="portal-table-title text-lg font-bold">Status Bil Keluarga</h2>
-                <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran mengikut kod keluarga.</p>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="portal-table-title text-lg font-bold">Status Bil Keluarga</h2>
+                        <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran mengikut kod keluarga.</p>
+                    </div>
+                    @if (! empty($latestCurrentYearReceipt))
+                        <a
+                            href="{{ route('parent.payments.receipt', $latestCurrentYearReceipt->external_order_id) }}"
+                            class="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
+                        >
+                            Muat Turun Resit Yuran {{ $billingYear }}
+                        </a>
+                    @endif
+                </div>
             </div>
 
             <div class="overflow-x-auto">
@@ -285,6 +357,13 @@
                                             class="portal-primary-btn inline-flex items-center rounded-xl px-4 py-2 text-xs font-semibold transition"
                                         >
                                             Bayar
+                                        </a>
+                                    @elseif (! empty($currentYearReceiptByFamily[(string) $billing->family_code] ?? null))
+                                        <a
+                                            href="{{ route('parent.payments.receipt', $currentYearReceiptByFamily[(string) $billing->family_code]->external_order_id) }}"
+                                            class="rounded-lg border border-sky-300 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                        >
+                                            Jana Resit
                                         </a>
                                     @else
                                         <span class="text-xs font-medium text-zinc-500">Lengkap</span>
@@ -339,13 +418,25 @@
 
         <section class="portal-card overflow-hidden">
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
-                <h2 class="portal-table-title text-lg font-bold">Sejarah Bayaran Tahun Lepas (Imported)</h2>
-                <p class="mt-1 text-sm text-zinc-600">Rujukan bayaran berstatus paid dari portal tahun lepas.</p>
-                <p class="mt-2 text-xs font-semibold text-zinc-700">
-                    Total paid: RM {{ number_format($legacyPaidTotal ?? 0, 2) }}
-                    <span class="mx-2">|</span>
-                    Total sumbangan: RM {{ number_format($legacyDonationTotal ?? 0, 2) }}
-                </p>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="portal-table-title text-lg font-bold">Sejarah Bayaran Tahun Lepas (Imported)</h2>
+                        <p class="mt-1 text-sm text-zinc-600">Rujukan bayaran berstatus paid dari portal tahun lepas.</p>
+                        <p class="mt-2 text-xs font-semibold text-zinc-700">
+                            Total paid: RM {{ number_format($legacyPaidTotal ?? 0, 2) }}
+                            <span class="mx-2">|</span>
+                            Total sumbangan: RM {{ number_format($legacyDonationTotal ?? 0, 2) }}
+                        </p>
+                    </div>
+                    @if (($legacyPayments ?? collect())->isNotEmpty())
+                        <a
+                            href="{{ route('parent.dashboard.legacy-receipt', ['year' => (int) ($legacyPayments->max('source_year') ?? $billingYear - 1)]) }}"
+                            class="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
+                        >
+                            Jana Resit Tahun Lepas
+                        </a>
+                    @endif
+                </div>
             </div>
 
             <div class="overflow-x-auto">
@@ -367,7 +458,7 @@
                                 <td class="px-6 py-5">{{ $legacyPayment->paid_at?->format('d M Y H:i') ?: '-' }}</td>
                                 <td class="px-6 py-5 font-mono text-xs">{{ $legacyPayment->payment_reference ?: '-' }}</td>
                                 <td class="px-6 py-5 font-medium">{{ $legacyPayment->student_name }}</td>
-                                <td class="px-6 py-5">{{ $legacyPayment->class_name ?: '-' }}</td>
+                                <td class="px-6 py-5">{{ $legacyPayment->display_class_name ?: ($legacyPayment->class_name ?: '-') }}</td>
                                 <td class="px-6 py-5 text-right">{{ number_format((float) $legacyPayment->amount_paid, 2) }}</td>
                                 <td class="px-6 py-5 text-right">{{ number_format((float) $legacyPayment->donation_amount, 2) }}</td>
                                 <td class="px-6 py-5">{{ $legacyPayment->source_year }}</td>

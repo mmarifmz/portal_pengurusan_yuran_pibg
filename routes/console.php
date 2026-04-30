@@ -13,6 +13,7 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -207,6 +208,90 @@ Artisan::command('system:admin:provision
 
     return self::SUCCESS;
 })->purpose('Provision or promote a system_admin account via CLI with privileged authorization.');
+
+Artisan::command('user:create-system-admin
+    {--name= : Name for the account}
+    {--email= : Email for the account}
+    {--password= : Password for the account (min 8 chars)}
+    {--role=system_admin : Allowed: system_admin or system_installer}', function () {
+    $name = trim((string) ($this->option('name') ?? ''));
+    $email = mb_strtolower(trim((string) ($this->option('email') ?? '')));
+    $password = (string) ($this->option('password') ?? '');
+    $role = trim((string) ($this->option('role') ?? 'system_admin'));
+
+    if ($name === '') {
+        $name = trim((string) $this->ask('Name'));
+    }
+
+    if ($email === '') {
+        $email = mb_strtolower(trim((string) $this->ask('Email')));
+    }
+
+    if ($password === '') {
+        $password = (string) $this->secret('Password (min 8 chars)');
+        $passwordConfirmation = (string) $this->secret('Confirm password');
+        if (! hash_equals($password, $passwordConfirmation)) {
+            $this->error('Password confirmation does not match.');
+
+            return self::FAILURE;
+        }
+    }
+
+    if ($role === '') {
+        $role = (string) $this->choice('Role', ['system_admin', 'system_installer'], 'system_admin');
+    }
+
+    $allowedRoles = ['system_admin', 'system_installer'];
+    if (! in_array($role, $allowedRoles, true)) {
+        $this->error('Invalid role. Allowed: '.implode(', ', $allowedRoles));
+
+        return self::FAILURE;
+    }
+
+    $validator = Validator::make([
+        'name' => $name,
+        'email' => $email,
+        'password' => $password,
+    ], [
+        'name' => ['required', 'string', 'max:255'],
+        'email' => ['required', 'email', 'max:255'],
+        'password' => ['required', 'string', 'min:8'],
+    ]);
+
+    if ($validator->fails()) {
+        foreach ($validator->errors()->all() as $message) {
+            $this->error($message);
+        }
+
+        return self::FAILURE;
+    }
+
+    $existing = User::query()
+        ->whereRaw('LOWER(email) = ?', [$email])
+        ->first();
+
+    if ($existing) {
+        $this->error("User already exists for {$email} (role: {$existing->role}). Use another email.");
+
+        return self::FAILURE;
+    }
+
+    $user = User::query()->create([
+        'name' => $name,
+        'email' => $email,
+        'password' => $password,
+        'role' => $role,
+        'class_name' => null,
+        'is_active' => true,
+        'receive_whatsapp_notifications' => false,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->info("User created: {$user->email} ({$user->role})");
+    $this->line('Login password is the one you entered for this command.');
+
+    return self::SUCCESS;
+})->purpose('Create a system admin account from CLI with interactive prompts and validation.');
 
 Artisan::command('whatsapp:test
     {phone : Target phone number (e.g. 60123456789)}

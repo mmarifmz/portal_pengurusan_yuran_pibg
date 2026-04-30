@@ -26,6 +26,7 @@ use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -92,9 +93,80 @@ Route::get('/', function () {
         ->take(10)
         ->values();
 
+    $billingYear = (int) now()->year;
+    $competitionStart = Carbon::create($billingYear, 4, 14, 0, 0, 0)->startOfWeek();
+
+    $competitionStudents = Student::query()
+        ->where('billing_year', $billingYear)
+        ->whereNotNull('class_name')
+        ->where('class_name', '!=', '')
+        ->get(['family_code', 'class_name', 'annual_fee']);
+
+    $classTargets = $competitionStudents
+        ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+        ->map(fn ($group): float => (float) $group->sum(fn (Student $student): float => max(0, (float) $student->annual_fee)));
+
+    $dominantClassByFamilyForRanking = $competitionStudents
+        ->filter(fn (Student $student): bool => filled($student->family_code))
+        ->groupBy(fn (Student $student): string => (string) $student->family_code)
+        ->map(function ($familyStudents): string {
+            return (string) ($familyStudents
+                ->pluck('class_name')
+                ->map(fn ($className) => trim((string) $className))
+                ->filter()
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first() ?? '');
+        });
+
+    $paidByClass = FamilyPaymentTransaction::query()
+        ->with('familyBilling:id,family_code,billing_year')
+        ->where('status', 'success')
+        ->whereNotNull('paid_at')
+        ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), now()->endOfDay()])
+        ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
+        ->get()
+        ->reduce(function (\Illuminate\Support\Collection $carry, FamilyPaymentTransaction $transaction) use ($dominantClassByFamilyForRanking): \Illuminate\Support\Collection {
+            $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+            if ($familyCode === '') {
+                return $carry;
+            }
+            $className = (string) ($dominantClassByFamilyForRanking->get($familyCode) ?? '');
+            if ($className === '') {
+                return $carry;
+            }
+            $feePaid = max(0, (float) ($transaction->fee_amount_paid ?? $transaction->amount ?? 0));
+            $carry->put($className, ((float) $carry->get($className, 0)) + $feePaid);
+            return $carry;
+        }, collect());
+
+    $welcomeClassCompetition = $classTargets
+        ->map(function (float $targetTotal, string $className) use ($paidByClass): array {
+            $paidTotal = (float) $paidByClass->get($className, 0);
+            $firstChar = mb_substr(trim($className), 0, 1);
+            $year = (int) preg_replace('/\D/', '', $firstChar);
+
+            return [
+                'class_name' => $className,
+                'percentage' => $targetTotal > 0 ? round(($paidTotal / $targetTotal) * 100, 2) : 0.0,
+                'tahap' => $year >= 4 ? 'Tahap 2' : 'Tahap 1',
+            ];
+        })
+        ->sortBy([
+            ['percentage', 'desc'],
+        ])
+        ->values();
+
+    $welcomeClassCompetitionByTahap = collect([
+        'Tahap 1' => $welcomeClassCompetition->where('tahap', 'Tahap 1')->take(6)->values(),
+        'Tahap 2' => $welcomeClassCompetition->where('tahap', 'Tahap 2')->take(6)->values(),
+    ]);
+
     return view('welcome', [
         'classOptions' => $classOptions,
         'recentPaymentToasts' => $recentPaymentToasts,
+        'welcomeClassCompetitionByTahap' => $welcomeClassCompetitionByTahap,
     ]);
 })->name('home');
 
@@ -197,6 +269,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/parent/dashboard', [ParentDashboardController::class, 'index'])
         ->middleware('role:parent')
         ->name('parent.dashboard');
+    Route::get('/parent/dashboard/class-progress', [ParentDashboardController::class, 'classProgress'])
+        ->middleware('role:parent')
+        ->name('parent.dashboard.class-progress');
+    Route::get('/parent/dashboard/legacy-receipt', [ParentDashboardController::class, 'legacyReceiptPdf'])
+        ->middleware('role:parent')
+        ->name('parent.dashboard.legacy-receipt');
 
     Route::post('/parent/search/select/{familyBilling}', [PublicParentSearchController::class, 'selectFamily'])
         ->middleware('role:parent')

@@ -363,9 +363,21 @@ class ParentPaymentController extends Controller
             ->latest('id')
             ->paginate(20);
 
+        $latestSuccessfulTransaction = FamilyPaymentTransaction::query()
+            ->with('familyBilling')
+            ->when(
+                $isTesterMode,
+                fn ($query) => $query->where('user_id', $user?->id),
+                fn ($query) => $query->whereHas('familyBilling', fn ($billingQuery) => $billingQuery->whereIn('family_code', $familyCodes))
+            )
+            ->where('status', 'success')
+            ->latest('id')
+            ->first();
+
         return view('parent.payment-history', [
             'transactions' => $transactions,
             'activeFilter' => $filter,
+            'latestSuccessfulTransaction' => $latestSuccessfulTransaction,
         ]);
     }
 
