@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
 use Illuminate\Support\Collection;
@@ -19,9 +20,42 @@ class TeacherContributionLeaderboardController extends Controller
             ->where('class_name', '!=', '')
             ->get(['family_code', 'class_name', 'annual_fee']);
 
+        $familyCodes = $students
+            ->pluck('family_code')
+            ->map(fn ($familyCode): string => trim((string) $familyCode))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $paidFamilyMap = FamilyBilling::query()
+            ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $familyCodes->all())
+            ->get(['family_code', 'status', 'fee_amount', 'paid_amount'])
+            ->mapWithKeys(function (FamilyBilling $billing): array {
+                $feeAmount = (float) $billing->fee_amount;
+                $paidAmount = (float) $billing->paid_amount;
+                $isPaid = $billing->status === 'paid' || ($feeAmount > 0 && $paidAmount >= $feeAmount);
+
+                return [(string) $billing->family_code => $isPaid];
+            });
+
         $classTargets = $students
             ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
             ->map(fn (Collection $group): float => (float) $group->sum(fn (Student $student): float => max(0, (float) $student->annual_fee)));
+
+        $classStudentCounts = $students
+            ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+            ->map(function (Collection $group) use ($paidFamilyMap): array {
+                $totalStudents = $group->count();
+                $paidStudents = $group
+                    ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+                    ->count();
+
+                return [
+                    'paid_students' => $paidStudents,
+                    'total_students' => $totalStudents,
+                ];
+            });
 
         $dominantClassByFamily = $students
             ->filter(fn (Student $student): bool => filled($student->family_code))
@@ -37,7 +71,6 @@ class TeacherContributionLeaderboardController extends Controller
                     ->first() ?? '');
             });
 
-        // Align with class progress page: use full current session successful payments (no mid-April cutoff).
         $transactions = FamilyPaymentTransaction::query()
             ->with('familyBilling:id,family_code,billing_year')
             ->where('status', 'success')
@@ -70,12 +103,17 @@ class TeacherContributionLeaderboardController extends Controller
         }, collect());
 
         $leaderboard = $classTargets
-            ->map(function (float $targetTotal, string $className) use ($totalsByClass): array {
+            ->map(function (float $targetTotal, string $className) use ($totalsByClass, $classStudentCounts): array {
                 $totals = (array) $totalsByClass->get($className, []);
                 $withoutDonation = (float) ($totals['without_donation'] ?? 0);
                 $withDonation = (float) ($totals['with_donation'] ?? 0);
 
-                $withoutPercent = $targetTotal > 0 ? round(($withoutDonation / $targetTotal) * 100, 1) : 0.0;
+                $classCounts = (array) $classStudentCounts->get($className, []);
+                $paidStudents = (int) ($classCounts['paid_students'] ?? 0);
+                $totalStudents = (int) ($classCounts['total_students'] ?? 0);
+
+                // Match Teacher Class Progress exactly for "Tanpa sumbangan" percentage.
+                $withoutPercent = $totalStudents > 0 ? round(($paidStudents / $totalStudents) * 100, 1) : 0.0;
                 $withPercent = $targetTotal > 0 ? round(($withDonation / $targetTotal) * 100, 1) : 0.0;
 
                 return [
@@ -86,6 +124,8 @@ class TeacherContributionLeaderboardController extends Controller
                     'with_donation_total' => $withDonation,
                     'without_donation_percent' => $withoutPercent,
                     'with_donation_percent' => $withPercent,
+                    'paid_students' => $paidStudents,
+                    'total_students' => $totalStudents,
                 ];
             })
             ->sortBy([
