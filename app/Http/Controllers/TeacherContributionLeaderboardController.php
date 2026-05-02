@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -13,7 +12,6 @@ class TeacherContributionLeaderboardController extends Controller
     public function index(): View
     {
         $billingYear = (int) now()->year;
-        $competitionStart = Carbon::create($billingYear, 4, 14, 0, 0, 0)->startOfWeek();
 
         $students = Student::query()
             ->where('billing_year', $billingYear)
@@ -39,11 +37,11 @@ class TeacherContributionLeaderboardController extends Controller
                     ->first() ?? '');
             });
 
+        // Align with class progress page: use full current session successful payments (no mid-April cutoff).
         $transactions = FamilyPaymentTransaction::query()
             ->with('familyBilling:id,family_code,billing_year')
             ->where('status', 'success')
             ->whereNotNull('paid_at')
-            ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), now()->endOfDay()])
             ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
             ->get();
 
@@ -104,7 +102,6 @@ class TeacherContributionLeaderboardController extends Controller
 
         return view('teacher.contribution-leaderboard', [
             'billingYear' => $billingYear,
-            'competitionStart' => $competitionStart,
             'groupedByTahap' => $groupedByTahap,
         ]);
     }

@@ -4,7 +4,7 @@
             <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-100">Teacher / Admin View</p>
             <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Leaderboard Sumbangan PIBG</h1>
             <p class="mt-2 text-sm text-emerald-50">
-                Prestasi kelas dari {{ $competitionStart->format('d M Y') }} hingga {{ now()->format('d M Y') }} | Tahun bil {{ $billingYear }}
+                Bagi Sesi {{ $billingYear }}
             </p>
             <p class="mt-1 text-xs text-emerald-100">
                 Dua metrik dipaparkan: <strong>Tanpa Sumbangan Tambahan</strong> dan <strong>Termasuk Sumbangan Tambahan</strong>.
