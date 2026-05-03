@@ -49,9 +49,9 @@
                                 </div>
 
                                 <div class="mt-3 space-y-1 text-sm font-semibold text-zinc-800">
-                                    <p>Tanpa sumbangan: <span class="text-base font-black">{{ number_format((float) $row['without_donation_percent'], 1) }}%</span></p>
+                                    <p>Pembayaran Yuran: <span class="text-base font-black">{{ number_format((float) $row['without_donation_percent'], 1) }}%</span></p>
                                     <p class="text-xs text-zinc-700">{{ (int) ($row['paid_students'] ?? 0) }} / {{ (int) ($row['total_students'] ?? 0) }} murid</p>
-                                    <p>Termasuk sumbangan: <span class="text-base font-black">{{ number_format((float) $row['with_donation_percent'], 1) }}%</span></p>
+                                    <p>Sumbangan Tambahan</p>
                                     <p class="text-xs text-zinc-700">RM {{ number_format((float) $row['with_donation_total'], 2) }}</p>
                                 </div>
                             </article>
