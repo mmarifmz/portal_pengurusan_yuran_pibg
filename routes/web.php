@@ -25,6 +25,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
+use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -95,67 +96,54 @@ Route::get('/', function () {
         ->values();
 
     $billingYear = (int) now()->year;
-    $competitionStart = Carbon::create($billingYear, 4, 14, 0, 0, 0)->startOfWeek();
 
     $competitionStudents = Student::query()
         ->where('billing_year', $billingYear)
         ->whereNotNull('class_name')
         ->where('class_name', '!=', '')
-        ->get(['family_code', 'class_name', 'annual_fee']);
+        ->get(['family_code', 'class_name']);
 
-    $classTargets = $competitionStudents
-        ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
-        ->map(fn ($group): float => (float) $group->sum(fn (Student $student): float => max(0, (float) $student->annual_fee)));
+    $familyCodesForRanking = $competitionStudents
+        ->pluck('family_code')
+        ->map(fn ($familyCode): string => trim((string) $familyCode))
+        ->filter()
+        ->unique()
+        ->values();
 
-    $dominantClassByFamilyForRanking = $competitionStudents
-        ->filter(fn (Student $student): bool => filled($student->family_code))
-        ->groupBy(fn (Student $student): string => (string) $student->family_code)
-        ->map(function ($familyStudents): string {
-            return (string) ($familyStudents
-                ->pluck('class_name')
-                ->map(fn ($className) => trim((string) $className))
-                ->filter()
-                ->countBy()
-                ->sortDesc()
-                ->keys()
-                ->first() ?? '');
+    $paidFamilyMap = FamilyBilling::query()
+        ->where('billing_year', $billingYear)
+        ->whereIn('family_code', $familyCodesForRanking->all())
+        ->get(['family_code', 'status', 'fee_amount', 'paid_amount'])
+        ->mapWithKeys(function (FamilyBilling $billing): array {
+            $feeAmount = (float) $billing->fee_amount;
+            $paidAmount = (float) $billing->paid_amount;
+            $isPaid = $billing->status === 'paid' || ($feeAmount > 0 && $paidAmount >= $feeAmount);
+
+            return [(string) $billing->family_code => $isPaid];
         });
 
-    $paidByClass = FamilyPaymentTransaction::query()
-        ->with('familyBilling:id,family_code,billing_year')
-        ->where('status', 'success')
-        ->whereNotNull('paid_at')
-        ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), now()->endOfDay()])
-        ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
-        ->get()
-        ->reduce(function (\Illuminate\Support\Collection $carry, FamilyPaymentTransaction $transaction) use ($dominantClassByFamilyForRanking): \Illuminate\Support\Collection {
-            $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
-            if ($familyCode === '') {
-                return $carry;
-            }
-            $className = (string) ($dominantClassByFamilyForRanking->get($familyCode) ?? '');
-            if ($className === '') {
-                return $carry;
-            }
-            $feePaid = max(0, (float) ($transaction->fee_amount_paid ?? $transaction->amount ?? 0));
-            $carry->put($className, ((float) $carry->get($className, 0)) + $feePaid);
-            return $carry;
-        }, collect());
+    $welcomeClassCompetition = $competitionStudents
+        ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+        ->map(function ($classGroup, string $className) use ($paidFamilyMap): array {
+            $totalStudents = $classGroup->count();
+            $paidStudents = $classGroup
+                ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+                ->count();
 
-    $welcomeClassCompetition = $classTargets
-        ->map(function (float $targetTotal, string $className) use ($paidByClass): array {
-            $paidTotal = (float) $paidByClass->get($className, 0);
             $firstChar = mb_substr(trim($className), 0, 1);
             $year = (int) preg_replace('/\D/', '', $firstChar);
 
             return [
                 'class_name' => $className,
-                'percentage' => $targetTotal > 0 ? round(($paidTotal / $targetTotal) * 100, 2) : 0.0,
+                'percentage' => $totalStudents > 0 ? round(($paidStudents / $totalStudents) * 100, 2) : 0.0,
+                'paid_students' => $paidStudents,
+                'total_students' => $totalStudents,
                 'tahap' => $year >= 4 ? 'Tahap 2' : 'Tahap 1',
             ];
         })
         ->sortBy([
             ['percentage', 'desc'],
+            ['class_name', 'asc'],
         ])
         ->values();
 
