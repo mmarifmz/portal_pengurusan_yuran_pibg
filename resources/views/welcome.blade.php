@@ -216,13 +216,18 @@
                                 <article class="rounded-xl border border-zinc-200 bg-white p-4">
                                     <div class="mb-2 flex items-center justify-between gap-2">
                                         <div class="flex items-center gap-2 font-semibold text-zinc-900">
-                                            @if ($index === 0) ÃƒÂ°Ã…Â¸Ã‚Â¥Ã¢â‚¬Â¡ @elseif ($index === 1) ÃƒÂ°Ã…Â¸Ã‚Â¥Ã‹â€  @elseif ($index === 2) ÃƒÂ°Ã…Â¸Ã‚Â¥Ã¢â‚¬Â° @endif
+                                            @if ($index === 0)
+                                                <span class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">&#x1F947;</span>
+                                            @elseif ($index === 1)
+                                                <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-700">&#x1F948;</span>
+                                            @elseif ($index === 2)
+                                                <span class="inline-flex items-center rounded-md bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">&#x1F949;</span>
+                                            @endif
                                             <span class="inline-flex min-w-[2.2rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-sm font-bold text-zinc-700">#{{ $index + 1 }}</span>
                                             <span>{{ $row['class_name'] }}</span>
                                         </div>
                                         <p class="text-2xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 0) }}%</p>
                                     </div>
-                                    <p class="mt-2 text-xs font-medium text-zinc-600">{{ (int) ($row['paid_students'] ?? 0) }} / {{ (int) ($row['total_students'] ?? 0) }} murid</p>
                                     <div class="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
                                         <div class="flex h-3 w-full">
                                             <div class="bg-emerald-500" style="width: {{ max(0, min(100, $row['percentage'])) }}%;"></div>
