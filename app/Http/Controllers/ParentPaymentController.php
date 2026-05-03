@@ -374,10 +374,25 @@ class ParentPaymentController extends Controller
             ->latest('id')
             ->first();
 
+        $lastYear = (int) now()->year - 1;
+        $legacyPayments = LegacyStudentPayment::query()
+            ->where('source_year', $lastYear)
+            ->where('payment_status', 'paid')
+            ->when(
+                $isTesterMode,
+                fn ($query) => $query->whereIn('family_code', $familyCodes),
+                fn ($query) => $query->whereIn('family_code', $familyCodes)
+            )
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->get();
+
         return view('parent.payment-history', [
             'transactions' => $transactions,
             'activeFilter' => $filter,
             'latestSuccessfulTransaction' => $latestSuccessfulTransaction,
+            'legacyPayments' => $legacyPayments,
+            'lastYear' => $lastYear,
         ]);
     }
 

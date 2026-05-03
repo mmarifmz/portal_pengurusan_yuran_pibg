@@ -7,14 +7,6 @@
                     <h1 class="mt-2 text-2xl font-bold text-zinc-900">Ranking Kutipan Yuran PIBG</h1>
                     <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
                 </div>
-                <form method="GET" action="{{ route('parent.dashboard.class-progress') }}">
-                    <label for="week_start" class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Tapis Minggu</label>
-                    <select id="week_start" name="week_start" onchange="this.form.submit()" class="mt-1 w-72 rounded-lg border-zinc-300 text-sm focus:border-emerald-500 focus:ring-emerald-500">
-                        @foreach ($weekOptions as $week)
-                            <option value="{{ $week['value'] }}" @selected($selectedWeekStart === $week['value'])>{{ $week['label'] }}</option>
-                        @endforeach
-                    </select>
-                </form>
             </div>
             <p class="mt-4 text-sm font-medium text-zinc-600">Paparan: {{ $selectedWeekLabel }}</p>
         </section>
@@ -28,11 +20,17 @@
                             <article class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                                 <div class="mb-2 flex items-center justify-between gap-2">
                                     <h3 class="flex items-center gap-2 text-xl font-bold text-zinc-900">
-                                        @if ($index === 0) 🥇 @elseif ($index === 1) 🥈 @elseif ($index === 2) 🥉 @endif
+                                        @if ($index === 0)
+                                            <span class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">&#x1F947;</span>
+                                        @elseif ($index === 1)
+                                            <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-700">&#x1F948;</span>
+                                        @elseif ($index === 2)
+                                            <span class="inline-flex items-center rounded-md bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">&#x1F949;</span>
+                                        @endif
                                         <span class="inline-flex min-w-[2.4rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-base font-extrabold text-zinc-700">#{{ $index + 1 }}</span>
                                         <span>{{ $row['class_name'] }}</span>
                                     </h3>
-                                    <p class="text-3xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 2) }}%</p>
+                                    <p class="text-3xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 0) }}%</p>
                                 </div>
                                 <div class="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-200">
                                     <div class="flex h-3 w-full">

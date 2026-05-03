@@ -594,7 +594,7 @@ class ParentOtpAuthController extends Controller
             'logged_in_at' => now(),
         ]);
 
-        $intendedCheckoutId = $request->session()->pull('parent_login_intended_checkout');
+        $request->session()->forget('parent_login_intended_checkout');
         $request->session()->forget([
             'parent_otp_phone',
             'parent_otp_debug_code',
@@ -602,17 +602,6 @@ class ParentOtpAuthController extends Controller
             'parent_otp_return_url',
             'parent_otp_preview',
         ]);
-
-        if ($intendedCheckoutId) {
-            $familyBilling = FamilyBilling::query()->find($intendedCheckoutId);
-
-            if ($familyBilling && ($this->userCanAccessFamilyBilling($user, $familyBilling) || $user->isParentTester())) {
-                $request->session()->put('parent_child_selection_completed', true);
-                $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
-
-                return redirect()->route('parent.payments.checkout', $familyBilling);
-            }
-        }
 
         $request->session()->put('parent_child_selection_completed', false);
         $request->session()->forget('parent_selected_family_billing_id');

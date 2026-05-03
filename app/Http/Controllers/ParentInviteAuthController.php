@@ -88,10 +88,10 @@ class ParentInviteAuthController extends Controller
             'logged_in_at' => now(),
         ]);
 
-        $request->session()->put('parent_child_selection_completed', true);
-        $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
+        $request->session()->put('parent_child_selection_completed', false);
+        $request->session()->forget('parent_selected_family_billing_id');
 
-        return redirect()->route('parent.payments.checkout', $familyBilling)
+        return redirect()->route('parent.dashboard')
             ->with('status', 'Akses berjaya. Nombor telefon anda telah didaftarkan ke portal secara manual.');
     }
 

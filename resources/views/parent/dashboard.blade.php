@@ -257,55 +257,47 @@
 
         </section>
 
-        <section class="portal-card p-6">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <h2 class="portal-table-title text-lg font-bold">Ranking Kutipan Yuran PIBG</h2>
-                    <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
-                </div>
-                <a href="{{ route('parent.dashboard.class-progress') }}" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800">
-                    Lihat semua
-                </a>
+        
+
+        <section class="portal-card overflow-hidden">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
+                <h2 class="portal-table-title text-lg font-bold">Rekod Anak dibawah Keluarga</h2>
+                <p class="mt-1 text-sm text-zinc-600">Senarai nama anak dan info berkaitan</p>
             </div>
-            <div class="mt-4 space-y-5">
-                @foreach (($classCompetitionByTahap ?? collect()) as $tahapName => $rows)
-                    <div>
-                        <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-600">{{ $tahapName }}</h3>
-                        <div class="grid gap-3 md:grid-cols-2">
-                            @forelse ($rows as $index => $row)
-                                <div class="rounded-xl border border-zinc-200 bg-white p-4">
-                                    <div class="mb-2 flex items-center justify-between gap-2">
-                                        <div class="flex items-center gap-2 font-semibold text-zinc-900">
-                                            @if ($index === 0) 🥇 @elseif ($index === 1) 🥈 @elseif ($index === 2) 🥉 @endif
-                                            <span class="inline-flex min-w-[2.2rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-sm font-bold text-zinc-700">#{{ $index + 1 }}</span>
-                                            <span>{{ $row['class_name'] }}</span>
-                                        </div>
-                                        <p class="text-2xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 2) }}%</p>
-                                    </div>
-                                    <div class="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
-                                        <div class="flex h-3 w-full">
-                                            <div class="bg-emerald-500" style="width: {{ max(0, min(100, $row['percentage'])) }}%;"></div>
-                                            <div class="bg-zinc-300" style="width: {{ 100 - max(0, min(100, $row['percentage'])) }}%;"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
-                                    Tiada data untuk {{ $tahapName }}.
-                                </div>
-                            @endforelse
-                        </div>
-                    </div>
-                @endforeach
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-white">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <th class="px-6 py-4">Student No</th>
+                            <th class="px-6 py-4">Family Code</th>
+                            <th class="px-6 py-4">Name</th>
+                            <th class="px-6 py-4">Class</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                        @forelse ($children as $student)
+                            <tr>
+                                <td class="portal-heading px-6 py-5 font-semibold">{{ $student->student_no }}</td>
+                                <td class="px-6 py-5">{{ $student->family_code ?? '-' }}</td>
+                                <td class="px-6 py-5 font-medium">{{ $student->full_name }}</td>
+                                <td class="px-6 py-5">{{ $student->class_name ?? '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-6 py-10 text-center text-zinc-500">No children linked to your phone yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
         </section>
-
         <section class="portal-card overflow-hidden">
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="portal-table-title text-lg font-bold">Status Bil Keluarga</h2>
-                        <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran mengikut kod keluarga.</p>
+                        <h2 class="portal-table-title text-lg font-bold">Status Yuran PIBG Keluarga</h2>
+                        <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran dan Resit</p>
                     </div>
                     @if (! empty($latestCurrentYearReceipt))
                         <a
@@ -384,44 +376,10 @@
 
         <section class="portal-card overflow-hidden">
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
-                <h2 class="portal-table-title text-lg font-bold">Rekod Anak Dipautkan</h2>
-                <p class="mt-1 text-sm text-zinc-600">Senarai anak yang berkaitan dengan nombor parent semasa.</p>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-zinc-200">
-                    <thead class="bg-white">
-                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                            <th class="px-6 py-4">Student No</th>
-                            <th class="px-6 py-4">Family Code</th>
-                            <th class="px-6 py-4">Name</th>
-                            <th class="px-6 py-4">Class</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
-                        @forelse ($children as $student)
-                            <tr>
-                                <td class="portal-heading px-6 py-5 font-semibold">{{ $student->student_no }}</td>
-                                <td class="px-6 py-5">{{ $student->family_code ?? '-' }}</td>
-                                <td class="px-6 py-5 font-medium">{{ $student->full_name }}</td>
-                                <td class="px-6 py-5">{{ $student->class_name ?? '-' }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="px-6 py-10 text-center text-zinc-500">No children linked to your phone yet.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="portal-card overflow-hidden">
-            <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="portal-table-title text-lg font-bold">Sejarah Bayaran Tahun Lepas (Imported)</h2>
-                        <p class="mt-1 text-sm text-zinc-600">Rujukan bayaran berstatus paid dari portal tahun lepas.</p>
+                        <h2 class="portal-table-title text-lg font-bold">Rekod Bayaran Yuran PIBG Tahun {{ $billingYear - 1 }}</h2>
+                        <p class="mt-1 text-sm text-zinc-600">Senarai pembayaran berjaya & Resit</p>
                         <p class="mt-2 text-xs font-semibold text-zinc-700">
                             Total paid: RM {{ number_format($legacyPaidTotal ?? 0, 2) }}
                             <span class="mx-2">|</span>
@@ -470,6 +428,49 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+<section class="portal-card p-6">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="portal-table-title text-lg font-bold">Ranking Kutipan Yuran PIBG</h2>
+                    <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
+                </div>
+                <a href="{{ route('parent.dashboard.class-progress') }}" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800">
+                    Lihat semua
+                </a>
+            </div>
+            <div class="mt-4 space-y-5">
+                @foreach (($classCompetitionByTahap ?? collect()) as $tahapName => $rows)
+                    <div>
+                        <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-zinc-600">{{ $tahapName }}</h3>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            @forelse ($rows as $index => $row)
+                                <div class="rounded-xl border border-zinc-200 bg-white p-4">
+                                    <div class="mb-2 flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 font-semibold text-zinc-900">
+                                            @if ($index === 0) &#x1F947; @elseif ($index === 1) &#x1F948; @elseif ($index === 2) &#x1F949; @endif
+                                            <span class="inline-flex min-w-[2.2rem] justify-center rounded-md bg-zinc-100 px-2 py-0.5 text-sm font-bold text-zinc-700">#{{ $index + 1 }}</span>
+                                            <span>{{ $row['class_name'] }}</span>
+                                        </div>
+                                        <p class="text-2xl font-extrabold text-emerald-700">{{ number_format((float) $row['percentage'], 2) }}%</p>
+                                    </div>
+                                    <div class="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+                                        <div class="flex h-3 w-full">
+                                            <div class="bg-emerald-500" style="width: {{ max(0, min(100, $row['percentage'])) }}%;"></div>
+                                            <div class="bg-zinc-300" style="width: {{ 100 - max(0, min(100, $row['percentage'])) }}%;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                                    Tiada data untuk {{ $tahapName }}.
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+                @endforeach
             </div>
         </section>
     </div>

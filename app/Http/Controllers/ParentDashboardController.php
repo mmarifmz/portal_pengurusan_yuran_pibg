@@ -124,80 +124,62 @@ class ParentDashboardController extends Controller
             ->map(fn (Collection $group) => $group->first())
             ->filter();
 
-        $competitionStart = Carbon::create($billingYear, 4, 14, 0, 0, 0)->startOfWeek();
         $competitionStudents = Student::query()
             ->where('billing_year', $billingYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
             ->get(['family_code', 'class_name', 'annual_fee']);
 
-        $dominantClassByFamily = $competitionStudents
-            ->filter(fn (Student $student): bool => filled($student->family_code))
-            ->groupBy(fn (Student $student): string => (string) $student->family_code)
-            ->map(function ($familyStudents): string {
-                return (string) ($familyStudents
-                    ->pluck('class_name')
-                    ->map(fn ($className) => trim((string) $className))
-                    ->filter()
-                    ->countBy()
-                    ->sortDesc()
-                    ->keys()
-                    ->first() ?? '');
+        $familyCodesForCompetition = $competitionStudents
+            ->pluck('family_code')
+            ->map(fn ($familyCode): string => trim((string) $familyCode))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $paidFamilyMap = FamilyBilling::query()
+            ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $familyCodesForCompetition->all())
+            ->get(['family_code', 'status', 'fee_amount', 'paid_amount'])
+            ->mapWithKeys(function (FamilyBilling $billing): array {
+                $feeAmount = (float) $billing->fee_amount;
+                $paidAmount = (float) $billing->paid_amount;
+                $isPaid = $billing->status === 'paid' || ($feeAmount > 0 && $paidAmount >= $feeAmount);
+
+                return [(string) $billing->family_code => $isPaid];
             });
 
         $overallYuranTotal = (float) $competitionStudents->sum(fn (Student $student): float => max(0, (float) $student->annual_fee));
-        $overallYuranPaid = (float) FamilyPaymentTransaction::query()
-            ->where('status', 'success')
-            ->whereNotNull('paid_at')
-            ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), now()->endOfDay()])
-            ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
-            ->sum('fee_amount_paid');
+        $overallYuranPaid = (float) $competitionStudents
+            ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+            ->sum(fn (Student $student): float => max(0, (float) $student->annual_fee));
         $overallYuranPercentage = $overallYuranTotal > 0
             ? round(($overallYuranPaid / $overallYuranTotal) * 100, 1)
             : 0.0;
 
-        $classTargets = $competitionStudents
+        $classCompetition = $competitionStudents
             ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
-            ->map(fn ($group): float => (float) $group->sum(fn (Student $student): float => max(0, (float) $student->annual_fee)));
+            ->map(function (Collection $classStudents, string $className) use ($paidFamilyMap): array {
+                $totalStudents = $classStudents->count();
+                $paidStudents = $classStudents
+                    ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+                    ->count();
 
-        $paidByClass = FamilyPaymentTransaction::query()
-            ->with('familyBilling:id,family_code,billing_year')
-            ->where('status', 'success')
-            ->whereNotNull('paid_at')
-            ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), now()->endOfDay()])
-            ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
-            ->get()
-            ->reduce(function (Collection $carry, FamilyPaymentTransaction $transaction) use ($dominantClassByFamily): Collection {
-                $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
-                if ($familyCode === '') {
-                    return $carry;
-                }
-                $className = (string) ($dominantClassByFamily->get($familyCode) ?? '');
-                if ($className === '') {
-                    return $carry;
-                }
-                $feePaid = max(0, (float) ($transaction->fee_amount_paid ?? $transaction->amount ?? 0));
-                $carry->put($className, ((float) $carry->get($className, 0)) + $feePaid);
-                return $carry;
-            }, collect());
-
-        $classCompetition = $classTargets
-            ->map(function (float $targetTotal, string $className) use ($paidByClass): array {
-                $paidFeeTotal = (float) $paidByClass->get($className, 0);
                 return [
                     'class_name' => $className,
-                    'percentage' => $targetTotal > 0 ? round(($paidFeeTotal / $targetTotal) * 100, 2) : 0.0,
+                    'percentage' => $totalStudents > 0 ? round(($paidStudents / $totalStudents) * 100, 2) : 0.0,
                     'tahap' => $this->resolveTahapFromClassName($className),
                 ];
             })
             ->sortBy([
                 ['percentage', 'desc'],
+                ['class_name', 'asc'],
             ])
             ->values();
 
         $classCompetitionByTahap = collect([
-            'Tahap 1' => $classCompetition->where('tahap', 'Tahap 1')->take(5)->values(),
-            'Tahap 2' => $classCompetition->where('tahap', 'Tahap 2')->take(5)->values(),
+            'Tahap 1' => $classCompetition->where('tahap', 'Tahap 1')->take(3)->values(),
+            'Tahap 2' => $classCompetition->where('tahap', 'Tahap 2')->take(3)->values(),
         ]);
 
         return view('parent.dashboard', [
@@ -338,89 +320,55 @@ class ParentDashboardController extends Controller
     public function classProgress(Request $request): View
     {
         $billingYear = (int) now()->year;
-        $competitionStart = Carbon::create($billingYear, 4, 14, 0, 0, 0)->startOfWeek();
-        $currentWeekStart = now()->startOfWeek();
-
-        $weekStarts = collect();
-        for ($cursor = $competitionStart->copy(); $cursor->lte($currentWeekStart); $cursor->addWeek()) {
-            $weekStarts->push($cursor->copy());
-        }
-        if ($weekStarts->isEmpty()) {
-            $weekStarts->push($currentWeekStart->copy());
-        }
-
-        $selectedWeekStartInput = (string) $request->query('week_start', $weekStarts->last()->toDateString());
-        $selectedWeekStart = $weekStarts
-            ->first(fn (Carbon $week): bool => $week->toDateString() === $selectedWeekStartInput)
-            ?? $weekStarts->last();
-        $selectedWeekEnd = $selectedWeekStart->copy()->addDays(6)->endOfDay();
 
         $students = Student::query()
             ->where('billing_year', $billingYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
-            ->get(['family_code', 'class_name', 'annual_fee']);
+            ->get(['family_code', 'class_name']);
 
-        $classTargets = $students
-            ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
-            ->map(fn ($group): float => (float) $group->sum(fn (Student $student): float => max(0, (float) $student->annual_fee)));
+        $familyCodes = $students
+            ->pluck('family_code')
+            ->map(fn ($familyCode): string => trim((string) $familyCode))
+            ->filter()
+            ->unique()
+            ->values();
 
-        $dominantClassByFamily = $students
-            ->filter(fn (Student $student): bool => filled($student->family_code))
-            ->groupBy(fn (Student $student): string => (string) $student->family_code)
-            ->map(function ($familyStudents): string {
-                return (string) ($familyStudents
-                    ->pluck('class_name')
-                    ->map(fn ($className) => trim((string) $className))
-                    ->filter()
-                    ->countBy()
-                    ->sortDesc()
-                    ->keys()
-                    ->first() ?? '');
+        $paidFamilyMap = FamilyBilling::query()
+            ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $familyCodes->all())
+            ->get(['family_code', 'status', 'fee_amount', 'paid_amount'])
+            ->mapWithKeys(function (FamilyBilling $billing): array {
+                $feeAmount = (float) $billing->fee_amount;
+                $paidAmount = (float) $billing->paid_amount;
+                $isPaid = $billing->status === 'paid' || ($feeAmount > 0 && $paidAmount >= $feeAmount);
+
+                return [(string) $billing->family_code => $isPaid];
             });
 
-        $weeklyTransactions = FamilyPaymentTransaction::query()
-            ->with('familyBilling:id,family_code,billing_year')
-            ->where('status', 'success')
-            ->whereNotNull('paid_at')
-            ->whereBetween('paid_at', [$competitionStart->copy()->startOfDay(), $selectedWeekEnd])
-            ->whereHas('familyBilling', fn ($query) => $query->where('billing_year', $billingYear))
-            ->get();
+        $classProgress = $students
+            ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+            ->map(function (Collection $classStudents, string $className) use ($paidFamilyMap): array {
+                $totalStudents = $classStudents->count();
+                $paidStudents = $classStudents
+                    ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+                    ->count();
 
-        $weeklyPaidByClass = $weeklyTransactions
-            ->reduce(function (Collection $carry, FamilyPaymentTransaction $transaction) use ($dominantClassByFamily): Collection {
-                $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
-                if ($familyCode === '') {
-                    return $carry;
-                }
-
-                $className = (string) ($dominantClassByFamily->get($familyCode) ?? '');
-                if ($className === '') {
-                    return $carry;
-                }
-
-                $paid = max(0, (float) ($transaction->fee_amount_paid ?? $transaction->amount ?? 0));
-                $carry->put($className, ((float) $carry->get($className, 0)) + $paid);
-
-                return $carry;
-            }, collect());
-
-        $classProgress = $classTargets
-            ->map(function (float $targetTotal, string $className) use ($weeklyPaidByClass): array {
-                $paidTotal = (float) $weeklyPaidByClass->get($className, 0);
-                $percentage = $targetTotal > 0 ? round(($paidTotal / $targetTotal) * 100, 1) : 0.0;
+                $percentage = $totalStudents > 0
+                    ? round(($paidStudents / $totalStudents) * 100, 2)
+                    : 0.0;
 
                 return [
                     'class_name' => $className,
                     'percentage' => max(0, min(100, $percentage)),
-                    'paid_total' => $paidTotal,
-                    'target_total' => $targetTotal,
+                    'paid_students' => $paidStudents,
+                    'total_students' => $totalStudents,
                     'tahap' => $this->resolveTahapFromClassName($className),
                 ];
             })
             ->sortBy([
                 ['percentage', 'desc'],
-                ['paid_total', 'desc'],
+                ['class_name', 'asc'],
             ])
             ->values();
 
@@ -430,12 +378,7 @@ class ParentDashboardController extends Controller
         ]);
 
         return view('parent.class-progress', [
-            'weekOptions' => $weekStarts->map(fn (Carbon $week) => [
-                'value' => $week->toDateString(),
-                'label' => 'Minggu '.$week->format('d M').' - '.$week->copy()->addDays(6)->format('d M Y'),
-            ]),
-            'selectedWeekStart' => $selectedWeekStart->toDateString(),
-            'selectedWeekLabel' => 'Minggu '.$selectedWeekStart->format('d M').' - '.$selectedWeekStart->copy()->addDays(6)->format('d M Y'),
+            'selectedWeekLabel' => 'Bagi Sesi '.$billingYear,
             'classProgressByTahap' => $classProgressByTahap,
         ]);
     }

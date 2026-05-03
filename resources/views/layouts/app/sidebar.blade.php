@@ -106,14 +106,14 @@
                         <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
                             {{ __('Ibu / Bapa & Penjaga') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="clock" :href="route('parent.payments.history')" :current="request()->routeIs('parent.payments.history')" wire:navigate>
+                            {{ __('Payment History') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="chart-pie" :href="route('parent.dashboard.class-progress')" :current="request()->routeIs('parent.dashboard.class-progress')" wire:navigate>
                             {{ __('Ranking Kelas') }}
                         </flux:sidebar.item>
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
                             {{ __('Takwim Sekolah') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="clock" :href="route('parent.payments.history')" :current="request()->routeIs('parent.payments.history')" wire:navigate>
-                            {{ __('Payment History') }}
                         </flux:sidebar.item>
                     @endif
                 </flux:sidebar.group>

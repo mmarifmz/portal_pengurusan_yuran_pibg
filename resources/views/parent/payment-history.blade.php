@@ -106,5 +106,62 @@
                 {{ $transactions->appends(['filter' => $activeFilter])->links() }}
             </div>
         </div>
+
+        <div class="box overflow-hidden">
+            <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-zinc-700">Rekod Bayaran Tahun {{ $lastYear }}</h3>
+                        <p class="mt-1 text-xs text-zinc-500">Rekod imported tahun lepas dan akses cepat jana resit.</p>
+                    </div>
+                    <a
+                        href="{{ route('parent.dashboard.legacy-receipt', ['year' => $lastYear]) }}"
+                        class="rounded-lg border border-sky-300 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                    >
+                        Jana Resit Tahun {{ $lastYear }}
+                    </a>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr class="text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <th class="px-4 py-3">Tarikh Bayar</th>
+                            <th class="px-4 py-3">Rujukan</th>
+                            <th class="px-4 py-3">Anak</th>
+                            <th class="px-4 py-3">Kelas</th>
+                            <th class="px-4 py-3 text-right">Jumlah (RM)</th>
+                            <th class="px-4 py-3 text-right">Sumbangan (RM)</th>
+                            <th class="px-4 py-3 text-right">Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 text-sm text-zinc-800">
+                        @forelse (($legacyPayments ?? collect()) as $legacyPayment)
+                            <tr>
+                                <td class="px-4 py-3">{{ $legacyPayment->paid_at?->format('d M Y H:i') ?? '-' }}</td>
+                                <td class="px-4 py-3 font-mono text-xs">{{ $legacyPayment->payment_reference ?: '-' }}</td>
+                                <td class="px-4 py-3">{{ $legacyPayment->student_name ?: '-' }}</td>
+                                <td class="px-4 py-3">{{ $legacyPayment->display_class_name ?: ($legacyPayment->class_name ?: '-') }}</td>
+                                <td class="px-4 py-3 text-right font-semibold">{{ number_format((float) $legacyPayment->amount_paid, 2) }}</td>
+                                <td class="px-4 py-3 text-right">{{ number_format((float) $legacyPayment->donation_amount, 2) }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <a
+                                        href="{{ route('parent.dashboard.legacy-receipt', ['year' => (int) ($legacyPayment->source_year ?: $lastYear)]) }}"
+                                        class="rounded-lg border border-sky-300 px-3 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                    >
+                                        Jana Resit
+                                    </a>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-zinc-500">Tiada rekod imported untuk tahun {{ $lastYear }}.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </x-layouts::app>
