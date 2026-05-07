@@ -22,6 +22,9 @@
         $registeredParentUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
             'record_filter' => 'registered-parent',
         ])));
+        $registeredParentProfileUnpaidUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
+            'record_filter' => 'registered-parent-profile-unpaid',
+        ])));
         $paidIncompleteParentUrl = route('teacher.records', array_filter(array_merge($baseQuery, [
             'record_filter' => 'paid-incomplete-parent',
         ])));
@@ -193,13 +196,19 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <a
                         href="{{ $allRecordsUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === '' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-emerald-300 hover:text-emerald-700' }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === '' ? 'shadow-sm ring-2 ring-zinc-300' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 hover:text-zinc-900' }}"
+                        @if ($recordFilter === '')
+                            style="background-color:#0f766e;border-color:#0f766e;color:#ffffff;"
+                        @endif
                     >
                         All records
                     </a>
                     <a
                         href="{{ $duplicateRecordsUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'duplicates' ? 'border-amber-600 bg-amber-500 text-white' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'duplicates' ? 'shadow-sm ring-2 ring-zinc-300' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' }}"
+                        @if ($recordFilter === 'duplicates')
+                            style="background-color:#d97706;border-color:#b45309;color:#ffffff;"
+                        @endif
                     >
                         Duplicate only
                     </a>
@@ -217,9 +226,21 @@
                     </a>
                     <a
                         href="{{ $registeredParentUrl }}"
-                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'registered-parent' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50' }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'registered-parent' ? 'shadow-sm ring-2 ring-zinc-300' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50' }}"
+                        @if ($recordFilter === 'registered-parent')
+                            style="background-color:#334155;border-color:#334155;color:#ffffff;"
+                        @endif
                     >
                         Parent is registered
+                    </a>
+                    <a
+                        href="{{ $registeredParentProfileUnpaidUrl }}"
+                        class="inline-flex items-center whitespace-nowrap rounded-full border px-3 py-2 text-xs font-semibold transition {{ $recordFilter === 'registered-parent-profile-unpaid' ? 'shadow-sm ring-2 ring-zinc-300' : 'border-zinc-300 bg-zinc-100 text-zinc-900 hover:bg-zinc-200' }}"
+                        @if ($recordFilter === 'registered-parent-profile-unpaid')
+                            style="background-color:#a21caf;border-color:#86198f;color:#ffffff;"
+                        @endif
+                    >
+                        Registered + profile + unpaid
                     </a>
                     <a
                         href="{{ $paidIncompleteParentUrl }}"

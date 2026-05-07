@@ -236,6 +236,34 @@ class TeacherRecordsController extends Controller
                     return false;
                 });
             })
+            ->when($recordFilter === 'registered-parent-profile-unpaid', function ($collection) use ($onboardedParentEmails, $onboardedParentPhones, $paidThisYearFamilyCodes, $familyCodesWithResolvedParent) {
+                return $collection->filter(function (Student $student) use ($onboardedParentEmails, $onboardedParentPhones, $paidThisYearFamilyCodes, $familyCodesWithResolvedParent): bool {
+                    $isPaidThisYear = filled($student->family_code) && $paidThisYearFamilyCodes->contains((string) $student->family_code);
+
+                    if ($isPaidThisYear) {
+                        return false;
+                    }
+
+                    $hasParentFile = filled($student->family_code)
+                        && $familyCodesWithResolvedParent->contains((string) $student->family_code);
+                    if (! $hasParentFile) {
+                        return false;
+                    }
+
+                    $studentEmail = mb_strtolower(trim((string) ($student->parent_email ?? '')));
+                    $studentPhone = $this->normalizePhoneForMatch((string) ($student->parent_phone ?? ''));
+
+                    if ($studentEmail !== '' && $onboardedParentEmails->contains($studentEmail)) {
+                        return true;
+                    }
+
+                    if ($studentPhone !== '' && $onboardedParentPhones->contains($studentPhone)) {
+                        return true;
+                    }
+
+                    return false;
+                });
+            })
             ->when($selectedSocialTag !== '', fn ($collection) => $collection->filter(
                 fn (Student $student) => (bool) data_get($student, $selectedSocialTag)
             ))
