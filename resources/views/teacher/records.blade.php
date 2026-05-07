@@ -39,6 +39,11 @@
             'sort_by' => 'class',
             'sort_dir' => $nextClassSortDir,
         ])));
+        $filteredFamiliesCount = $students
+            ->pluck('family_code')
+            ->filter()
+            ->unique()
+            ->count();
     @endphp
 
     <div class="space-y-8">
@@ -102,9 +107,14 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Full Student Directory</h2>
-                    <p class="text-sm text-gray-500">Default sort: latest paid yuran timestamp (newest first).</p>
+                    <p class="text-sm text-gray-700">Default sort: latest paid yuran timestamp (newest first).</p>
                 </div>
-                <span class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ $students->count() }} students</span>
+                <span class="text-xs font-semibold uppercase tracking-wide text-gray-700">
+                    {{ number_format($students->count()) }} students
+                    @if ($filteredFamiliesCount > 0)
+                        | {{ number_format($filteredFamiliesCount) }} families
+                    @endif
+                </span>
             </div>
 
             <div class="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
