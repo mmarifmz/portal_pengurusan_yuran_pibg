@@ -351,12 +351,11 @@
                                             @endif
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4 text-right font-semibold {{ $student->outstanding_balance > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
-                                        @if ($isPaidThisYear)
-                                            <span class="text-zinc-400">-</span>
-                                        @else
-                                            RM {{ number_format($student->outstanding_balance, 2) }}
-                                        @endif
+                                    @php
+                                        $displayOutstanding = (float) ($student->current_year_outstanding_balance ?? $student->outstanding_balance);
+                                    @endphp
+                                    <td class="px-5 py-4 text-right font-semibold {{ $displayOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
+                                        RM {{ number_format($displayOutstanding, 2) }}
                                     </td>
                                     <td class="px-5 py-4">
                                         <div class="flex flex-wrap items-center gap-2">

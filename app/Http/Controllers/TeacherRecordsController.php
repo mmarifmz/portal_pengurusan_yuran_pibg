@@ -342,6 +342,25 @@ class TeacherRecordsController extends Controller
             ->orderBy('family_code')
             ->get();
 
+        $outstandingByFamilyCode = $familyBillings
+            ->mapWithKeys(fn (FamilyBilling $billing): array => [
+                (string) $billing->family_code => (float) $billing->outstanding_amount,
+            ]);
+
+        $studentsWithResolvedParents = $studentsWithResolvedParents
+            ->map(function (Student $student) use ($outstandingByFamilyCode): Student {
+                $familyCode = (string) ($student->family_code ?? '');
+
+                if ($familyCode !== '' && $outstandingByFamilyCode->has($familyCode)) {
+                    $student->setAttribute('current_year_outstanding_balance', (float) $outstandingByFamilyCode->get($familyCode));
+                } else {
+                    $student->setAttribute('current_year_outstanding_balance', max(0, (float) $student->outstanding_balance));
+                }
+
+                return $student;
+            })
+            ->values();
+
         $filteredFamilyCodes = $filteredStudents
             ->pluck('family_code')
             ->filter()
