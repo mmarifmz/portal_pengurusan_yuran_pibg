@@ -41,6 +41,7 @@ class TeacherRecordsController extends Controller
             : ($sortBy === 'paid_latest' ? 'desc' : 'asc');
 
         $students = Student::query()
+            ->where('billing_year', $billingYear)
             ->orderBy('family_code')
             ->orderBy('full_name')
             ->get();
@@ -70,6 +71,7 @@ class TeacherRecordsController extends Controller
             ->unique();
 
         $availableClasses = Student::query()
+            ->where('billing_year', $billingYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
             ->distinct()
