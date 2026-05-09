@@ -103,9 +103,14 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-xs uppercase tracking-wide text-zinc-500">Collection trend</p>
-                    <h3 class="text-lg font-semibold text-zinc-900">Trend kutipan bulanan</h3>
+                    <h3 class="text-lg font-semibold text-zinc-900">Trend kutipan harian</h3>
                 </div>
                 <span class="text-xs text-zinc-500">{{ $selectedDashboardYear }} (Jan-Dis)</span>
+            </div>
+            <div class="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+                <p id="dailyCollectionTicker" class="text-xs font-semibold text-sky-900">
+                    Daily ticker: memuatkan data kutipan harian...
+                </p>
             </div>
             <div class="mt-5 h-64">
                 <canvas id="dailyCollectionChart" class="h-full w-full"></canvas>
@@ -392,6 +397,41 @@
                     }
 
                     const lineCanvas = document.getElementById('dailyCollectionChart');
+                    const dailyTickerElement = document.getElementById('dailyCollectionTicker');
+                    const dailyTickerRows = @json($dailyTickerRows ?? []);
+                    let dailyTickerTimer = null;
+
+                    const initDailyTicker = () => {
+                        if (!dailyTickerElement) {
+                            return;
+                        }
+
+                        if (dailyTickerTimer) {
+                            clearInterval(dailyTickerTimer);
+                            dailyTickerTimer = null;
+                        }
+
+                        if (!Array.isArray(dailyTickerRows) || dailyTickerRows.length === 0) {
+                            dailyTickerElement.textContent = 'Daily ticker: tiada kutipan direkodkan lagi untuk tahun ini.';
+                            return;
+                        }
+
+                        let tickerIndex = 0;
+                        const renderTicker = () => {
+                            const row = dailyTickerRows[tickerIndex];
+                            const amount = Number(row?.amount || 0).toLocaleString('en-MY', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                            });
+                            const dateText = row?.date || '-';
+                            dailyTickerElement.textContent = `Daily ticker: ${dateText} | RM ${amount}`;
+                            tickerIndex = (tickerIndex + 1) % dailyTickerRows.length;
+                        };
+
+                        renderTicker();
+                        dailyTickerTimer = setInterval(renderTicker, 2200);
+                    };
+
                     if (lineCanvas) {
                         destroyChart('line');
                         dashboardState.line = new Chart(lineCanvas, {
@@ -411,11 +451,17 @@
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
+                                interaction: {
+                                    mode: 'index',
+                                    intersect: false,
+                                },
                                 scales: {
                                     y: { beginAtZero: true, ticks: { callback(value) { return `RM ${Number(value).toFixed(0)}`; } } },
+                                    x: { ticks: { maxTicksLimit: 16 } },
                                 },
                             },
                         });
+                        initDailyTicker();
                     } else {
                         destroyChart('line');
                     }

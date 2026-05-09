@@ -349,14 +349,10 @@ class DashboardController extends Controller
         $classChartYuran = $filteredClassCollection->pluck('yuran')->toArray();
         $classChartSumbangan = $filteredClassCollection->pluck('sumbangan')->toArray();
 
-        $trendMonthLabels = collect(range(1, 12))
-            ->map(fn (int $month): string => Carbon::create($selectedDashboardYear, $month, 1)->format('M'))
-            ->values();
-
         if ($useLegacyKpiSource) {
-            $monthlyPaid = $legacyPaymentTransactions
+            $dailyPaid = $legacyPaymentTransactions
                 ->filter(fn (array $payment) => ($payment['paid_at'] ?? null) !== null)
-                ->groupBy(fn (array $payment) => $payment['paid_at']->format('n'))
+                ->groupBy(fn (array $payment) => $payment['paid_at']->format('Y-m-d'))
                 ->map(fn ($group) => (float) $group->sum('amount_paid'));
 
             $calendarPaidCountByDate = $legacyPaymentTransactions
@@ -365,8 +361,8 @@ class DashboardController extends Controller
                 ->map(fn ($group) => $group->count())
                 ->toArray();
         } else {
-            $monthlyPaid = $selectedYearTransactions
-                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('n'))
+            $dailyPaid = $selectedYearTransactions
+                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
                 ->map(fn ($group) => (float) $group->sum('amount'));
 
             $calendarPaidCountByDate = $selectedYearTransactions
@@ -375,9 +371,34 @@ class DashboardController extends Controller
                 ->toArray();
         }
 
-        $dailyTrendLabels = $trendMonthLabels->toArray();
-        $dailyTrendValues = collect(range(1, 12))
-            ->map(fn (int $month): float => round((float) $monthlyPaid->get((string) $month, $monthlyPaid->get($month, 0)), 2))
+        $trendStart = Carbon::create($selectedDashboardYear, 1, 1)->startOfDay();
+        $trendEnd = Carbon::create($selectedDashboardYear, 12, 31)->endOfDay();
+
+        $dailyTrendDates = collect();
+        for ($cursor = $trendStart->copy(); $cursor->lte($trendEnd); $cursor->addDay()) {
+            $dailyTrendDates->push($cursor->copy());
+        }
+
+        $dailyTrendLabels = $dailyTrendDates
+            ->map(fn (Carbon $date): string => $date->format('d M'))
+            ->toArray();
+        $dailyTrendValues = $dailyTrendDates
+            ->map(fn (Carbon $date): float => round((float) $dailyPaid->get($date->toDateString(), 0), 2))
+            ->values()
+            ->toArray();
+
+        $dailyTickerRows = $dailyTrendDates
+            ->map(function (Carbon $date) use ($dailyPaid): array {
+                $value = round((float) $dailyPaid->get($date->toDateString(), 0), 2);
+
+                return [
+                    'date' => $date->format('d M Y'),
+                    'amount' => $value,
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['amount'] > 0)
+            ->values()
+            ->take(-60)
             ->values()
             ->toArray();
 
@@ -534,6 +555,7 @@ class DashboardController extends Controller
             'tahap2TopClasses' => $tahap2TopClasses,
             'dailyTrendLabels' => $dailyTrendLabels,
             'dailyTrendValues' => $dailyTrendValues,
+            'dailyTickerRows' => $dailyTickerRows,
             'calendarPaidCountByDate' => $calendarPaidCountByDate,
             'familyStatusByYearClass' => $familyStatusByYearClass,
             'statusFilterYears' => $statusFilterYears,
