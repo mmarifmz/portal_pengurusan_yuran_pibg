@@ -105,7 +105,7 @@
                     <p class="text-xs uppercase tracking-wide text-zinc-500">Collection trend</p>
                     <h3 class="text-lg font-semibold text-zinc-900">Trend kutipan harian</h3>
                 </div>
-                <span class="text-xs text-zinc-500">{{ $selectedDashboardYear }} (Jan-Dis)</span>
+                <span class="text-xs text-zinc-500">{{ $dailyTrendRangeLabel ?? ($selectedDashboardYear.' (Jan-Dis)') }}</span>
             </div>
             <div class="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
                 <p id="dailyCollectionTicker" class="text-xs font-semibold text-sky-900">

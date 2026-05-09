@@ -350,10 +350,27 @@ class DashboardController extends Controller
         $classChartSumbangan = $filteredClassCollection->pluck('sumbangan')->toArray();
 
         if ($useLegacyKpiSource) {
-            $dailyPaid = $legacyPaymentTransactions
+            $dailyPaidRows = $legacyPaymentTransactions
                 ->filter(fn (array $payment) => ($payment['paid_at'] ?? null) !== null)
-                ->groupBy(fn (array $payment) => $payment['paid_at']->format('Y-m-d'))
-                ->map(fn ($group) => (float) $group->sum('amount_paid'));
+                ->map(function (array $payment): array {
+                    $paidAt = Carbon::parse((string) $payment['paid_at'])->timezone(config('app.timezone', 'Asia/Kuala_Lumpur'));
+
+                    return [
+                        'paid_at' => $paidAt,
+                        'amount' => (float) ($payment['amount_paid'] ?? 0),
+                    ];
+                })
+                ->values();
+
+            $firstPaidAt = $dailyPaidRows
+                ->pluck('paid_at')
+                ->filter()
+                ->sort()
+                ->first();
+
+            $dailyPaid = $dailyPaidRows
+                ->groupBy(fn (array $row) => $row['paid_at']->format('Y-m-d'))
+                ->map(fn ($group) => (float) collect($group)->sum('amount'));
 
             $calendarPaidCountByDate = $legacyPaymentTransactions
                 ->filter(fn (array $payment) => ($payment['paid_at'] ?? null) !== null)
@@ -361,9 +378,29 @@ class DashboardController extends Controller
                 ->map(fn ($group) => $group->count())
                 ->toArray();
         } else {
-            $dailyPaid = $selectedYearTransactions
-                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
-                ->map(fn ($group) => (float) $group->sum('amount'));
+            $dailyPaidRows = $selectedYearTransactions
+                ->map(function (FamilyPaymentTransaction $transaction): array {
+                    $paidAt = $transaction->paid_at
+                        ? Carbon::parse((string) $transaction->paid_at)->timezone(config('app.timezone', 'Asia/Kuala_Lumpur'))
+                        : null;
+
+                    return [
+                        'paid_at' => $paidAt,
+                        'amount' => (float) $transaction->amount,
+                    ];
+                })
+                ->filter(fn (array $row): bool => $row['paid_at'] !== null)
+                ->values();
+
+            $firstPaidAt = $dailyPaidRows
+                ->pluck('paid_at')
+                ->filter()
+                ->sort()
+                ->first();
+
+            $dailyPaid = $dailyPaidRows
+                ->groupBy(fn (array $row) => $row['paid_at']->format('Y-m-d'))
+                ->map(fn ($group) => (float) collect($group)->sum('amount'));
 
             $calendarPaidCountByDate = $selectedYearTransactions
                 ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
@@ -371,8 +408,17 @@ class DashboardController extends Controller
                 ->toArray();
         }
 
-        $trendStart = Carbon::create($selectedDashboardYear, 1, 1)->startOfDay();
-        $trendEnd = Carbon::create($selectedDashboardYear, 12, 31)->endOfDay();
+        if ($firstPaidAt instanceof Carbon) {
+            $trendStart = $firstPaidAt->copy()->startOfDay();
+            $trendEnd = $trendStart->copy()->addMonthsNoOverflow(4)->endOfDay();
+            $yearEnd = Carbon::create($selectedDashboardYear, 12, 31)->endOfDay();
+            if ($trendEnd->gt($yearEnd)) {
+                $trendEnd = $yearEnd;
+            }
+        } else {
+            $trendStart = Carbon::create($selectedDashboardYear, 1, 1)->startOfDay();
+            $trendEnd = Carbon::create($selectedDashboardYear, 4, 30)->endOfDay();
+        }
 
         $dailyTrendDates = collect();
         for ($cursor = $trendStart->copy(); $cursor->lte($trendEnd); $cursor->addDay()) {
@@ -401,6 +447,7 @@ class DashboardController extends Controller
             ->take(-60)
             ->values()
             ->toArray();
+        $dailyTrendRangeLabel = $trendStart->format('d M Y').' - '.$trendEnd->format('d M Y');
 
         $familyBillingsAllYears = FamilyBilling::query()
             ->with('students')
@@ -556,6 +603,7 @@ class DashboardController extends Controller
             'dailyTrendLabels' => $dailyTrendLabels,
             'dailyTrendValues' => $dailyTrendValues,
             'dailyTickerRows' => $dailyTickerRows,
+            'dailyTrendRangeLabel' => $dailyTrendRangeLabel,
             'calendarPaidCountByDate' => $calendarPaidCountByDate,
             'familyStatusByYearClass' => $familyStatusByYearClass,
             'statusFilterYears' => $statusFilterYears,
