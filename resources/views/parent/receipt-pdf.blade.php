@@ -191,9 +191,23 @@
                         </td>
                         <td>
                             <p class="label">Status</p>
-                            <p class="value">{{ ucfirst($transaction->status) }}</p>
+                            <p class="value">{{ $receiptContext['payment_status_label'] ?? ucfirst($transaction->status) }}</p>
                         </td>
                     </tr>
+                    @if (! empty($receiptContext['has_installment']))
+                        <tr>
+                            <td>
+                                <p class="label">Ansuran</p>
+                                <p class="value">{{ $receiptContext['installment_label'] }}</p>
+                                <p class="muted">Bayaran transaksi ini: RM {{ number_format((float) $receiptContext['transaction_amount'], 2) }}</p>
+                            </td>
+                            <td>
+                                <p class="label">Ringkasan Bayaran</p>
+                                <p class="muted">Jumlah dibayar: RM {{ number_format((float) ($receiptContext['total_paid_to_date'] ?? 0), 2) }}</p>
+                                <p class="muted">Baki bayaran: RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}</p>
+                            </td>
+                        </tr>
+                    @endif
                     <tr>
                         <td>
                             <p class="label">Maklumat pembayar</p>

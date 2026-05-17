@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\SiteSetting;
+use App\Models\SocialTag;
+use App\Models\FamilyBilling;
 use App\Models\Student;
 use App\Models\User;
 
@@ -161,4 +163,84 @@ it('shows filtered student list when selecting social tag group', function () {
     $response->assertSee('Student List');
     $response->assertSee('SSP-FLT1');
     $response->assertDontSee('SSP-FLT2');
+});
+
+it('allows system admin to create, update, and delete unused master social tags', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('teacher.social-tags.tags.store'), [
+            'name' => 'Asnaf',
+            'is_active' => '1',
+            'sort_order' => 5,
+        ])
+        ->assertRedirect(route('teacher.social-tags.index'));
+
+    $tag = SocialTag::query()->where('name', 'Asnaf')->firstOrFail();
+
+    $this->actingAs($admin)
+        ->patch(route('teacher.social-tags.tags.update', $tag), [
+            'name' => 'Special Approval',
+            'sort_order' => 3,
+        ])
+        ->assertRedirect(route('teacher.social-tags.index'));
+
+    expect($tag->fresh()->name)->toBe('Special Approval');
+    expect($tag->fresh()->slug)->toBe('special-approval');
+
+    $this->actingAs($admin)
+        ->delete(route('teacher.social-tags.tags.destroy', $tag))
+        ->assertRedirect(route('teacher.social-tags.index'));
+
+    expect(SocialTag::query()->whereKey($tag->id)->exists())->toBeFalse();
+});
+
+it('bulk applies real social tags onto family billing assignments', function () {
+    $this->withoutMiddleware();
+
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $billingYear = (int) now()->year;
+    $socialTag = SocialTag::query()->firstOrCreate([
+        'name' => 'Asnaf',
+    ], [
+        'slug' => 'asnaf',
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-TAGREAL1',
+        'billing_year' => $billingYear,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'TAGREAL-001',
+        'family_code' => 'SSP-TAGREAL1',
+        'full_name' => 'Nur Amalina',
+        'class_name' => '2 Aman',
+        'billing_year' => $billingYear,
+    ]);
+
+    $response = $this->actingAs($teacher)->post(route('teacher.social-tags.bulk-apply'), [
+        'billing_year' => $billingYear,
+        'class_name' => 'all',
+        'social_tag_id' => $socialTag->id,
+        'match_lines' => "1\tNUR AMALINA\t2 AMAN\n",
+    ]);
+
+    $response->assertRedirect();
+
+    $billing = FamilyBilling::query()->where('family_code', 'SSP-TAGREAL1')->firstOrFail();
+    expect($billing->socialTags()->pluck('name')->all())->toContain('Asnaf');
+    expect($billing->fresh()->social_tag)->toBe('Asnaf');
 });

@@ -3,10 +3,15 @@
 namespace App\Models;
 
 use App\Models\FamilyPaymentTransaction;
+use App\Models\FamilyPaymentInstallment;
+use App\Models\FamilyPaymentPlan;
+use App\Models\SocialTag;
 use App\Models\Student;
 use App\Support\ParentPhone;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class FamilyBilling extends Model
 {
@@ -16,6 +21,7 @@ class FamilyBilling extends Model
         'fee_amount',
         'paid_amount',
         'status',
+        'social_tag',
         'due_date',
         'notes',
     ];
@@ -41,6 +47,24 @@ class FamilyBilling extends Model
     public function paymentTransactions(): HasMany
     {
         return $this->hasMany(FamilyPaymentTransaction::class);
+    }
+
+    public function paymentPlan(): HasOne
+    {
+        return $this->hasOne(FamilyPaymentPlan::class);
+    }
+
+    public function paymentInstallments(): HasMany
+    {
+        return $this->hasMany(FamilyPaymentInstallment::class);
+    }
+
+    public function socialTags(): BelongsToMany
+    {
+        return $this->belongsToMany(SocialTag::class, 'family_social_tags')
+            ->withTimestamps()
+            ->orderBy('sort_order')
+            ->orderBy('name');
     }
 
     public function students(): HasMany

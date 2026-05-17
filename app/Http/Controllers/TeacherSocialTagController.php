@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SiteSetting;
+use App\Models\FamilyBilling;
+use App\Models\PaymentCampaignSetting;
+use App\Models\SocialTag;
 use App\Models\Student;
+use App\Services\SocialTagService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -11,8 +14,18 @@ use Illuminate\View\View;
 
 class TeacherSocialTagController extends Controller
 {
+    public function __construct(private readonly SocialTagService $socialTagService)
+    {
+    }
+
     public function index(Request $request): View
     {
+        // Debugbar can exhaust memory on this analytics-heavy page while collecting
+        // the rendered payload, which results in a blank response for signed-in users.
+        if (app()->bound('debugbar')) {
+            app('debugbar')->disable();
+        }
+
         $currentYear = (int) now()->year;
 
         $yearOptions = Student::query()
@@ -51,10 +64,9 @@ class TeacherSocialTagController extends Controller
             $selectedClass = 'all';
         }
 
-        $socialTagLabels = $this->enabledSocialTagLabels();
-        $tagFields = collect(array_keys($socialTagLabels));
-        $selectedTagFilter = trim((string) $request->query('tag_filter', 'all'));
-        if ($selectedTagFilter !== 'all' && ! $tagFields->contains($selectedTagFilter)) {
+        $tagFilters = $this->socialTagService->tagFilterOptions();
+        $selectedTagFilter = $this->socialTagService->resolveFilterKey(trim((string) $request->query('tag_filter', 'all')));
+        if ($selectedTagFilter !== 'all' && ! array_key_exists($selectedTagFilter, $tagFilters)) {
             $selectedTagFilter = 'all';
         }
 
@@ -63,17 +75,30 @@ class TeacherSocialTagController extends Controller
             ->when($selectedClass !== 'all', fn ($query) => $query->where('class_name', $selectedClass))
             ->orderBy('class_name')
             ->orderBy('full_name')
-            ->get(['id', 'family_code', 'full_name', 'class_name', 'is_b40', 'is_kwap', 'is_rmt']);
+            ->get(['id', 'family_code', 'full_name', 'class_name', 'billing_year', 'is_b40', 'is_kwap', 'is_rmt']);
+
+        $familyBillingsByCode = FamilyBilling::query()
+            ->where('billing_year', $selectedYear)
+            ->whereIn('family_code', $students->pluck('family_code')->filter()->unique()->values())
+            ->with('socialTags')
+            ->get()
+            ->keyBy(fn (FamilyBilling $billing): string => (string) $billing->family_code);
 
         $totalStudents = $students->count();
 
-        $tagSummaries = collect($socialTagLabels)
-            ->map(function (string $label, string $field) use ($students, $totalStudents): array {
-                $count = $students->where($field, true)->count();
+        $tagSummaries = collect($tagFilters)
+            ->map(function (string $label, string $filterKey) use ($students, $familyBillingsByCode, $totalStudents): array {
+                $count = $students->filter(
+                    fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
+                        $familyBillingsByCode->get((string) $student->family_code),
+                        $student,
+                        $filterKey
+                    )
+                )->count();
                 $percent = $totalStudents > 0 ? round(($count / $totalStudents) * 100, 1) : 0;
 
                 return [
-                    'field' => $field,
+                    'key' => $filterKey,
                     'label' => $label,
                     'hashtag' => $this->asHashtag($label),
                     'count' => $count,
@@ -84,11 +109,20 @@ class TeacherSocialTagController extends Controller
 
         $classBreakdown = $students
             ->groupBy(fn (Student $student): string => trim((string) ($student->class_name ?: 'Tanpa Kelas')))
-            ->map(function (Collection $classStudents, string $className) use ($tagFields): array {
+            ->map(function (Collection $classStudents, string $className) use ($tagFilters, $familyBillingsByCode): array {
                 $total = $classStudents->count();
+                $counts = collect($tagFilters)
+                    ->mapWithKeys(function (string $label, string $filterKey) use ($classStudents, $familyBillingsByCode): array {
+                        $count = $classStudents->filter(
+                            fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
+                                $familyBillingsByCode->get((string) $student->family_code),
+                                $student,
+                                $filterKey
+                            )
+                        )->count();
 
-                $counts = $tagFields
-                    ->mapWithKeys(fn (string $field): array => [$field => $classStudents->where($field, true)->count()])
+                        return [$filterKey => $count];
+                    })
                     ->all();
 
                 return [
@@ -103,21 +137,26 @@ class TeacherSocialTagController extends Controller
         $filteredTagStudents = collect();
         if ($selectedTagFilter !== 'all') {
             $filteredTagStudents = $students
-                ->filter(fn (Student $student): bool => (bool) data_get($student, $selectedTagFilter))
+                ->filter(
+                    fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
+                        $familyBillingsByCode->get((string) $student->family_code),
+                        $student,
+                        $selectedTagFilter
+                    )
+                )
                 ->values();
         }
 
         $selectedTagSummary = $selectedTagFilter === 'all'
             ? null
-            : $tagSummaries
-                ->firstWhere('field', $selectedTagFilter);
+            : $tagSummaries->firstWhere('key', $selectedTagFilter);
 
         return view('teacher.social-tags', [
             'selectedYear' => $selectedYear,
             'yearOptions' => $yearOptions,
             'selectedClass' => $selectedClass,
             'availableClasses' => $availableClasses,
-            'socialTagLabels' => $socialTagLabels,
+            'socialTags' => $this->socialTagService->allTags(),
             'tagSummaries' => $tagSummaries,
             'classBreakdown' => $classBreakdown,
             'totalStudents' => $totalStudents,
@@ -127,30 +166,94 @@ class TeacherSocialTagController extends Controller
         ]);
     }
 
+    public function storeTag(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:social_tags,name'],
+            'is_active' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:99999'],
+        ]);
+
+        SocialTag::query()->create([
+            'name' => trim((string) $validated['name']),
+            'slug' => $this->socialTagService->generateUniqueSlug((string) $validated['name']),
+            'is_active' => (bool) ($validated['is_active'] ?? true),
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+            'created_by' => $request->user()?->id,
+            'updated_by' => $request->user()?->id,
+        ]);
+
+        return redirect()
+            ->route('teacher.social-tags.index')
+            ->with('status', 'Tag sosial baharu berjaya ditambah.');
+    }
+
+    public function updateTag(Request $request, SocialTag $socialTag): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:social_tags,name,'.$socialTag->id],
+            'is_active' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:99999'],
+        ]);
+
+        $socialTag->fill([
+            'name' => trim((string) $validated['name']),
+            'slug' => $this->socialTagService->generateUniqueSlug((string) $validated['name'], $socialTag),
+            'is_active' => (bool) ($validated['is_active'] ?? false),
+            'sort_order' => (int) ($validated['sort_order'] ?? 0),
+            'updated_by' => $request->user()?->id,
+        ])->save();
+
+        return redirect()
+            ->route('teacher.social-tags.index')
+            ->with('status', 'Tag sosial berjaya dikemas kini.');
+    }
+
+    public function destroyTag(SocialTag $socialTag): RedirectResponse
+    {
+        $assignedFamiliesCount = $socialTag->familyBillings()->count();
+        $campaignUsageCount = PaymentCampaignSetting::query()
+            ->where('split_2_social_tag_id', $socialTag->id)
+            ->orWhere('split_3_social_tag_id', $socialTag->id)
+            ->count();
+
+        if ($assignedFamiliesCount > 0 || $campaignUsageCount > 0) {
+            return redirect()
+                ->route('teacher.social-tags.index')
+                ->withErrors([
+                    'social_tag_delete' => 'Tag sosial ini masih digunakan oleh family atau kempen bayaran. Nyahaktifkan dahulu sebelum padam.',
+                ]);
+        }
+
+        $socialTag->delete();
+
+        return redirect()
+            ->route('teacher.social-tags.index')
+            ->with('status', 'Tag sosial berjaya dipadam.');
+    }
+
     public function bulkApply(Request $request): RedirectResponse
     {
-        $socialTagLabels = $this->enabledSocialTagLabels();
-        $allowedTagFields = collect(array_keys($socialTagLabels));
-
         $validated = $request->validate([
             'billing_year' => ['required', 'integer'],
             'class_name' => ['nullable', 'string', 'max:120'],
-            'tag_field' => ['required', 'string'],
+            'social_tag_id' => ['nullable', 'integer', 'exists:social_tags,id'],
+            'tag_field' => ['nullable', 'string'],
             'match_lines' => ['required', 'string'],
         ]);
 
         $selectedYear = (int) $validated['billing_year'];
         $selectedClass = trim((string) ($validated['class_name'] ?? 'all'));
-        $tagField = trim((string) $validated['tag_field']);
         $rawLines = (string) $validated['match_lines'];
+        $socialTag = $this->resolveBulkApplyTag($validated, $request);
 
-        if (! $allowedTagFields->contains($tagField)) {
+        if (! $socialTag) {
             return redirect()
                 ->route('teacher.social-tags.index', [
                     'billing_year' => $selectedYear,
                     'class_name' => $selectedClass,
                 ])
-                ->withErrors(['tag_field' => 'Tag pilihan tidak sah.']);
+                ->withErrors(['social_tag_id' => 'Tag sosial pilihan tidak sah.']);
         }
 
         $entries = $this->parseBulkEntries($rawLines);
@@ -218,29 +321,46 @@ class TeacherSocialTagController extends Controller
         }
 
         $matchedFamilyCodes = $matchedFamilyCodes->unique()->values();
+        $matchedBillings = FamilyBilling::query()
+            ->where('billing_year', $selectedYear)
+            ->whereIn('family_code', $matchedFamilyCodes)
+            ->with('socialTags')
+            ->get();
 
-        $updatedStudentsCount = 0;
-        if ($matchedFamilyCodes->isNotEmpty()) {
-            $updatedStudentsCount = Student::query()
+        $updatedFamiliesCount = 0;
+        foreach ($matchedBillings as $billing) {
+            $billing->socialTags()->syncWithoutDetaching([$socialTag->id]);
+            $billing->load('socialTags');
+            $this->socialTagService->syncFamilyPrimarySocialTag($billing);
+            $this->socialTagService->mirrorLegacyStudentTag($billing, $socialTag);
+            $updatedFamiliesCount++;
+        }
+
+        $missingBillingCount = max(0, $matchedFamilyCodes->count() - $matchedBillings->count());
+        $missingBillingFamilyCodes = $matchedFamilyCodes->diff(
+            $matchedBillings->pluck('family_code')->map(fn ($code): string => (string) $code)
+        )->values();
+        $legacyField = $this->socialTagService->legacyFieldForTag($socialTag);
+
+        if ($legacyField !== null && $missingBillingFamilyCodes->isNotEmpty()) {
+            Student::query()
                 ->where('billing_year', $selectedYear)
-                ->whereIn('family_code', $matchedFamilyCodes)
+                ->whereIn('family_code', $missingBillingFamilyCodes)
                 ->update([
-                    $tagField => true,
+                    $legacyField => true,
                     'updated_at' => now(),
                 ]);
         }
 
-        $matchedFamiliesCount = $matchedFamilyCodes->count();
         $lineCount = $entries->count();
         $unmatchedCount = $unmatchedEntries->count();
         $ambiguousCount = $ambiguousEntries->count();
-        $tagLabel = (string) ($socialTagLabels[$tagField] ?? $tagField);
 
         $status = sprintf(
-            'Bulk tag #%s selesai: %d family dipadankan, %d murid dikemas kini, %d baris tidak jumpa, %d baris bertindih.',
-            ltrim($this->asHashtag($tagLabel), '#'),
-            $matchedFamiliesCount,
-            $updatedStudentsCount,
+            'Bulk tag #%s selesai: %d family ditag, %d family tiada bil tahun ini, %d baris tidak jumpa, %d baris bertindih.',
+            ltrim($this->asHashtag((string) $socialTag->name), '#'),
+            $updatedFamiliesCount,
+            $missingBillingCount,
             $unmatchedCount,
             $ambiguousCount
         );
@@ -249,43 +369,37 @@ class TeacherSocialTagController extends Controller
             ->route('teacher.social-tags.index', [
                 'billing_year' => $selectedYear,
                 'class_name' => $selectedClass,
-                'tag_filter' => $tagField,
+                'tag_filter' => $socialTag->slug,
             ])
             ->with('status', $status)
             ->with('bulk_tag_report', [
                 'line_count' => $lineCount,
-                'matched_families_count' => $matchedFamiliesCount,
-                'updated_students_count' => $updatedStudentsCount,
+                'matched_families_count' => $updatedFamiliesCount,
+                'missing_billing_count' => $missingBillingCount,
                 'unmatched_count' => $unmatchedCount,
                 'ambiguous_count' => $ambiguousCount,
                 'unmatched_entries' => $unmatchedEntries->values()->all(),
                 'ambiguous_entries' => $ambiguousEntries->values()->all(),
-                'unmatched_preview' => $unmatchedEntries->take(8)->values()->all(),
-                'ambiguous_preview' => $ambiguousEntries->take(8)->values()->all(),
-                'tag_field' => $tagField,
-                'tag_label' => $tagLabel,
+                'social_tag_id' => $socialTag->id,
+                'tag_label' => (string) $socialTag->name,
             ]);
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function enabledSocialTagLabels(): array
+    private function resolveBulkApplyTag(array $validated, Request $request): ?SocialTag
     {
-        $settings = SiteSetting::getMany([
-            'social_tag_label_b40' => 'B40',
-            'social_tag_label_kwap' => 'KWAP',
-            'social_tag_label_rmt' => 'RMT',
-        ]);
+        $socialTagId = (int) ($validated['social_tag_id'] ?? 0);
+        if ($socialTagId > 0) {
+            return SocialTag::query()->find($socialTagId);
+        }
 
-        return collect([
-            'is_b40' => trim((string) ($settings['social_tag_label_b40'] ?? '')),
-            'is_kwap' => trim((string) ($settings['social_tag_label_kwap'] ?? '')),
-            'is_rmt' => trim((string) ($settings['social_tag_label_rmt'] ?? '')),
-        ])
-            ->filter(fn (string $label): bool => $label !== '')
-            ->map(fn (string $label): string => mb_strtoupper($label))
-            ->all();
+        $legacyField = trim((string) ($validated['tag_field'] ?? ''));
+        if ($legacyField === '') {
+            return null;
+        }
+
+        $legacyLabel = $this->socialTagService->legacyTagLabels()[$legacyField] ?? null;
+
+        return $legacyLabel ? $this->socialTagService->findOrCreateByName($legacyLabel, $request->user()?->id) : null;
     }
 
     private function asHashtag(string $label): string

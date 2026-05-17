@@ -158,6 +158,16 @@
                                     Sumbangan {{ $yearB }}
                                 @endif
                             </th>
+                            <th class="px-5 py-3">Social Tag</th>
+                            <th class="px-5 py-3">Available Payment Options</th>
+                            <th class="px-5 py-3">Selected Payment Plan</th>
+                            <th class="px-5 py-3">Campaign Name</th>
+                            <th class="px-5 py-3">Payment Plan {{ $currentYear }}</th>
+                            <th class="px-5 py-3 text-right">Total Amount {{ $currentYear }}</th>
+                            <th class="px-5 py-3 text-right">Paid Amount {{ $currentYear }}</th>
+                            <th class="px-5 py-3 text-right">Balance {{ $currentYear }}</th>
+                            <th class="px-5 py-3">Payment Status</th>
+                            <th class="px-5 py-3">Paid Instalments</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-200 bg-white">
@@ -193,10 +203,20 @@
                                 <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['social_tag'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['available_payment_options'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['selected_payment_plan'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['campaign_name'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['payment_plan'] }}</td>
+                                <td class="px-5 py-4 text-right text-zinc-700">RM {{ number_format((float) $row['plan_total_amount'], 2) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-emerald-700">RM {{ number_format((float) $row['plan_paid_amount'], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row['plan_balance_amount'] > 0 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold' }}">RM {{ number_format((float) $row['plan_balance_amount'], 2) }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['plan_payment_status'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['paid_installments'] }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
+                                <td colspan="17" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -209,6 +229,16 @@
                             <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
                             <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
                             <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3 text-right">RM {{ number_format((float) $totals['plan_total_amount'], 2) }}</td>
+                            <td class="px-5 py-3 text-right text-emerald-700">RM {{ number_format((float) $totals['plan_paid_amount'], 2) }}</td>
+                            <td class="px-5 py-3 text-right {{ (float) $totals['plan_balance_amount'] > 0 ? 'text-amber-700' : 'text-emerald-700' }}">RM {{ number_format((float) $totals['plan_balance_amount'], 2) }}</td>
+                            <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3"></td>
                         </tr>
                     </tfoot>
                 </table>

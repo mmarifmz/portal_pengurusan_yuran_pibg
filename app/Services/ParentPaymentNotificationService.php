@@ -47,6 +47,8 @@ class ParentPaymentNotificationService
 
     private function buildPaymentReceiptMessage(FamilyPaymentTransaction $transaction, ?string $parentName = null): string
     {
+        $transaction->loadMissing('installment.paymentPlan.installments', 'familyBilling');
+
         $receiptUrl = $this->receiptUrl($transaction);
         $maxChars = max(200, (int) config('services.parent_receipt_whatsapp_max_chars', 1000));
         $familyCode = (string) ($transaction->familyBilling->family_code ?? '-');
@@ -54,6 +56,8 @@ class ParentPaymentNotificationService
         $orderIdText = (string) $transaction->external_order_display;
         $invoiceText = trim((string) $transaction->provider_invoice_no);
         $paidAtText = $transaction->paid_at_for_display?->format('d/m/Y, h:i A');
+        $installment = $transaction->installment;
+        $plan = $installment?->paymentPlan;
 
         $headerLine = trim((string) $parentName) !== ''
             ? 'Assalamualaikum dan Salam Sejahtera, '.trim((string) $parentName)
@@ -70,6 +74,12 @@ class ParentPaymentNotificationService
             '• Jumlah: '.$amountText,
             '• Order ID: '.$orderIdText,
         ];
+
+        if ($installment && $plan) {
+            $fullLines[] = sprintf('• Ansuran: %d/%d', (int) $installment->installment_no, $plan->installments->count());
+            $fullLines[] = '• Jumlah Dibayar Setakat Ini: RM'.number_format((float) $plan->paid_amount, 2);
+            $fullLines[] = '• Baki Bayaran: RM'.number_format((float) $plan->balance_amount, 2);
+        }
 
         if ($invoiceText !== '') {
             $fullLines[] = '• Invoice: '.$invoiceText;
@@ -106,6 +116,11 @@ class ParentPaymentNotificationService
             'Jumlah: '.$amountText,
             'Order ID: '.$orderIdText,
         ];
+
+        if ($installment && $plan) {
+            $compactLines[] = sprintf('Ansuran: %d/%d', (int) $installment->installment_no, $plan->installments->count());
+            $compactLines[] = 'Baki: RM'.number_format((float) $plan->balance_amount, 2);
+        }
 
         if ($invoiceText !== '') {
             $compactLines[] = 'Invoice: '.$invoiceText;

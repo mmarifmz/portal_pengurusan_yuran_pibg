@@ -124,6 +124,9 @@
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
                                 {{ __('Portal Setting') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="credit-card" :href="route('system.payment-campaign-settings.index')" :current="request()->routeIs('system.payment-campaign-settings.*')" wire:navigate>
+                                {{ __('Payment Campaign Settings') }}
+                            </flux:sidebar.item>
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
                                 {{ __('Tester Zone') }}
                             </flux:sidebar.item>

@@ -12,6 +12,7 @@ class FamilyPaymentTransaction extends Model
 {
     protected $fillable = [
         'family_billing_id',
+        'family_payment_installment_id',
         'user_id',
         'payment_provider',
         'external_order_id',
@@ -116,6 +117,11 @@ class FamilyPaymentTransaction extends Model
     public function familyBilling(): BelongsTo
     {
         return $this->belongsTo(FamilyBilling::class);
+    }
+
+    public function installment(): BelongsTo
+    {
+        return $this->belongsTo(FamilyPaymentInstallment::class, 'family_payment_installment_id');
     }
 
     public function user(): BelongsTo

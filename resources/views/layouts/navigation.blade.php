@@ -32,6 +32,9 @@
                         <x-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
                             {{ __('Portal SEO') }}
                         </x-nav-link>
+                        <x-nav-link :href="route('system.payment-campaign-settings.index')" :active="request()->routeIs('system.payment-campaign-settings.*')">
+                            {{ __('Payment Campaign') }}
+                        </x-nav-link>
                         <x-nav-link :href="route('system.payment-testers.index')" :active="request()->routeIs('system.payment-testers.*')">
                             {{ __('Payment Testers') }}
                         </x-nav-link>
@@ -120,6 +123,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('system.portal-seo.index')" :active="request()->routeIs('system.portal-seo.*')">
                     {{ __('Portal SEO') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('system.payment-campaign-settings.index')" :active="request()->routeIs('system.payment-campaign-settings.*')">
+                    {{ __('Payment Campaign') }}
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('system.payment-testers.index')" :active="request()->routeIs('system.payment-testers.*')">
                     {{ __('Payment Testers') }}

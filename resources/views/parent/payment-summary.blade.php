@@ -27,7 +27,7 @@
         $hasReturn = filled($transaction->raw_return);
         $hasCallback = filled($transaction->raw_callback);
         $gatewaySeen = $hasReturn || $hasCallback;
-        $statusDisplay = $status === 'superseded' ? 'Dibatalkan' : ucfirst($status);
+        $statusDisplay = $receiptContext['payment_status_label'] ?? ($status === 'superseded' ? 'Dibatalkan' : ucfirst($status));
     @endphp
 
     <style>
@@ -158,6 +158,29 @@
                     <p class="text-xl font-bold text-zinc-700">{{ $transaction->paid_at?->format('d M Y H:i') ?? '-' }}</p>
                 </div>
             </div>
+
+            @if (! empty($receiptContext['has_installment']))
+                <div class="mt-4 grid gap-3 sm:grid-cols-4">
+                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                        <p class="text-xs uppercase tracking-wide text-zinc-500">Ansuran</p>
+                        <p class="text-lg font-bold text-zinc-900">{{ $receiptContext['installment_label'] }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                        <p class="text-xs uppercase tracking-wide text-zinc-500">Bayaran Transaksi Ini</p>
+                        <p class="text-lg font-bold text-zinc-900">RM {{ number_format((float) $receiptContext['transaction_amount'], 2) }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                        <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Dibayar</p>
+                        <p class="text-lg font-bold text-emerald-700">RM {{ number_format((float) ($receiptContext['total_paid_to_date'] ?? 0), 2) }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                        <p class="text-xs uppercase tracking-wide text-zinc-500">Baki Bayaran</p>
+                        <p class="text-lg font-bold {{ ! empty($receiptContext['fully_paid']) ? 'text-emerald-700' : 'text-amber-700' }}">
+                            RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}
+                        </p>
+                    </div>
+                </div>
+            @endif
 
             <div class="mt-4 space-y-2 text-sm text-zinc-600">
                 <p>Order ID: {{ $transaction->external_order_display }}</p>

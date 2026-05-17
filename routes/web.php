@@ -23,6 +23,7 @@ use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\VisitorLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
+use App\Http\Controllers\PaymentCampaignSettingController;
 use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\FamilyBilling;
@@ -214,6 +215,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/teacher/records/family/{familyCode}/parent-profile', [TeacherRecordsController::class, 'updateFamilyParentProfile'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.parent-profile.update');
+    Route::patch('/teacher/records/family/{familyCode}/social-tags', [TeacherRecordsController::class, 'updateFamilySocialTags'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.records.family.social-tags.update');
     Route::patch('/teacher/records/students/{student}/tags', [TeacherRecordsController::class, 'updateStudentTags'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.students.tags.update');
@@ -245,6 +249,15 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/teacher/social-tags/bulk-apply', [TeacherSocialTagController::class, 'bulkApply'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.social-tags.bulk-apply');
+    Route::post('/teacher/social-tags/tags', [TeacherSocialTagController::class, 'storeTag'])
+        ->middleware('role:system_admin')
+        ->name('teacher.social-tags.tags.store');
+    Route::patch('/teacher/social-tags/tags/{socialTag}', [TeacherSocialTagController::class, 'updateTag'])
+        ->middleware('role:system_admin')
+        ->name('teacher.social-tags.tags.update');
+    Route::delete('/teacher/social-tags/tags/{socialTag}', [TeacherSocialTagController::class, 'destroyTag'])
+        ->middleware('role:system_admin')
+        ->name('teacher.social-tags.tags.destroy');
     Route::get('/teacher/finance-accounting/export', [TeacherFinanceAccountingController::class, 'export'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.finance-accounting.export');
@@ -269,6 +282,15 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:parent')
         ->name('parent.dashboard.legacy-receipt');
 
+    Route::get('/review-payment/{familyBilling}', [ParentPaymentController::class, 'checkout'])
+        ->middleware('role:parent')
+        ->name('parent.payments.review');
+    Route::post('/review-payment/{familyBilling}/plan', [ParentPaymentController::class, 'selectPlan'])
+        ->middleware('role:parent');
+    Route::post('/payment/installment/{installment}/pay', [ParentPaymentController::class, 'payInstallment'])
+        ->middleware('role:parent')
+        ->name('parent.payments.installments.pay');
+
     Route::post('/parent/search/select/{familyBilling}', [PublicParentSearchController::class, 'selectFamily'])
         ->middleware('role:parent')
         ->name('parent.search.select');
@@ -276,6 +298,8 @@ Route::middleware(['auth'])->group(function () {
     Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.'], function () {
         Route::get('history', [ParentPaymentController::class, 'history'])->name('history');
         Route::get('{familyBilling}/checkout', [ParentPaymentController::class, 'checkout'])->name('checkout');
+        Route::post('{familyBilling}/plan', [ParentPaymentController::class, 'selectPlan'])->name('plan.select');
+        Route::post('installment/{installment}/pay', [ParentPaymentController::class, 'payInstallment'])->name('installments.pay-alias');
         Route::post('{familyBilling}/create', [ParentPaymentController::class, 'create'])->name('create');
         Route::get('summary/{externalOrderId}', [ParentPaymentController::class, 'summary'])->name('summary');
         Route::get('receipt/{externalOrderId}', [ParentPaymentController::class, 'receiptPdf'])->name('receipt');
@@ -331,6 +355,12 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/system/portal-seo', [PortalSeoSettingsController::class, 'update'])
         ->middleware('role:system_admin')
         ->name('system.portal-seo.update');
+    Route::get('/system/payment-campaign-settings', [PaymentCampaignSettingController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-campaign-settings.index');
+    Route::post('/system/payment-campaign-settings', [PaymentCampaignSettingController::class, 'save'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-campaign-settings.save');
 
     Route::get('/system/payment-testers', [PaymentTesterUserController::class, 'index'])
         ->middleware('role:system_admin')

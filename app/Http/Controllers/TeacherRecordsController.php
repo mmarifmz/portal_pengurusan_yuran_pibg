@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Services\ParentProfileSyncFromPaymentsService;
+use App\Services\SocialTagService;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\ParentLoginOtp;
 use App\Models\ParentLoginAudit;
 use App\Models\SiteSetting;
+use App\Models\SocialTag;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -21,6 +23,10 @@ use Illuminate\View\View;
 
 class TeacherRecordsController extends Controller
 {
+    public function __construct(private readonly SocialTagService $socialTagService)
+    {
+    }
+
     public function index(Request $request): View
     {
         $billingYear = now()->year;
@@ -79,10 +85,18 @@ class TeacherRecordsController extends Controller
             ->pluck('class_name')
             ->values();
 
-        $socialTagLabels = $this->enabledSocialTagLabels();
+        $socialTagLabels = $this->socialTagService->tagFilterOptions();
+        $selectedSocialTag = $this->socialTagService->resolveFilterKey($selectedSocialTag);
         if ($selectedSocialTag !== '' && ! array_key_exists($selectedSocialTag, $socialTagLabels)) {
             $selectedSocialTag = '';
         }
+
+        $familyBillingsByCode = FamilyBilling::query()
+            ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $students->pluck('family_code')->filter()->unique()->values())
+            ->with('socialTags')
+            ->get()
+            ->keyBy(fn (FamilyBilling $billing): string => (string) $billing->family_code);
 
         $allStudentParentEmails = $students
             ->pluck('parent_email')
@@ -265,7 +279,11 @@ class TeacherRecordsController extends Controller
                 });
             })
             ->when($selectedSocialTag !== '', fn ($collection) => $collection->filter(
-                fn (Student $student) => (bool) data_get($student, $selectedSocialTag)
+                fn (Student $student) => $this->socialTagService->familyMatchesFilter(
+                    $familyBillingsByCode->get((string) $student->family_code),
+                    $student,
+                    $selectedSocialTag
+                )
             ))
             ->when($selectedClass !== '', fn ($collection) => $collection->filter(fn (Student $student) => (string) $student->class_name === $selectedClass))
             ->when($familyCodeQuery !== '', function ($collection) use ($familyCodeQuery) {
@@ -376,7 +394,7 @@ class TeacherRecordsController extends Controller
             ]);
 
         $studentsWithResolvedParents = $studentsWithResolvedParents
-            ->map(function (Student $student) use ($outstandingByFamilyCode): Student {
+            ->map(function (Student $student) use ($outstandingByFamilyCode, $familyBillingsByCode): Student {
                 $familyCode = (string) ($student->family_code ?? '');
 
                 if ($familyCode !== '' && $outstandingByFamilyCode->has($familyCode)) {
@@ -384,6 +402,19 @@ class TeacherRecordsController extends Controller
                 } else {
                     $student->setAttribute('current_year_outstanding_balance', max(0, (float) $student->outstanding_balance));
                 }
+
+                $student->setAttribute(
+                    'resolved_social_tags',
+                    $familyCode !== ''
+                        ? $this->socialTagService->resolveFamilyTagNames(
+                            $familyBillingsByCode->get($familyCode) ?? new FamilyBilling([
+                                'family_code' => $familyCode,
+                                'billing_year' => $student->billing_year,
+                            ]),
+                            $student
+                        )->values()->all()
+                        : []
+                );
 
                 return $student;
             })
@@ -560,7 +591,10 @@ class TeacherRecordsController extends Controller
 
         $familyBillings = FamilyBilling::query()
             ->where('family_code', $familyCode)
-            ->with(['phones' => fn ($query) => $query->orderBy('id')])
+            ->with([
+                'phones' => fn ($query) => $query->orderBy('id'),
+                'socialTags',
+            ])
             ->orderByDesc('billing_year')
             ->get();
 
@@ -724,6 +758,10 @@ class TeacherRecordsController extends Controller
             ->values();
 
         $currentBilling = $familyBillings->first();
+        $currentFamilySocialTags = $currentBilling
+            ? $this->socialTagService->resolveFamilyTagNames($currentBilling)
+            : collect();
+        $availableSocialTags = $this->socialTagService->activeTags();
         $totalPaid = (float) $familyBillings->sum('paid_amount');
         $totalBilled = (float) $familyBillings->sum('fee_amount');
         $totalOutstanding = max(0, $totalBilled - $totalPaid);
@@ -821,6 +859,8 @@ class TeacherRecordsController extends Controller
             'legacyPayments' => $legacyPayments,
             'legacyPaidTotal' => $legacyPaidTotal,
             'legacyDonationTotal' => $legacyDonationTotal,
+            'availableSocialTags' => $availableSocialTags,
+            'currentFamilySocialTags' => $currentFamilySocialTags,
             'socialTagLabels' => $this->enabledSocialTagLabels(),
         ]);
     }
@@ -866,6 +906,41 @@ class TeacherRecordsController extends Controller
         return redirect()
             ->route('teacher.records.family', ['familyCode' => $familyCode])
             ->with('status', 'Family parent profile updated successfully.');
+    }
+
+    public function updateFamilySocialTags(Request $request, string $familyCode): RedirectResponse
+    {
+        $students = Student::query()
+            ->where('family_code', $familyCode)
+            ->get();
+
+        abort_if($students->isEmpty(), 404);
+
+        $currentBilling = FamilyBilling::query()
+            ->where('family_code', $familyCode)
+            ->with('socialTags')
+            ->orderByDesc('billing_year')
+            ->first();
+
+        abort_if(! $currentBilling, 404);
+
+        $validated = $request->validate([
+            'social_tag_ids' => ['nullable', 'array'],
+            'social_tag_ids.*' => ['integer', 'exists:social_tags,id'],
+        ]);
+
+        $selectedTags = SocialTag::query()
+            ->whereIn('id', collect($validated['social_tag_ids'] ?? [])->map(fn ($id): int => (int) $id)->all())
+            ->get();
+
+        $currentBilling->socialTags()->sync($selectedTags->pluck('id')->all());
+        $currentBilling->load('socialTags');
+        $this->socialTagService->syncFamilyPrimarySocialTag($currentBilling);
+        $this->syncLegacyStudentTagsForBilling($currentBilling, $selectedTags);
+
+        return redirect()
+            ->route('teacher.records.family', ['familyCode' => $familyCode])
+            ->with('status', 'Family social tags updated successfully.');
     }
 
     public function updateStudentTags(Request $request, Student $student): RedirectResponse|JsonResponse
@@ -1009,6 +1084,36 @@ class TeacherRecordsController extends Controller
             ->filter(fn (string $label): bool => $label !== '')
             ->map(fn (string $label): string => mb_strtoupper($label))
             ->all();
+    }
+
+    private function syncLegacyStudentTagsForBilling(FamilyBilling $familyBilling, Collection $selectedTags): void
+    {
+        $legacyUpdates = collect($this->enabledSocialTagLabels())
+            ->mapWithKeys(fn (string $label, string $field): array => [$field => false])
+            ->all();
+
+        foreach ($selectedTags as $socialTag) {
+            if (! $socialTag instanceof SocialTag) {
+                continue;
+            }
+
+            $legacyField = $this->socialTagService->legacyFieldForTag($socialTag);
+
+            if ($legacyField !== null) {
+                $legacyUpdates[$legacyField] = true;
+            }
+        }
+
+        if ($legacyUpdates === []) {
+            return;
+        }
+
+        Student::query()
+            ->where('family_code', $familyBilling->family_code)
+            ->where('billing_year', (int) $familyBilling->billing_year)
+            ->update(array_merge($legacyUpdates, [
+                'updated_at' => now(),
+            ]));
     }
 
     private function normalizePhoneForMatch(string $phone): string

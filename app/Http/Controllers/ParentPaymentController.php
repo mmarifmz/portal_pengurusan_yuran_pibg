@@ -3,28 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentInstallment;
+use App\Models\FamilyPaymentPlan;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Support\ParentPhone;
+use App\Services\FamilyPaymentPlanService;
+use App\Services\FamilyPaymentSettlementService;
+use App\Services\PaymentCampaignService;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use RuntimeException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
+use RuntimeException;
 
 class ParentPaymentController extends Controller
 {
     public function __construct(
         private readonly ToyyibPayService $toyyibPayService,
+        private readonly FamilyPaymentPlanService $paymentPlanService,
+        private readonly FamilyPaymentSettlementService $paymentSettlementService,
+        private readonly PaymentCampaignService $paymentCampaignService,
         private readonly ParentPaymentNotificationService $paymentNotificationService
     ) {
     }
@@ -52,6 +59,17 @@ class ParentPaymentController extends Controller
             ? 0.0
             : (float) $familyBilling->outstanding_amount;
         $checkoutBaseAmount = $isTesterMode ? $this->testerAmount() : $checkoutOutstanding;
+        $paymentPlan = $familyBilling->paymentPlan()
+            ->with(['installments' => fn ($query) => $query->orderBy('installment_no')])
+            ->first();
+        $paymentPlanProgress = $paymentPlan && (float) $paymentPlan->total_amount > 0
+            ? (int) round(((float) $paymentPlan->paid_amount / (float) $paymentPlan->total_amount) * 100)
+            : 0;
+        $campaignSetting = $this->paymentCampaignService->activeCampaign();
+        $familySocialTag = $this->paymentCampaignService->resolveFamilySocialTag($familyBilling);
+        $eligiblePlanTypes = $this->paymentCampaignService->eligiblePlanTypes($familyBilling);
+        $availablePlans = $this->paymentPlanService->availablePlans((float) $familyBilling->fee_amount, $eligiblePlanTypes);
+        $availablePaymentOptionLabels = $this->paymentCampaignService->eligiblePlanLabels($familyBilling);
 
         $defaultDonation = 0.0;
         $fromTransactionId = (int) $request->query('from_transaction', 0);
@@ -171,6 +189,12 @@ class ParentPaymentController extends Controller
             'testerAmount' => $this->testerAmount(),
             'checkoutBaseAmount' => $checkoutBaseAmount,
             'alreadyPaidCurrentYear' => $alreadyPaidCurrentYear,
+            'paymentPlan' => $paymentPlan,
+            'paymentPlanProgress' => $paymentPlanProgress,
+            'availablePlans' => $availablePlans,
+            'campaignSetting' => $campaignSetting,
+            'familySocialTag' => $familySocialTag,
+            'availablePaymentOptionLabels' => $availablePaymentOptionLabels,
             'recentPaymentAttempts' => $recentPaymentAttempts,
             'lastYear' => $lastYear,
             'lastYearPaidTotal' => $lastYearPaidTotal,
@@ -233,28 +257,26 @@ class ParentPaymentController extends Controller
     {
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
-        $validated = $request->validate([
-            'payer_name' => ['required', 'string', 'max:255'],
-            'payer_email' => ['required', 'email', 'max:255'],
-            'payer_phone' => ['required', 'string', 'max:25'],
-            'donation_preset' => ['nullable', 'numeric', 'min:0'],
-            'donation_custom' => ['nullable', 'numeric', 'min:0'],
-            'donation_intention' => ['nullable', 'string', 'max:500'],
-        ]);
+        $existingPlan = $familyBilling->paymentPlan()->first();
+        $eligiblePlanTypes = $this->paymentCampaignService->eligiblePlanTypes($familyBilling);
 
-        $payerName = trim((string) ($validated['payer_name'] ?? ''));
-        $payerEmail = mb_strtolower(trim((string) ($validated['payer_email'] ?? '')));
-
-        $placeholderNamePattern = '/^parent\s+ssp-/i';
-        $isPlaceholderName = preg_match($placeholderNamePattern, $payerName) === 1;
-        $isPlaceholderEmail = str_ends_with($payerEmail, '@placeholder.local');
-
-        if ($isPlaceholderName || $isPlaceholderEmail) {
-            return back()->withErrors([
-                'payer_name' => 'Sila pastikan nama ibu/bapa/penjaga yang dimasukkan adalah tepat dan sebenar sebelum meneruskan pembayaran.',
-                'payer_email' => 'Sila gunakan alamat email yang sah dan aktif.',
-            ])->withInput();
+        if ($existingPlan && (float) $familyBilling->outstanding_amount > 0 && $existingPlan->status !== FamilyPaymentPlan::STATUS_PAID) {
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_plan' => 'Sila teruskan bayaran melalui pelan ansuran yang telah dipilih.',
+                ]);
         }
+
+        if ((float) $familyBilling->outstanding_amount > 0 && ! in_array(FamilyPaymentPlan::PLAN_FULL, $eligiblePlanTypes, true)) {
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_plan' => 'Bayaran penuh tidak dibenarkan untuk kempen semasa.',
+                ]);
+        }
+
+        $validated = $this->validatePayerInput($request, true);
 
         $isTesterMode = (bool) $request->user()?->isParentTester();
         $alreadyPaidCurrentYear = $this->familyHasCompletedCurrentYearPayment($familyBilling);
@@ -335,6 +357,152 @@ class ParentPaymentController extends Controller
                 'donation_intention' => $donationIntention !== '' ? $donationIntention : null,
             ],
         ]);
+
+        return redirect()->away($this->toyyibPayService->paymentUrl($billCode));
+    }
+
+    public function selectPlan(Request $request, FamilyBilling $familyBilling): RedirectResponse
+    {
+        $this->authorizeParentFamilyBilling($request, $familyBilling);
+
+        $validated = $request->validate([
+            'plan_type' => ['required', 'in:full,two_times,three_times'],
+        ]);
+
+        if ((float) $familyBilling->outstanding_amount <= 0) {
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_plan' => 'Bil keluarga ini telah selesai. Pelan ansuran tidak diperlukan.',
+                ]);
+        }
+
+        $planType = (string) $validated['plan_type'];
+        $eligiblePlanTypes = $this->paymentCampaignService->eligiblePlanTypes($familyBilling);
+
+        if (! in_array($planType, $eligiblePlanTypes, true)) {
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_plan' => 'Pelan bayaran yang dipilih tidak dibenarkan untuk keluarga ini dalam kempen semasa.',
+                ]);
+        }
+
+        $this->paymentPlanService->createPlan($familyBilling, $planType);
+
+        return redirect()
+            ->route('parent.payments.checkout', $familyBilling)
+            ->with('status', 'Pelan bayaran berjaya dipilih.');
+    }
+
+    public function payInstallment(Request $request, FamilyPaymentInstallment $installment): RedirectResponse
+    {
+        $familyBilling = $installment->familyBilling()->firstOrFail();
+        $this->authorizeParentFamilyBilling($request, $familyBilling);
+
+        $validated = $this->validatePayerInput($request, false);
+
+        $installment->loadMissing('paymentPlan.installments');
+
+        $validationMessage = $this->paymentPlanService->validateInstallmentCanBePaid($installment);
+
+        if ($validationMessage !== null) {
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_plan' => $validationMessage,
+                ])
+                ->withInput();
+        }
+
+        $reusableTransaction = $installment->transactions()
+            ->where('status', 'pending')
+            ->whereNotNull('provider_bill_code')
+            ->latest('id')
+            ->first();
+
+        if ($reusableTransaction) {
+            $installment->forceFill([
+                'status' => FamilyPaymentInstallment::STATUS_REDIRECTED,
+                'billcode' => $reusableTransaction->provider_bill_code,
+            ])->save();
+
+            return redirect()->away($this->toyyibPayService->paymentUrl((string) $reusableTransaction->provider_bill_code));
+        }
+
+        $externalOrderId = $this->generateExternalOrderId();
+
+        try {
+            $billCode = $this->toyyibPayService->createBill([
+                'billName' => sprintf(
+                    'Ansuran %d PIBG %d - %s',
+                    (int) $installment->installment_no,
+                    (int) $familyBilling->billing_year,
+                    (string) $familyBilling->family_code
+                ),
+                'billDescription' => sprintf(
+                    'Bayaran ansuran %d untuk keluarga %s',
+                    (int) $installment->installment_no,
+                    (string) $familyBilling->family_code
+                ),
+                'billPriceSetting' => 1,
+                'billPayorInfo' => 1,
+                'billAmount' => (int) round((float) $installment->amount * 100),
+                'billReturnUrl' => route('parent.payments.summary.return'),
+                'billCallbackUrl' => route('parent.payments.toyyibpay.callback'),
+                'billExternalReferenceNo' => $externalOrderId,
+                'billTo' => (string) $validated['payer_name'],
+                'billEmail' => (string) $validated['payer_email'],
+                'billPhone' => (string) $validated['payer_phone'],
+                'billSplitPayment' => 0,
+                'billSplitPaymentArgs' => '',
+                'billPaymentChannel' => (string) config('services.toyyibpay.payment_channel', '0'),
+                'billChargeToCustomer' => (string) config('services.toyyibpay.charge_to_customer', ''),
+            ]);
+        } catch (RuntimeException $exception) {
+            Log::warning('ToyyibPay installment bill creation failed', [
+                'family_billing_id' => $familyBilling->id,
+                'installment_id' => $installment->id,
+                'family_code' => $familyBilling->family_code,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('parent.payments.checkout', $familyBilling)
+                ->withErrors([
+                    'payment_gateway' => $exception->getMessage(),
+                ])
+                ->withInput();
+        }
+
+        $transaction = FamilyPaymentTransaction::query()->create([
+            'family_billing_id' => $familyBilling->id,
+            'family_payment_installment_id' => $installment->id,
+            'user_id' => $request->user()?->id,
+            'payment_provider' => 'toyyibpay',
+            'external_order_id' => $externalOrderId,
+            'provider_bill_code' => $billCode,
+            'amount' => (float) $installment->amount,
+            'payer_name' => $validated['payer_name'],
+            'payer_email' => $validated['payer_email'],
+            'payer_phone' => $validated['payer_phone'],
+            'status' => 'pending',
+            'return_status' => 'pending completion',
+            'raw_return' => [
+                'installment_id' => $installment->id,
+                'plan_type' => $installment->paymentPlan?->plan_type,
+                'installment_no' => $installment->installment_no,
+                'installment_amount' => (float) $installment->amount,
+                'outstanding_at_checkout' => (float) $installment->amount,
+            ],
+        ]);
+
+        $installment->forceFill([
+            'status' => FamilyPaymentInstallment::STATUS_REDIRECTED,
+            'billcode' => $billCode,
+        ])->save();
+
+        $this->paymentPlanService->syncInstallmentAttemptStatus($transaction, 'pending');
 
         return redirect()->away($this->toyyibPayService->paymentUrl($billCode));
     }
@@ -436,6 +604,11 @@ class ParentPaymentController extends Controller
             ]);
         }
 
+        $this->paymentPlanService->syncInstallmentAttemptStatus(
+            $transaction->fresh(['installment.paymentPlan']),
+            $this->resolveInstallmentAttemptStatus($transaction->fresh())
+        );
+
         return redirect()->route('parent.payments.summary', $transaction->external_order_id);
     }
 
@@ -482,13 +655,18 @@ class ParentPaymentController extends Controller
             $this->synchronizeSuccessfulPayment($transaction);
         }
 
+        $this->paymentPlanService->syncInstallmentAttemptStatus(
+            $transaction->fresh(['installment.paymentPlan']),
+            $this->resolveInstallmentAttemptStatus($transaction->fresh())
+        );
+
         return response('ok');
     }
 
     public function summary(string $externalOrderId): View
     {
         $transaction = FamilyPaymentTransaction::query()
-            ->with('familyBilling')
+            ->with(['familyBilling', 'installment.paymentPlan.installments'])
             ->where('external_order_id', $externalOrderId)
             ->firstOrFail();
 
@@ -503,6 +681,7 @@ class ParentPaymentController extends Controller
             'transaction' => $transaction,
             'familyChildren' => $familyChildren,
             'receiptUrl' => $receiptUrl,
+            'receiptContext' => $this->buildReceiptContext($transaction),
             'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
         ]);
     }
@@ -510,7 +689,7 @@ class ParentPaymentController extends Controller
     public function receiptPdf(string $externalOrderId): Response
     {
         $transaction = FamilyPaymentTransaction::query()
-            ->with('familyBilling')
+            ->with(['familyBilling', 'installment.paymentPlan.installments'])
             ->where('external_order_id', $externalOrderId)
             ->firstOrFail();
 
@@ -525,6 +704,7 @@ class ParentPaymentController extends Controller
         $pdf = Pdf::loadView('parent.receipt-pdf', [
             'transaction' => $transaction,
             'familyChildren' => $familyChildren,
+            'receiptContext' => $this->buildReceiptContext($transaction),
             'schoolLogoUrl' => $schoolLogoUrl,
             'schoolLogoPdfSource' => $schoolLogoPdfSource,
         ])->setPaper('a4');
@@ -578,31 +758,14 @@ class ParentPaymentController extends Controller
         $invoiceNo = (string) ($matched['billpaymentInvoiceNo'] ?? '');
         $paymentDate = (string) ($matched['billPaymentDate'] ?? '');
 
-        DB::transaction(function () use ($transaction, $billing, $paidAmount, $invoiceNo, $paymentDate): void {
-            $billing->refresh();
-
-            $feeOutstanding = max(0, (float) $billing->fee_amount - (float) $billing->paid_amount);
-            $feeOutstandingAtCheckout = max(0, (float) data_get($transaction->raw_return, 'outstanding_at_checkout', $feeOutstanding));
-            $feeOutstanding = min($feeOutstanding, $feeOutstandingAtCheckout);
-            $feePaid = min($feeOutstanding, $paidAmount);
-            $donation = max(0, $paidAmount - $feePaid);
-
-            $billing->paid_amount = min((float) $billing->fee_amount, (float) $billing->paid_amount + $feePaid);
-            $billing->status = ((float) $billing->paid_amount >= (float) $billing->fee_amount) ? 'paid' : 'partial';
-            $billing->save();
-
-            $transaction->update([
-                'status' => 'success',
-                'provider_invoice_no' => filled($invoiceNo) ? $invoiceNo : $transaction->provider_invoice_no,
-                'amount' => $paidAmount,
-                'fee_amount_paid' => $feePaid,
-                'donation_amount' => $donation,
-                'paid_at' => now(),
-                'status_reason' => filled($paymentDate) ? "Paid at {$paymentDate}" : $transaction->status_reason,
-            ]);
-        });
+        $this->paymentSettlementService->synchronizeSuccessfulPayment($transaction, [
+            'billpaymentAmount' => $paidAmount,
+            'billpaymentInvoiceNo' => $invoiceNo,
+            'billPaymentDate' => $paymentDate,
+        ]);
 
         $transaction->refresh();
+        $billing->refresh();
 
         if (filled($transaction->payer_phone)) {
             $billing->registerPhone((string) $transaction->payer_phone);
@@ -668,8 +831,12 @@ class ParentPaymentController extends Controller
     private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
     {
         $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
+        $receiptContext = $this->buildReceiptContext($transaction);
+        $installmentLine = $receiptContext['installment_label'] !== null
+            ? 'Ansuran: '.$receiptContext['installment_label']
+            : null;
 
-        $message = implode("\n", [
+        $lines = [
             'Assalamualaikum guru,',
             '',
             'Saya ingin kongsi resit bayaran PIBG:',
@@ -677,9 +844,120 @@ class ParentPaymentController extends Controller
             'Jumlah: RM'.number_format((float) $transaction->amount, 2),
             'Order ID: '.$transaction->external_order_display,
             'Resit web: '.$receiptUrl,
-        ]);
+        ];
+
+        if ($installmentLine) {
+            array_splice($lines, 5, 0, [$installmentLine]);
+        }
+
+        $message = implode("\n", $lines);
 
         return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
+    }
+
+    /**
+     * @return array{payer_name: string, payer_email: string, payer_phone: string, donation_preset?: mixed, donation_custom?: mixed, donation_intention?: mixed}
+     */
+    private function validatePayerInput(Request $request, bool $includeDonationFields): array
+    {
+        $rules = [
+            'payer_name' => ['required', 'string', 'max:255'],
+            'payer_email' => ['required', 'email', 'max:255'],
+            'payer_phone' => ['required', 'string', 'max:25'],
+        ];
+
+        if ($includeDonationFields) {
+            $rules['donation_preset'] = ['nullable', 'numeric', 'min:0'];
+            $rules['donation_custom'] = ['nullable', 'numeric', 'min:0'];
+            $rules['donation_intention'] = ['nullable', 'string', 'max:500'];
+        }
+
+        /** @var array{payer_name: string, payer_email: string, payer_phone: string, donation_preset?: mixed, donation_custom?: mixed, donation_intention?: mixed} $validated */
+        $validated = $request->validate($rules);
+
+        $payerName = trim((string) ($validated['payer_name'] ?? ''));
+        $payerEmail = mb_strtolower(trim((string) ($validated['payer_email'] ?? '')));
+
+        $placeholderNamePattern = '/^parent\s+ssp-/i';
+        $isPlaceholderName = preg_match($placeholderNamePattern, $payerName) === 1;
+        $isPlaceholderEmail = str_ends_with($payerEmail, '@placeholder.local');
+
+        if ($isPlaceholderName || $isPlaceholderEmail) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'payer_name' => 'Sila pastikan nama ibu/bapa/penjaga yang dimasukkan adalah tepat dan sebenar sebelum meneruskan pembayaran.',
+                'payer_email' => 'Sila gunakan alamat email yang sah dan aktif.',
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function resolveInstallmentAttemptStatus(FamilyPaymentTransaction $transaction): string
+    {
+        $returnStatus = strtolower(trim((string) $transaction->return_status));
+
+        if ($transaction->status === 'success') {
+            return 'success';
+        }
+
+        if ($transaction->status === 'failed' && (str_contains($returnStatus, 'cancel') || str_contains($returnStatus, 'batal'))) {
+            return 'cancelled';
+        }
+
+        return (string) $transaction->status;
+    }
+
+    /**
+     * @return array{
+     *   has_installment: bool,
+     *   plan_label: string|null,
+     *   installment_label: string|null,
+     *   installment_no: int|null,
+     *   installment_count: int|null,
+     *   transaction_amount: float,
+     *   total_paid_to_date: float|null,
+     *   remaining_balance: float|null,
+     *   payment_status_label: string|null,
+     *   fully_paid: bool
+     * }
+     */
+    private function buildReceiptContext(FamilyPaymentTransaction $transaction): array
+    {
+        $transaction->loadMissing('installment.paymentPlan.installments');
+
+        $installment = $transaction->installment;
+        $plan = $installment?->paymentPlan;
+
+        if (! $installment || ! $plan) {
+            return [
+                'has_installment' => false,
+                'plan_label' => null,
+                'installment_label' => null,
+                'installment_no' => null,
+                'installment_count' => null,
+                'transaction_amount' => round((float) $transaction->amount, 2),
+                'total_paid_to_date' => null,
+                'remaining_balance' => null,
+                'payment_status_label' => null,
+                'fully_paid' => strtolower((string) $transaction->status) === 'success',
+            ];
+        }
+
+        $installmentCount = $plan->installments->count();
+        $fullyPaid = (float) $plan->balance_amount <= 0.0;
+
+        return [
+            'has_installment' => true,
+            'plan_label' => $plan->plan_label,
+            'installment_label' => sprintf('Ansuran %d/%d', (int) $installment->installment_no, $installmentCount),
+            'installment_no' => (int) $installment->installment_no,
+            'installment_count' => $installmentCount,
+            'transaction_amount' => round((float) $transaction->amount, 2),
+            'total_paid_to_date' => round((float) $plan->paid_amount, 2),
+            'remaining_balance' => round((float) $plan->balance_amount, 2),
+            'payment_status_label' => $fullyPaid ? 'Selesai Dibayar' : 'Bayaran Sebahagian',
+            'fully_paid' => $fullyPaid,
+        ];
     }
 
     private function normalizeWaPhone(string $phone): string

@@ -6,12 +6,18 @@
             </section>
         @endif
 
+        @if ($errors->has('social_tag_delete'))
+            <section class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
+                {{ $errors->first('social_tag_delete') }}
+            </section>
+        @endif
+
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
                     <h1 class="text-2xl font-bold text-zinc-900">Social Tags Analytics</h1>
-                    <p class="mt-1 text-sm text-zinc-600">Pantau hashtag sosial murid dan kiraan semasa.</p>
+                    <p class="mt-1 text-sm text-zinc-600">Pantau tag sosial keluarga, padankan secara pukal, dan sediakan tag untuk kempen bayaran ansuran.</p>
                 </div>
                 <a
                     href="{{ route('teacher.records') }}"
@@ -52,100 +58,196 @@
             </form>
         </section>
 
-        @if ($socialTagLabels === [])
-            <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 shadow-sm">
-                Tiada social tag aktif. Sila tetapkan label social tag di Portal Setting terlebih dahulu.
-            </section>
-        @else
+        @if (auth()->user()?->role === 'system_admin')
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Bulk Tag Student + Siblings</h2>
-                        <p class="mt-1 text-xs text-zinc-500">
-                            Tampal senarai murid dari spreadsheet. Sistem akan padankan baris yang sepadan, kemudian set tag untuk murid dan semua adik-beradik dalam family code yang sama.
-                        </p>
+                        <h2 class="text-lg font-semibold text-zinc-900">Master Social Tags</h2>
+                        <p class="mt-1 text-xs text-zinc-500">Tag ini akan digunakan untuk kempen bayaran, analitik, dan tugasan family-ke-tag.</p>
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('teacher.social-tags.bulk-apply') }}" class="mt-3 grid gap-3 lg:grid-cols-6">
+                <form method="POST" action="{{ route('teacher.social-tags.tags.store') }}" class="mt-4 grid gap-3 lg:grid-cols-5">
                     @csrf
-                    <input type="hidden" name="billing_year" value="{{ $selectedYear }}">
-                    <input type="hidden" name="class_name" value="{{ $selectedClass }}">
-
                     <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 lg:col-span-2">
-                        Tag to apply
-                        <select name="tag_field" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
-                            @foreach ($tagSummaries as $summary)
-                                <option value="{{ $summary['field'] }}" @selected(old('tag_field') === $summary['field'])>{{ $summary['hashtag'] }} - {{ $summary['label'] }}</option>
-                            @endforeach
-                        </select>
-                        @error('tag_field')
-                            <span class="mt-1 block text-[11px] font-medium text-rose-600">{{ $message }}</span>
-                        @enderror
+                        Tag Name
+                        <input
+                            name="name"
+                            type="text"
+                            value="{{ old('name') }}"
+                            placeholder="Contoh: Asnaf"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
                     </label>
 
-                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 lg:col-span-4">
-                        Paste lines from spreadsheet
-                        <textarea
-                            name="match_lines"
-                            rows="5"
-                            placeholder="1[TAB]MUHAMMAD ZAHIR IMAN[TAB]1 ALAMANDA"
-                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                        >{{ old('match_lines') }}</textarea>
-                        @error('match_lines')
-                            <span class="mt-1 block text-[11px] font-medium text-rose-600">{{ $message }}</span>
-                        @enderror
+                    <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                        Sort Order
+                        <input
+                            name="sort_order"
+                            type="number"
+                            min="0"
+                            value="{{ old('sort_order', 0) }}"
+                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        />
                     </label>
 
-                    <div class="lg:col-span-6 flex flex-wrap items-center gap-2">
+                    <label class="inline-flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700 lg:mt-6">
+                        <input type="checkbox" name="is_active" value="1" checked>
+                        Aktif
+                    </label>
+
+                    <div class="lg:mt-6">
                         <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
-                            Apply Bulk Tag
+                            Tambah Tag
                         </button>
-                        <p class="text-[11px] text-zinc-500">Cadangan: guna tahun semasa dan class filter yang tepat untuk elak padanan bertindih.</p>
                     </div>
                 </form>
 
-                @php($bulkReport = session('bulk_tag_report'))
-                @if (is_array($bulkReport))
-                    <div class="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
-                        <p class="font-semibold text-zinc-900">
-                            Laporan bulk tag {{ data_get($bulkReport, 'tag_label', '-') }}:
-                            {{ number_format((int) data_get($bulkReport, 'matched_families_count', 0)) }} family dipadankan,
-                            {{ number_format((int) data_get($bulkReport, 'updated_students_count', 0)) }} murid dikemas kini.
-                        </p>
-                        <p class="mt-1">
-                            Baris diproses: {{ number_format((int) data_get($bulkReport, 'line_count', 0)) }} |
-                            Tidak jumpa: {{ number_format((int) data_get($bulkReport, 'unmatched_count', 0)) }} |
-                            Bertindih: {{ number_format((int) data_get($bulkReport, 'ambiguous_count', 0)) }}
-                        </p>
-
-                        @php($unmatchedEntries = collect(data_get($bulkReport, 'unmatched_entries', [])))
-                        @if ($unmatchedEntries->isNotEmpty())
-                            <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
-                                <p class="font-semibold text-rose-700">Senarai Tidak Jumpa ({{ $unmatchedEntries->count() }})</p>
-                                <ul class="mt-2 space-y-1 text-[11px] text-rose-800">
-                                    @foreach ($unmatchedEntries as $entry)
-                                        <li class="break-words">- {{ $entry }}</li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-
-                        @php($ambiguousEntries = collect(data_get($bulkReport, 'ambiguous_entries', [])))
-                        @if ($ambiguousEntries->isNotEmpty())
-                            <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                <p class="font-semibold text-amber-700">Senarai Bertindih ({{ $ambiguousEntries->count() }})</p>
-                                <ul class="mt-2 space-y-1 text-[11px] text-amber-800">
-                                    @foreach ($ambiguousEntries as $entry)
-                                        <li class="break-words">- {{ $entry }}</li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-                    </div>
-                @endif
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full divide-y divide-zinc-200 text-sm">
+                        <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            <tr>
+                                <th class="px-4 py-3">Tag</th>
+                                <th class="px-4 py-3">Slug</th>
+                                <th class="px-4 py-3">Family Tagged</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Kemaskini</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-200">
+                            @forelse ($socialTags as $socialTag)
+                                @php($updateFormId = 'social-tag-update-'.$socialTag->id)
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <input
+                                            form="{{ $updateFormId }}"
+                                            name="name"
+                                            type="text"
+                                            value="{{ old('name_'.$socialTag->id, $socialTag->name) }}"
+                                            class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+                                        />
+                                    </td>
+                                    <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $socialTag->slug }}</td>
+                                    <td class="px-4 py-3 text-zinc-700">{{ number_format((int) $socialTag->family_billings_count) }}</td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center gap-3">
+                                            <input
+                                                form="{{ $updateFormId }}"
+                                                name="sort_order"
+                                                type="number"
+                                                min="0"
+                                                value="{{ old('sort_order_'.$socialTag->id, $socialTag->sort_order) }}"
+                                                class="w-24 rounded-lg border border-zinc-300 px-2 py-2 text-sm text-zinc-900"
+                                            />
+                                            <label class="inline-flex items-center gap-2 text-xs font-semibold text-zinc-700">
+                                                <input form="{{ $updateFormId }}" type="checkbox" name="is_active" value="1" @checked($socialTag->is_active)>
+                                                {{ $socialTag->is_active ? 'Aktif' : 'Tidak Aktif' }}
+                                            </label>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <form id="{{ $updateFormId }}" method="POST" action="{{ route('teacher.social-tags.tags.update', $socialTag) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                            </form>
+                                            <button form="{{ $updateFormId }}" type="submit" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                                                Simpan
+                                            </button>
+                                            <form method="POST" action="{{ route('teacher.social-tags.tags.destroy', $socialTag) }}" onsubmit="return confirm('Padam tag sosial ini?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="inline-flex items-center rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100">
+                                                Padam
+                                            </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="px-4 py-6 text-center text-zinc-500">Belum ada master social tag direkodkan.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </section>
+        @endif
 
+        <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-zinc-900">Bulk Tag Family</h2>
+                    <p class="mt-1 text-xs text-zinc-500">
+                        Tampal senarai murid dari spreadsheet. Sistem akan padankan family code untuk tahun yang dipilih dan lekatkan tag kepada family billing.
+                    </p>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ route('teacher.social-tags.bulk-apply') }}" class="mt-3 grid gap-3 lg:grid-cols-6">
+                @csrf
+                <input type="hidden" name="billing_year" value="{{ $selectedYear }}">
+                <input type="hidden" name="class_name" value="{{ $selectedClass }}">
+
+                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 lg:col-span-2">
+                    Tag to apply
+                    <select name="social_tag_id" class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                        <option value="">Pilih tag sosial</option>
+                        @foreach ($socialTags as $socialTag)
+                            <option value="{{ $socialTag->id }}" @selected((string) old('social_tag_id', data_get(session('bulk_tag_report'), 'social_tag_id')) === (string) $socialTag->id)>
+                                {{ $socialTag->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('social_tag_id')
+                        <span class="mt-1 block text-[11px] font-medium text-rose-600">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-600 lg:col-span-4">
+                    Paste lines from spreadsheet
+                    <textarea
+                        name="match_lines"
+                        rows="5"
+                        placeholder="1[TAB]MUHAMMAD ZAHIR IMAN[TAB]1 ALAMANDA"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >{{ old('match_lines') }}</textarea>
+                    @error('match_lines')
+                        <span class="mt-1 block text-[11px] font-medium text-rose-600">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <div class="lg:col-span-6 flex flex-wrap items-center gap-2">
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                        Apply Bulk Tag
+                    </button>
+                    <p class="text-[11px] text-zinc-500">Cadangan: guna tahun semasa dan class filter yang tepat untuk elak padanan bertindih.</p>
+                </div>
+            </form>
+
+            @php($bulkReport = session('bulk_tag_report'))
+            @if (is_array($bulkReport))
+                <div class="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+                    <p class="font-semibold text-zinc-900">
+                        Laporan bulk tag {{ data_get($bulkReport, 'tag_label', '-') }}:
+                        {{ number_format((int) data_get($bulkReport, 'matched_families_count', 0)) }} family ditag,
+                        {{ number_format((int) data_get($bulkReport, 'missing_billing_count', 0)) }} family tiada bil tahun ini.
+                    </p>
+                    <p class="mt-1">
+                        Baris diproses: {{ number_format((int) data_get($bulkReport, 'line_count', 0)) }} |
+                        Tidak jumpa: {{ number_format((int) data_get($bulkReport, 'unmatched_count', 0)) }} |
+                        Bertindih: {{ number_format((int) data_get($bulkReport, 'ambiguous_count', 0)) }}
+                    </p>
+                </div>
+            @endif
+        </section>
+
+        @if ($socialTags->isEmpty())
+            <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 shadow-sm">
+                Tiada social tag aktif. Tambah tag baharu dahulu untuk mula tag keluarga dan kawal kempen bayaran.
+            </section>
+        @else
             <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <article class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Total Students</p>
@@ -167,8 +269,8 @@
                 <div class="flex flex-wrap items-center gap-2">
                     @foreach ($tagSummaries as $summary)
                         <a
-                            href="{{ route('teacher.social-tags.index', ['billing_year' => $selectedYear, 'class_name' => $selectedClass, 'tag_filter' => $summary['field']]) }}"
-                            class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition {{ $selectedTagFilter === $summary['field'] ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}"
+                            href="{{ route('teacher.social-tags.index', ['billing_year' => $selectedYear, 'class_name' => $selectedClass, 'tag_filter' => $summary['key']]) }}"
+                            class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition {{ $selectedTagFilter === $summary['key'] ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}"
                         >
                             {{ $summary['hashtag'] }} · {{ $summary['count'] }}
                         </a>
@@ -190,7 +292,7 @@
                                 {{ $selectedTagSummary['hashtag'] }} Student List
                             </h2>
                             <p class="mt-1 text-xs text-zinc-500">
-                                Paparan murid mengikut group tag terpilih ({{ number_format($filteredTagStudents->count()) }} murid).
+                                Paparan murid mengikut tag sosial keluarga yang dipilih ({{ number_format($filteredTagStudents->count()) }} murid).
                             </p>
                         </div>
                     </div>
@@ -230,7 +332,7 @@
 
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                 <h2 class="text-lg font-semibold text-zinc-900">Tag Count by Class</h2>
-                <p class="mt-1 text-xs text-zinc-500">Kiraan murid mengikut kelas dan hashtag.</p>
+                <p class="mt-1 text-xs text-zinc-500">Kiraan murid mengikut kelas berdasarkan social tag keluarga.</p>
 
                 <div class="mt-3 overflow-x-auto">
                     <table class="min-w-full divide-y divide-zinc-200 text-sm">
@@ -249,7 +351,7 @@
                                     <td class="px-4 py-3 font-semibold text-zinc-900">{{ $row['class_name'] }}</td>
                                     <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((int) $row['total_students']) }}</td>
                                     @foreach ($tagSummaries as $summary)
-                                        <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((int) ($row['tag_counts'][$summary['field']] ?? 0)) }}</td>
+                                        <td class="px-4 py-3 text-right text-zinc-700">{{ number_format((int) ($row['tag_counts'][$summary['key']] ?? 0)) }}</td>
                                     @endforeach
                                 </tr>
                             @empty

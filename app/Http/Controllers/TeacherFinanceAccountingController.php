@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentPlan;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\PaymentCampaignService;
 use App\Support\ParentPhone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -16,6 +18,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeacherFinanceAccountingController extends Controller
 {
+    public function __construct(private readonly PaymentCampaignService $paymentCampaignService)
+    {
+    }
+
     public function index(Request $request): View
     {
         $dataset = $this->buildDataset($request);
@@ -56,6 +62,16 @@ class TeacherFinanceAccountingController extends Controller
                 "Sumbangan {$yearA}",
                 "Yuran {$yearB}",
                 "Sumbangan {$yearB}",
+                "Social Tag {$yearB}",
+                "Available Payment Options {$yearB}",
+                "Selected Payment Plan {$yearB}",
+                "Campaign Name {$yearB}",
+                "Payment Plan {$yearB}",
+                "Total Amount {$yearB}",
+                "Paid Amount {$yearB}",
+                "Balance {$yearB}",
+                "Payment Status {$yearB}",
+                "Paid Instalments {$yearB}",
             ]);
 
             foreach ($rows as $row) {
@@ -67,6 +83,16 @@ class TeacherFinanceAccountingController extends Controller
                     number_format((float) $row["sumbangan_{$yearA}"], 2, '.', ''),
                     number_format((float) $row["yuran_{$yearB}"], 2, '.', ''),
                     number_format((float) $row["sumbangan_{$yearB}"], 2, '.', ''),
+                    $row['social_tag'],
+                    $row['available_payment_options'],
+                    $row['selected_payment_plan'],
+                    $row['campaign_name'],
+                    $row['payment_plan'],
+                    number_format((float) $row['plan_total_amount'], 2, '.', ''),
+                    number_format((float) $row['plan_paid_amount'], 2, '.', ''),
+                    number_format((float) $row['plan_balance_amount'], 2, '.', ''),
+                    $row['plan_payment_status'],
+                    $row['paid_installments'],
                 ]);
             }
 
@@ -78,6 +104,16 @@ class TeacherFinanceAccountingController extends Controller
                 number_format((float) $totals["sumbangan_{$yearA}"], 2, '.', ''),
                 number_format((float) $totals["yuran_{$yearB}"], 2, '.', ''),
                 number_format((float) $totals["sumbangan_{$yearB}"], 2, '.', ''),
+                '',
+                '',
+                '',
+                '',
+                '',
+                number_format((float) $totals['plan_total_amount'], 2, '.', ''),
+                number_format((float) $totals['plan_paid_amount'], 2, '.', ''),
+                number_format((float) $totals['plan_balance_amount'], 2, '.', ''),
+                '',
+                '',
             ]);
 
             fclose($handle);
@@ -121,6 +157,7 @@ class TeacherFinanceAccountingController extends Controller
 
         $nowYear = (int) now()->year;
         $currentYear = in_array($nowYear, [$yearA, $yearB], true) ? $nowYear : $yearB;
+        $activeCampaign = $this->paymentCampaignService->activeCampaign();
 
         $studentsByFamily = Student::query()
             ->whereNotNull('family_code')
@@ -135,6 +172,20 @@ class TeacherFinanceAccountingController extends Controller
             ->get()
             ->groupBy('billing_year')
             ->map(fn (Collection $yearRows): Collection => $yearRows->keyBy('family_code'));
+
+        $billingIds = $billingByYearAndFamily
+            ->flatten(1)
+            ->pluck('id')
+            ->filter()
+            ->values();
+
+        $paymentPlanByBillingId = $billingIds->isEmpty()
+            ? collect()
+            : FamilyPaymentPlan::query()
+                ->with('installments')
+                ->whereIn('family_billing_id', $billingIds->all())
+                ->get()
+                ->keyBy('family_billing_id');
 
         $portalPaymentByYearFamily = FamilyPaymentTransaction::query()
             ->selectRaw('family_billings.billing_year, family_billings.family_code')
@@ -242,16 +293,28 @@ class TeacherFinanceAccountingController extends Controller
                 $legacyPaymentByYearFamily,
                 $parentNameByPhone,
                 $parentNameByEmail,
+                $paymentPlanByBillingId,
                 $yearA,
                 $yearB,
-                $currentYear
+                $currentYear,
+                $activeCampaign
             ): array {
                 $billingA = $billingByYearAndFamily->get($yearA)?->get($familyCode);
                 $billingB = $billingByYearAndFamily->get($yearB)?->get($familyCode);
+                $currentBilling = $billingByYearAndFamily->get($currentYear)?->get($familyCode);
                 $portalA = $portalPaymentByYearFamily->get((string) $yearA)?->get($familyCode);
                 $portalB = $portalPaymentByYearFamily->get((string) $yearB)?->get($familyCode);
                 $legacyA = $legacyPaymentByYearFamily->get((string) $yearA)?->get($familyCode);
                 $legacyB = $legacyPaymentByYearFamily->get((string) $yearB)?->get($familyCode);
+                $currentPlan = $currentBilling ? $paymentPlanByBillingId->get($currentBilling->id) : null;
+                $socialTag = $currentBilling
+                    ? (implode(', ', $this->paymentCampaignService->resolveFamilySocialTags($currentBilling)->all()) ?: '-')
+                    : '-';
+                $availablePaymentOptions = $currentBilling
+                    ? $this->paymentCampaignService->eligiblePlanLabels($currentBilling)
+                    : [];
+                $selectedPaymentPlan = $currentPlan?->plan_label
+                    ?? ($currentBilling ? 'Bayaran Penuh' : '-');
 
                 [$yuranA, $sumbanganA] = $this->resolveYearBreakdown($billingA, $portalA, $legacyA);
                 [$yuranB, $sumbanganB] = $this->resolveYearBreakdown($billingB, $portalB, $legacyB);
@@ -261,10 +324,29 @@ class TeacherFinanceAccountingController extends Controller
                     'name' => $this->resolveDisplayName($familyStudents, $parentNameByPhone, $parentNameByEmail),
                     'class_name' => $this->resolveClassName($familyStudents),
                     'students' => $this->buildStudentItems($familyStudents),
+                    'social_tag' => $socialTag,
+                    'available_payment_options' => $availablePaymentOptions !== [] ? implode(', ', $availablePaymentOptions) : 'Tiada',
+                    'selected_payment_plan' => $selectedPaymentPlan,
+                    'campaign_name' => $activeCampaign?->campaign_name ?? 'Single Payment Default',
                     "yuran_{$yearA}" => $yuranA,
                     "sumbangan_{$yearA}" => $sumbanganA,
                     "yuran_{$yearB}" => $yuranB,
                     "sumbangan_{$yearB}" => $sumbanganB,
+                    'payment_plan' => $currentPlan?->plan_label
+                        ?? ($currentBilling ? 'Bayar Penuh' : '-'),
+                    'plan_total_amount' => round((float) ($currentPlan?->total_amount ?? $currentBilling?->fee_amount ?? 0), 2),
+                    'plan_paid_amount' => round((float) ($currentPlan?->paid_amount ?? $currentBilling?->paid_amount ?? 0), 2),
+                    'plan_balance_amount' => round((float) ($currentPlan?->balance_amount ?? $currentBilling?->outstanding_amount ?? 0), 2),
+                    'plan_payment_status' => $this->formatPlanStatus(
+                        (string) ($currentPlan?->status ?? $currentBilling?->status ?? 'pending')
+                    ),
+                    'paid_installments' => $currentPlan
+                        ? $currentPlan->paid_installments_summary
+                        : ($currentBilling
+                            ? (((string) $currentBilling->status === 'paid')
+                                ? '1/1 paid'
+                                : ((float) $currentBilling->paid_amount > 0 ? 'Bayaran sebahagian' : '0/1 paid'))
+                            : '-'),
                 ];
 
                 $row['current_year_total'] = (float) ($row["yuran_{$currentYear}"] + $row["sumbangan_{$currentYear}"]);
@@ -331,6 +413,9 @@ class TeacherFinanceAccountingController extends Controller
             "sumbangan_{$yearA}" => (float) $rows->sum("sumbangan_{$yearA}"),
             "yuran_{$yearB}" => (float) $rows->sum("yuran_{$yearB}"),
             "sumbangan_{$yearB}" => (float) $rows->sum("sumbangan_{$yearB}"),
+            'plan_total_amount' => (float) $rows->sum('plan_total_amount'),
+            'plan_paid_amount' => (float) $rows->sum('plan_paid_amount'),
+            'plan_balance_amount' => (float) $rows->sum('plan_balance_amount'),
         ];
 
         return [
@@ -358,6 +443,17 @@ class TeacherFinanceAccountingController extends Controller
         $sumbangan = max(0, $safePaid - $safeFee);
 
         return [round($yuran, 2), round($sumbangan, 2)];
+    }
+
+    private function formatPlanStatus(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'paid' => 'Selesai Dibayar',
+            'partial' => 'Bayaran Sebahagian',
+            'cancelled', 'canceled' => 'Dibatalkan',
+            'unpaid' => 'Belum Dibayar',
+            default => 'Pending',
+        };
     }
 
     private function resolveDisplayName(Collection $familyStudents, Collection $parentNameByPhone, Collection $parentNameByEmail): string

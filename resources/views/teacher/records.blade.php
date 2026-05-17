@@ -354,9 +354,7 @@
                                         <p>{{ $parentDisplayName }}</p>
                                         <p class="text-xs text-zinc-400">{{ $student->parent_phone ?: '-' }}</p>
                                         @php
-                                            $studentTags = collect($socialTagLabels)
-                                                ->filter(fn ($label, $field) => (bool) data_get($student, $field))
-                                                ->values();
+                                            $studentTags = collect($student->resolved_social_tags ?? []);
                                         @endphp
                                         @if ($studentTags->isNotEmpty())
                                             <div class="mt-1 flex flex-wrap gap-1">

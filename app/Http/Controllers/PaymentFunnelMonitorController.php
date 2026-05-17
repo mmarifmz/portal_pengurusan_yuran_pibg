@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
+use App\Services\FamilyPaymentSettlementService;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class PaymentFunnelMonitorController extends Controller
 {
     public function __construct(
         private readonly ToyyibPayService $toyyibPayService,
+        private readonly FamilyPaymentSettlementService $paymentSettlementService,
         private readonly ParentPaymentNotificationService $paymentNotificationService
     ) {
     }
@@ -508,38 +510,13 @@ class PaymentFunnelMonitorController extends Controller
             return;
         }
 
-        $paidAmount = $this->normalizeGatewayAmount($gatewayRecord['billpaymentAmount'] ?? $transaction->amount);
         $invoiceNo = (string) ($gatewayRecord['billpaymentInvoiceNo'] ?? '');
         $paymentDate = (string) ($gatewayRecord['billPaymentDate'] ?? $gatewayRecord['billpaymentDate'] ?? '');
 
-        DB::transaction(function () use ($transaction, $billing, $paidAmount, $invoiceNo, $paymentDate, $gatewayReason): void {
-            $billing->refresh();
-
-            $feeOutstanding = max(0, (float) $billing->fee_amount - (float) $billing->paid_amount);
-            $feeOutstandingAtCheckout = max(0, (float) data_get($transaction->raw_return, 'outstanding_at_checkout', $feeOutstanding));
-            $feeOutstanding = min($feeOutstanding, $feeOutstandingAtCheckout);
-            $feePaid = min($feeOutstanding, $paidAmount);
-            $donation = max(0, $paidAmount - $feePaid);
-
-            $billing->paid_amount = min((float) $billing->fee_amount, (float) $billing->paid_amount + $feePaid);
-            $billing->status = ((float) $billing->paid_amount >= (float) $billing->fee_amount) ? 'paid' : 'partial';
-            $billing->save();
-
-            $transaction->forceFill([
-                'status' => 'success',
-                'return_status' => 'successful',
-                'provider_invoice_no' => filled($invoiceNo) ? $invoiceNo : $transaction->provider_invoice_no,
-                'amount' => $paidAmount,
-                'fee_amount_paid' => $feePaid,
-                'donation_amount' => $donation,
-                'paid_at' => now(),
-                'status_reason' => filled($paymentDate)
-                    ? "Paid at {$paymentDate}"
-                    : ($gatewayReason !== '' ? $gatewayReason : $transaction->status_reason),
-            ])->save();
-        });
+        $this->paymentSettlementService->synchronizeSuccessfulPayment($transaction, $gatewayRecord, $gatewayReason);
 
         $transaction->refresh();
+        $billing->refresh();
 
         if (filled($transaction->payer_phone)) {
             $billing->registerPhone((string) $transaction->payer_phone);

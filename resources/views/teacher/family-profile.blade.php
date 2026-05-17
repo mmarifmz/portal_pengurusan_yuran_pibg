@@ -123,6 +123,66 @@
             </div>
         </section>
 
+        @if ($currentBilling)
+            <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-zinc-900">Family Social Tags</h2>
+                        <p class="mt-1 text-xs text-zinc-500">Paparan ini mengambil tag sosial terkini untuk bil family tahun {{ $currentBilling->billing_year }}.</p>
+                    </div>
+                    <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                        Open Tag Count Page
+                    </a>
+                </div>
+                <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Current Tags</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @forelse ($currentFamilySocialTags as $tagName)
+                            <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                {{ $tagName }}
+                            </span>
+                        @empty
+                            <span class="text-xs text-zinc-500">Belum ada tag sosial direkodkan untuk family ini.</span>
+                        @endforelse
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('teacher.records.family.social-tags.update', ['familyCode' => $familyCode]) }}" class="mt-4 space-y-3">
+                    @csrf
+                    @method('PATCH')
+
+                    <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Update Family Tags</p>
+                        <div class="mt-3 flex flex-wrap gap-3">
+                            @foreach ($availableSocialTags as $socialTag)
+                                <label class="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700">
+                                    <input
+                                        type="checkbox"
+                                        name="social_tag_ids[]"
+                                        value="{{ $socialTag->id }}"
+                                        @checked(collect(old('social_tag_ids', $currentBilling->socialTags->pluck('id')->all()))->map(fn ($id) => (string) $id)->contains((string) $socialTag->id))
+                                    >
+                                    {{ $socialTag->name }}
+                                </label>
+                            @endforeach
+                        </div>
+                        @error('social_tag_ids')
+                            <p class="mt-2 text-[11px] font-medium text-rose-600">{{ $message }}</p>
+                        @enderror
+                        @error('social_tag_ids.*')
+                            <p class="mt-2 text-[11px] font-medium text-rose-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <button type="submit" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                            Save Family Tags
+                        </button>
+                    </div>
+                </form>
+            </section>
+        @endif
+
         <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Family Members</h2>
             <div class="mt-3 overflow-x-auto">
@@ -155,86 +215,6 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div id="update-parent-profile" class="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <h3 class="text-sm font-semibold text-zinc-900">Update Family Parent Profile</h3>
-                <p class="mt-1 text-xs text-zinc-500">Teacher boleh kemas kini nama dan email parent untuk semua murid di family code ini.</p>
-                <form method="POST" action="{{ $updateParentProfileUrl }}" class="mt-3 grid gap-3 sm:grid-cols-2">
-                    @csrf
-                    @method('PATCH')
-                    <label class="text-xs font-semibold text-zinc-600">
-                        Parent Name
-                        <input
-                            type="text"
-                            name="parent_name"
-                            value="{{ old('parent_name', $parentProfileName ?? '') }}"
-                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                        />
-                        @error('parent_name')
-                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
-                        @enderror
-                    </label>
-                    <label class="text-xs font-semibold text-zinc-600">
-                        Parent Email
-                        <input
-                            type="email"
-                            name="parent_email"
-                            value="{{ old('parent_email', $parentProfileEmail ?? '') }}"
-                            class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                        />
-                        @error('parent_email')
-                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
-                        @enderror
-                    </label>
-                    <p class="sm:col-span-2 text-[11px] text-zinc-500">Boleh kemas kini satu medan sahaja (nama atau email), atau kedua-duanya sekali.</p>
-                    <div class="sm:col-span-2">
-                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
-                            Save Parent Profile
-                        </button>
-                    </div>
-                </form>
-
-                @if (! empty($socialTagLabels))
-                    <div class="mt-4 rounded-xl border border-zinc-200 bg-white p-3">
-                        <div class="flex items-center justify-between gap-2">
-                            <h4 class="text-xs font-semibold uppercase tracking-wide text-zinc-600">Student Social Tags</h4>
-                            <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                                Open Tag Count Page
-                            </a>
-                        </div>
-                        <p class="mt-1 text-[11px] text-zinc-500">Super admin boleh ubah label tag dari menu Portal SEO & Branding.</p>
-                        @error('tags')
-                            <p class="mt-2 text-[11px] font-medium text-rose-600">{{ $message }}</p>
-                        @enderror
-                        <div class="mt-3 space-y-2">
-                            @foreach ($students as $student)
-                                <form method="POST" action="{{ route('teacher.records.students.tags.update', ['student' => $student]) }}" class="js-tag-form rounded-lg border border-zinc-200 bg-zinc-50 p-2" data-student-id="{{ $student->id }}">
-                                    @csrf
-                                    @method('PATCH')
-                                    <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <div>
-                                            <p class="text-xs font-semibold text-zinc-900">{{ $student->full_name }}</p>
-                                            <p class="text-[11px] text-zinc-500">{{ $student->class_name ?: '-' }}{{ $student->student_no ? ' / '.$student->student_no : '' }}</p>
-                                        </div>
-                                        <div class="flex flex-wrap items-center gap-3">
-                                            @foreach ($socialTagLabels as $tagField => $tagLabel)
-                                                <label class="inline-flex items-center gap-1 text-xs font-medium text-zinc-700">
-                                                    <input type="checkbox" name="{{ $tagField }}" value="1" @checked((bool) data_get($student, $tagField))>
-                                                    {{ $tagLabel }}
-                                                </label>
-                                            @endforeach
-                                            <span class="js-tag-status text-[11px] font-medium text-zinc-500" aria-live="polite"></span>
-                                            <button type="submit" class="js-tag-submit inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                                                Save Tags
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-            </div>
-
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-zinc-900">Payment History</h2>
@@ -291,6 +271,50 @@
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <section id="update-parent-profile" class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-zinc-900">Update Family Parent Profile</h2>
+                    <p class="text-xs text-zinc-500">Teacher boleh kemas kini nama dan email parent untuk semua murid di family code ini.</p>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ $updateParentProfileUrl }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+                @csrf
+                @method('PATCH')
+                <label class="text-xs font-semibold text-zinc-600">
+                    Parent Name
+                    <input
+                        type="text"
+                        name="parent_name"
+                        value="{{ old('parent_name', $parentProfileName ?? '') }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                    @error('parent_name')
+                        <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                    @enderror
+                </label>
+                <label class="text-xs font-semibold text-zinc-600">
+                    Parent Email
+                    <input
+                        type="email"
+                        name="parent_email"
+                        value="{{ old('parent_email', $parentProfileEmail ?? '') }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                    @error('parent_email')
+                        <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                    @enderror
+                </label>
+                <p class="sm:col-span-2 text-[11px] text-zinc-500">Boleh kemas kini satu medan sahaja (nama atau email), atau kedua-duanya sekali.</p>
+                <div class="sm:col-span-2">
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                        Save Parent Profile
+                    </button>
+                </div>
+            </form>
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -389,90 +413,5 @@
             </div>
         </section>
     </div>
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const forms = Array.from(document.querySelectorAll('.js-tag-form'));
-    if (!forms.length) {
-        return;
-    }
-
-    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
-    const setStatus = (form, message, tone = 'neutral') => {
-        const status = form.querySelector('.js-tag-status');
-        if (!status) return;
-
-        status.textContent = message;
-        status.classList.remove('text-zinc-500', 'text-emerald-600', 'text-rose-600');
-        if (tone === 'success') status.classList.add('text-emerald-600');
-        else if (tone === 'error') status.classList.add('text-rose-600');
-        else status.classList.add('text-zinc-500');
-    };
-
-    const toggleBusy = (form, busy) => {
-        const submit = form.querySelector('.js-tag-submit');
-        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
-
-        if (submit) {
-            submit.disabled = busy;
-            submit.textContent = busy ? 'Saving...' : 'Save Tags';
-        }
-
-        checkboxes.forEach((checkbox) => {
-            checkbox.disabled = busy;
-        });
-    };
-
-    const saveForm = async (form) => {
-        try {
-            toggleBusy(form, true);
-            setStatus(form, 'Saving...', 'neutral');
-
-            const formData = new FormData(form);
-            const response = await fetch(form.action, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': token,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                },
-                body: formData,
-            });
-
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(payload.message || 'Unable to save tags.');
-            }
-
-            setStatus(form, payload.message || 'Saved', 'success');
-            window.setTimeout(() => setStatus(form, ''), 1400);
-        } catch (error) {
-            setStatus(form, error.message || 'Save failed', 'error');
-        } finally {
-            toggleBusy(form, false);
-        }
-    };
-
-    forms.forEach((form) => {
-        let debounceTimer = null;
-
-        form.addEventListener('submit', (event) => {
-            event.preventDefault();
-            window.clearTimeout(debounceTimer);
-            saveForm(form);
-        });
-
-        form.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-            checkbox.addEventListener('change', () => {
-                window.clearTimeout(debounceTimer);
-                debounceTimer = window.setTimeout(() => saveForm(form), 220);
-            });
-        });
-    });
-});
-</script>
-@endpush
 
 </x-layouts::app>

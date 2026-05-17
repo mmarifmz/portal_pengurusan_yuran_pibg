@@ -13,7 +13,7 @@ class ReceiptController extends Controller
     public function show(Request $request, string $receiptUuid): View
     {
         $transaction = FamilyPaymentTransaction::query()
-            ->with('familyBilling')
+            ->with(['familyBilling', 'installment.paymentPlan.installments'])
             ->where('receipt_uuid', $receiptUuid)
             ->firstOrFail();
 
@@ -59,6 +59,7 @@ class ReceiptController extends Controller
             'displayInvoiceNo' => $isPublicReceipt
                 ? $this->maskMiddle((string) ($transaction->provider_invoice_no ?: 'Belum dijana'), 3, 2)
                 : ($transaction->provider_invoice_no ?: 'Belum dijana'),
+            'receiptContext' => $this->buildReceiptContext($transaction),
             'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
             'schoolLogoUrl' => SiteSetting::schoolLogoUrl(),
         ]);
@@ -67,8 +68,9 @@ class ReceiptController extends Controller
     private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
     {
         $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
+        $receiptContext = $this->buildReceiptContext($transaction);
 
-        $message = implode("\n", [
+        $lines = [
             'Assalamualaikum guru,',
             '',
             'Saya ingin kongsi resit bayaran PIBG:',
@@ -76,9 +78,56 @@ class ReceiptController extends Controller
             'Jumlah: RM'.number_format((float) $transaction->amount, 2),
             'Order ID: '.$transaction->external_order_display,
             'Resit web: '.$receiptUrl,
-        ]);
+        ];
+
+        if ($receiptContext['installment_label'] !== null) {
+            array_splice($lines, 5, 0, ['Ansuran: '.$receiptContext['installment_label']]);
+        }
+
+        $message = implode("\n", $lines);
 
         return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
+    }
+
+    /**
+     * @return array{
+     *   has_installment: bool,
+     *   installment_label: string|null,
+     *   transaction_amount: float,
+     *   total_paid_to_date: float|null,
+     *   remaining_balance: float|null,
+     *   payment_status_label: string|null,
+     *   fully_paid: bool
+     * }
+     */
+    private function buildReceiptContext(FamilyPaymentTransaction $transaction): array
+    {
+        $transaction->loadMissing('installment.paymentPlan.installments');
+
+        $installment = $transaction->installment;
+        $plan = $installment?->paymentPlan;
+
+        if (! $installment || ! $plan) {
+            return [
+                'has_installment' => false,
+                'installment_label' => null,
+                'transaction_amount' => round((float) $transaction->amount, 2),
+                'total_paid_to_date' => null,
+                'remaining_balance' => null,
+                'payment_status_label' => null,
+                'fully_paid' => strtolower((string) $transaction->status) === 'success',
+            ];
+        }
+
+        return [
+            'has_installment' => true,
+            'installment_label' => sprintf('Ansuran %d/%d', (int) $installment->installment_no, $plan->installments->count()),
+            'transaction_amount' => round((float) $transaction->amount, 2),
+            'total_paid_to_date' => round((float) $plan->paid_amount, 2),
+            'remaining_balance' => round((float) $plan->balance_amount, 2),
+            'payment_status_label' => (float) $plan->balance_amount <= 0 ? 'Selesai Dibayar' : 'Bayaran Sebahagian',
+            'fully_paid' => (float) $plan->balance_amount <= 0,
+        ];
     }
 
     private function normalizeWaPhone(string $phone): string

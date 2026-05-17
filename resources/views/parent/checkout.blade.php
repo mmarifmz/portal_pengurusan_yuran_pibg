@@ -3,9 +3,16 @@
         $baseAmount = (float) ($checkoutBaseAmount ?? $familyBilling->outstanding_amount);
         $prefilledDonation = (float) ($defaultDonation ?? 0);
         $prefilledTotal = $baseAmount + $prefilledDonation;
+        $showInstallmentPlanner = empty($alreadyPaidCurrentYear) && (float) $familyBilling->outstanding_amount > 0;
     @endphp
 
     <div class="space-y-6">
+        @if (session('status'))
+            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                {{ session('status') }}
+            </div>
+        @endif
+
         <div class="flex flex-wrap gap-4">
             <div
                 class="flex-1 rounded-3xl border p-6 shadow-lg"
@@ -58,101 +65,245 @@
                     @endif
                 </div>
 
-                <form action="{{ route('parent.payments.create', $familyBilling) }}" method="POST" class="mt-4 space-y-4">
-                    @csrf
-                    @if ($errors->has('payment_gateway'))
-                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                            {{ $errors->first('payment_gateway') }}
+                @if (! empty($campaignSetting) && $showInstallmentPlanner)
+                    <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                        <p class="font-semibold text-zinc-900">Tetapan Kempen Bayaran</p>
+                        <p class="mt-1">Kempen: {{ $campaignSetting->campaign_name }}</p>
+                        <p class="mt-1">Tag Sosial: {{ $familySocialTag ?: 'Tiada' }}</p>
+                        <p class="mt-1">Pilihan Bayaran Yang Layak: {{ $availablePaymentOptionLabels !== [] ? implode(', ', $availablePaymentOptionLabels) : 'Tiada pilihan buat masa ini' }}</p>
+                    </div>
+                @endif
+
+                @if ($errors->has('payment_gateway') || $errors->has('payment_plan'))
+                    <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        {{ $errors->first('payment_gateway') ?: $errors->first('payment_plan') }}
+                    </div>
+                @endif
+
+                @if ($showInstallmentPlanner && ! $paymentPlan)
+                    <div class="mt-5 space-y-4">
+                        <div>
+                            <h4 class="text-lg font-bold text-zinc-900">Pilih Pelan Bayaran</h4>
+                            <p class="mt-1 text-sm text-zinc-600">Pilih cara bayaran yang sesuai untuk keluarga anda.</p>
                         </div>
-                    @endif
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Nama Ibu Bapa / Penjaga</label>
-                        <input
-                            name="payer_name"
-                            type="text"
-                            required
-                            class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
-                            placeholder="Contoh: Nurul Aini binti Ahmad"
-                            value="{{ old('payer_name') }}"
-                        >
-                        <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_name')" />
+
+                        @if ($availablePlans === [])
+                            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                                Tiada pilihan bayaran tersedia untuk keluarga anda dalam kempen semasa. Sila hubungi pihak PIBG atau pentadbir portal.
+                            </div>
+                        @else
+                            <div class="grid gap-3">
+                                @foreach ($availablePlans as $planOption)
+                                    <form method="POST" action="{{ route('parent.payments.plan.select', $familyBilling) }}" class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 transition hover:border-emerald-300 hover:bg-emerald-50">
+                                        @csrf
+                                        <input type="hidden" name="plan_type" value="{{ $planOption['type'] }}">
+                                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <p class="text-base font-bold text-zinc-900">{{ $planOption['label'] }}</p>
+                                                <p class="mt-1 text-sm text-zinc-600">
+                                                    @foreach ($planOption['amounts'] as $amountIndex => $amount)
+                                                        {{ $amountIndex > 0 ? ' + ' : '' }}RM{{ number_format((float) $amount, 2) }}
+                                                    @endforeach
+                                                </p>
+                                            </div>
+                                            <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                                Pilih {{ $planOption['label'] }}
+                                            </button>
+                                        </div>
+                                    </form>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</label>
-                        <input
-                            name="payer_email"
-                            type="email"
-                            required
-                            class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
-                            placeholder="Contoh: ibu.bapa@email.com"
-                            value="{{ old('payer_email') }}"
-                        >
-                        <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_email')" />
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">No Telefon</label>
-                        <input name="payer_phone" type="text" required class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm" value="{{ old('payer_phone', $defaultPhone) }}">
-                        <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_phone')" />
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sumbangan Tambahan (Pilihan)</label>
-                        <div class="flex flex-wrap gap-2 text-xs">
-                            @foreach([50,100,250,500,1000] as $preset)
-                                <button type="button" class="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-left text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 js-presets" data-amount="{{ $preset }}">RM{{ $preset }}</button>
-                            @endforeach
-                            <button type="button" class="rounded-full border border-zinc-300 bg-white px-3 py-1 text-left text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 js-reset-donation">
-                                Reset ke RM{{ number_format($baseAmount, 0) }}
-                            </button>
+                @elseif ($showInstallmentPlanner && $paymentPlan)
+                    <div class="mt-5 space-y-4">
+                        <div class="rounded-2xl border border-zinc-200 bg-[color:var(--brand-soft)] p-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-emerald-700">{{ $paymentPlan->plan_label }}</p>
+                                    <h4 class="text-xl font-extrabold text-zinc-900">Ringkasan Ansuran</h4>
+                                </div>
+                                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">{{ ucfirst((string) $paymentPlan->status) }}</span>
+                            </div>
+                            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Yuran</p>
+                                    <p class="mt-1 text-lg font-bold text-zinc-900">RM {{ number_format((float) $paymentPlan->total_amount, 2) }}</p>
+                                </div>
+                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Dibayar</p>
+                                    <p class="mt-1 text-lg font-bold text-emerald-700">RM {{ number_format((float) $paymentPlan->paid_amount, 2) }}</p>
+                                </div>
+                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
+                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Baki Bayaran</p>
+                                    <p class="mt-1 text-lg font-bold text-amber-700">RM {{ number_format((float) $paymentPlan->balance_amount, 2) }}</p>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <div class="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-600">
+                                    <span>Status Bayaran</span>
+                                    <span>{{ $paymentPlanProgress }}%</span>
+                                </div>
+                                <div class="h-3 overflow-hidden rounded-full bg-zinc-200">
+                                    <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ $paymentPlanProgress }}%;"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex w-full overflow-hidden rounded-lg border border-zinc-300">
-                            <span class="inline-flex items-center border-r border-zinc-300 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">RM</span>
+
+                        <form method="POST" class="space-y-4">
+                            @csrf
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Nama Ibu Bapa / Penjaga</label>
+                                <input
+                                    name="payer_name"
+                                    type="text"
+                                    required
+                                    class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                                    placeholder="Contoh: Nurul Aini binti Ahmad"
+                                    value="{{ old('payer_name', $defaultName) }}"
+                                >
+                                <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_name')" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</label>
+                                <input
+                                    name="payer_email"
+                                    type="email"
+                                    required
+                                    class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                                    placeholder="Contoh: ibu.bapa@email.com"
+                                    value="{{ old('payer_email', $defaultEmail) }}"
+                                >
+                                <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_email')" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">No Telefon</label>
+                                <input name="payer_phone" type="text" required class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm" value="{{ old('payer_phone', $defaultPhone) }}">
+                                <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_phone')" />
+                            </div>
+
+                            <div class="space-y-3">
+                                <h4 class="text-sm font-bold uppercase tracking-wide text-zinc-500">Ansuran</h4>
+                                @foreach ($paymentPlan->installments as $installment)
+                                    @php
+                                        $isPaidInstallment = (string) $installment->status === \App\Models\FamilyPaymentInstallment::STATUS_PAID;
+                                    @endphp
+                                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-4">
+                                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <p class="text-base font-bold text-zinc-900">Ansuran {{ $installment->installment_no }}</p>
+                                                <p class="mt-1 text-sm text-zinc-600">RM {{ number_format((float) $installment->amount, 2) }}</p>
+                                                <p class="mt-1 text-xs font-semibold {{ $isPaidInstallment ? 'text-emerald-700' : 'text-amber-700' }}">{{ $installment->status_label }}</p>
+                                            </div>
+                                            @if ($isPaidInstallment)
+                                                <span class="inline-flex items-center rounded-xl bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">Selesai Dibayar</span>
+                                            @else
+                                                <button
+                                                    type="submit"
+                                                    formaction="{{ route('parent.payments.installments.pay', $installment) }}"
+                                                    class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                                                >
+                                                    Bayar Sekarang
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </form>
+                    </div>
+                @else
+                    <form action="{{ route('parent.payments.create', $familyBilling) }}" method="POST" class="mt-4 space-y-4">
+                        @csrf
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Nama Ibu Bapa / Penjaga</label>
                             <input
-                                name="donation_custom"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                class="w-full border-0 px-4 py-3 text-sm outline-none focus:ring-0"
-                                placeholder="0"
-                                value="{{ old('donation_custom', $prefilledDonation > 0 ? number_format($prefilledDonation, 2, '.', '') : '') }}"
+                                name="payer_name"
+                                type="text"
+                                required
+                                class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                                placeholder="Contoh: Nurul Aini binti Ahmad"
+                                value="{{ old('payer_name', $defaultName) }}"
                             >
+                            <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_name')" />
                         </div>
                         <div class="space-y-2">
-                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Niat / Tujuan Sumbangan (Pilihan)</label>
-                            <textarea
-                                name="donation_intention"
-                                rows="2"
-                                maxlength="500"
+                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Email</label>
+                            <input
+                                name="payer_email"
+                                type="email"
+                                required
                                 class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
-                                placeholder="{{ ! empty($alreadyPaidCurrentYear) ? 'Sila nyatakan niat sumbangan tambahan anda. Contoh: Sumbangan untuk aktiviti kelas dan kebajikan murid.' : 'Contoh: Sumbangan tambahan untuk aktiviti kelas dan kebajikan murid.' }}"
-                            >{{ old('donation_intention') }}</textarea>
-                            <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('donation_intention')" />
+                                placeholder="Contoh: ibu.bapa@email.com"
+                                value="{{ old('payer_email', $defaultEmail) }}"
+                            >
+                            <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_email')" />
                         </div>
-                    </div>
-                    <input type="hidden" name="donation_preset" value="">
-                    <input type="hidden" name="total_amount" value="{{ number_format($prefilledTotal, 2, '.', '') }}">
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">No Telefon</label>
+                            <input name="payer_phone" type="text" required class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm" value="{{ old('payer_phone', $defaultPhone) }}">
+                            <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('payer_phone')" />
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sumbangan Tambahan (Pilihan)</label>
+                            <div class="flex flex-wrap gap-2 text-xs">
+                                @foreach([50,100,250,500,1000] as $preset)
+                                    <button type="button" class="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-left text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 js-presets" data-amount="{{ $preset }}">RM{{ $preset }}</button>
+                                @endforeach
+                                <button type="button" class="rounded-full border border-zinc-300 bg-white px-3 py-1 text-left text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 js-reset-donation">
+                                    Reset ke RM{{ number_format($baseAmount, 0) }}
+                                </button>
+                            </div>
+                            <div class="flex w-full overflow-hidden rounded-lg border border-zinc-300">
+                                <span class="inline-flex items-center border-r border-zinc-300 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-700">RM</span>
+                                <input
+                                    name="donation_custom"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="w-full border-0 px-4 py-3 text-sm outline-none focus:ring-0"
+                                    placeholder="0"
+                                    value="{{ old('donation_custom', $prefilledDonation > 0 ? number_format($prefilledDonation, 2, '.', '') : '') }}"
+                                >
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Niat / Tujuan Sumbangan (Pilihan)</label>
+                                <textarea
+                                    name="donation_intention"
+                                    rows="2"
+                                    maxlength="500"
+                                    class="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm"
+                                    placeholder="{{ ! empty($alreadyPaidCurrentYear) ? 'Sila nyatakan niat sumbangan tambahan anda. Contoh: Sumbangan untuk aktiviti kelas dan kebajikan murid.' : 'Contoh: Sumbangan tambahan untuk aktiviti kelas dan kebajikan murid.' }}"
+                                >{{ old('donation_intention') }}</textarea>
+                                <x-auth-session-status class="text-xs text-red-600" :status="$errors->first('donation_intention')" />
+                            </div>
+                        </div>
+                        <input type="hidden" name="donation_preset" value="">
+                        <input type="hidden" name="total_amount" value="{{ number_format($prefilledTotal, 2, '.', '') }}">
 
-                    <div class="space-y-2 rounded-2xl border border-zinc-200 bg-[color:var(--brand-soft)] px-4 py-3 text-sm">
-                        <div class="flex items-center justify-between text-zinc-600">
-                            <span>Yuran Asas</span>
-                            <strong id="baseAmountLabel">RM {{ number_format($baseAmount, 2) }}</strong>
+                        <div class="space-y-2 rounded-2xl border border-zinc-200 bg-[color:var(--brand-soft)] px-4 py-3 text-sm">
+                            <div class="flex items-center justify-between text-zinc-600">
+                                <span>Yuran Asas</span>
+                                <strong id="baseAmountLabel">RM {{ number_format($baseAmount, 2) }}</strong>
+                            </div>
+                            <div class="flex items-center justify-between text-zinc-600">
+                                <span>Sumbangan Tambahan</span>
+                                <strong id="donationAmountLabel">RM {{ number_format($prefilledDonation, 2) }}</strong>
+                            </div>
+                            <div class="flex items-center justify-between border-t border-zinc-200 pt-2 text-base text-zinc-900">
+                                <span class="font-semibold">Jumlah Bayaran</span>
+                                <strong class="text-xl font-extrabold text-[color:var(--brand-green)]" id="totalAmountLabel">RM {{ number_format($prefilledTotal, 2) }}</strong>
+                            </div>
                         </div>
-                        <div class="flex items-center justify-between text-zinc-600">
-                            <span>Sumbangan Tambahan</span>
-                            <strong id="donationAmountLabel">RM {{ number_format($prefilledDonation, 2) }}</strong>
-                        </div>
-                        <div class="flex items-center justify-between border-t border-zinc-200 pt-2 text-base text-zinc-900">
-                            <span class="font-semibold">Jumlah Bayaran</span>
-                            <strong class="text-xl font-extrabold text-[color:var(--brand-green)]" id="totalAmountLabel">RM {{ number_format($prefilledTotal, 2) }}</strong>
-                        </div>
-                    </div>
-                    <button
-                        type="submit"
-                        class="w-full rounded-2xl px-4 py-3 text-base font-semibold text-white"
-                        style="background:#1f8b5d;box-shadow:0 14px 28px rgba(31,139,93,0.30);"
-                    >
-                        Sahkan & Bayar
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            class="w-full rounded-2xl px-4 py-3 text-base font-semibold text-white"
+                            style="background:#1f8b5d;box-shadow:0 14px 28px rgba(31,139,93,0.30);"
+                        >
+                            Sahkan & Bayar
+                        </button>
+                    </form>
+                @endif
             </div>
         </div>
 
@@ -240,6 +391,10 @@
                 const totalAmountInput = document.querySelector('input[name="total_amount"]');
                 const presetButtons = document.querySelectorAll('.js-presets');
                 const resetButton = document.querySelector('.js-reset-donation');
+
+                if (!presetInput || !customInput || !donationLabel || !totalLabel || !totalAmountInput) {
+                    return;
+                }
 
                 const toMoney = (value) => `RM ${Number(value).toFixed(2)}`;
                 const getDonationValue = () => {
