@@ -94,6 +94,71 @@ class FamilyPaymentPlanService
         });
     }
 
+    public function canChangePlan(FamilyPaymentPlan $plan): bool
+    {
+        $plan->loadMissing('installments.transactions');
+
+        if ((float) $plan->paid_amount > 0) {
+            return false;
+        }
+
+        if ((string) $plan->status === FamilyPaymentPlan::STATUS_PAID) {
+            return false;
+        }
+
+        $hasPaidInstallment = $plan->installments
+            ->contains(fn (FamilyPaymentInstallment $installment): bool => $installment->status === FamilyPaymentInstallment::STATUS_PAID);
+
+        if ($hasPaidInstallment) {
+            return false;
+        }
+
+        return ! $plan->installments
+            ->flatMap(fn (FamilyPaymentInstallment $installment) => $installment->transactions)
+            ->contains(fn (FamilyPaymentTransaction $transaction): bool => strtolower((string) $transaction->status) === 'success');
+    }
+
+    public function cancelPlanForParentChange(FamilyPaymentPlan $plan): FamilyPaymentPlan
+    {
+        $plan->loadMissing('familyBilling', 'installments.transactions');
+
+        return DB::transaction(function () use ($plan): FamilyPaymentPlan {
+            foreach ($plan->installments as $installment) {
+                if ($installment->status === FamilyPaymentInstallment::STATUS_PAID) {
+                    continue;
+                }
+
+                $installment->forceFill([
+                    'status' => FamilyPaymentInstallment::STATUS_CANCELLED,
+                ])->save();
+
+                $installment->transactions
+                    ->filter(fn (FamilyPaymentTransaction $transaction): bool => strtolower((string) $transaction->status) !== 'success')
+                    ->each(function (FamilyPaymentTransaction $transaction): void {
+                        $transaction->forceFill([
+                            'status' => 'cancelled',
+                            'return_status' => 'parent cancel',
+                            'status_reason' => 'parent_changed_payment_plan',
+                            'raw_return' => array_merge($transaction->raw_return ?? [], [
+                                'parent_action' => 'changed_payment_plan',
+                            ]),
+                        ])->save();
+                    });
+            }
+
+            $plan->forceFill([
+                'status' => FamilyPaymentPlan::STATUS_CANCELLED,
+            ])->save();
+
+            $plan->familyBilling?->forceFill([
+                'paid_amount' => 0,
+                'status' => 'unpaid',
+            ])->save();
+
+            return $plan->fresh(['familyBilling', 'installments.transactions']);
+        });
+    }
+
     public function recalculatePlan(FamilyPaymentPlan $plan): FamilyPaymentPlan
     {
         $plan->loadMissing('installments', 'familyBilling');
@@ -137,10 +202,18 @@ class FamilyPaymentPlanService
             return 'Ansuran ini telah selesai dibayar.';
         }
 
+        if ($installment->status === FamilyPaymentInstallment::STATUS_CANCELLED) {
+            return 'Ansuran ini telah dibatalkan. Sila pilih semula pelan bayaran.';
+        }
+
         $plan = $installment->paymentPlan;
 
         if (! $plan) {
             return 'Pelan bayaran untuk ansuran ini tidak ditemui.';
+        }
+
+        if ($plan->status === FamilyPaymentPlan::STATUS_CANCELLED) {
+            return 'Pelan bayaran ini telah dibatalkan. Sila pilih semula pelan bayaran.';
         }
 
         if ($plan->status === FamilyPaymentPlan::STATUS_PAID) {
@@ -168,7 +241,12 @@ class FamilyPaymentPlanService
 
         $installment = $transaction->installment;
 
-        if (! $installment || $installment->status === FamilyPaymentInstallment::STATUS_PAID) {
+        if (
+            ! $installment
+            || $installment->status === FamilyPaymentInstallment::STATUS_PAID
+            || $installment->status === FamilyPaymentInstallment::STATUS_CANCELLED
+            || $installment->paymentPlan?->status === FamilyPaymentPlan::STATUS_CANCELLED
+        ) {
             return;
         }
 

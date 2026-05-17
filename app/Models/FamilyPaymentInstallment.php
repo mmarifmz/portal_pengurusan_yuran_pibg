@@ -52,6 +52,11 @@ class FamilyPaymentInstallment extends Model
         return $this->hasMany(FamilyPaymentTransaction::class, 'family_payment_installment_id');
     }
 
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class, 'family_payment_installment_id');
+    }
+
     public function getStatusLabelAttribute(): string
     {
         return match ((string) $this->status) {

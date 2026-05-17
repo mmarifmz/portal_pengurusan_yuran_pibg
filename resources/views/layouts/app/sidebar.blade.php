@@ -122,20 +122,23 @@
                     <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">
                         @if (auth()->user()->isSystemAdmin())
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
-                                {{ __('Portal Setting') }}
+                                {{ __('Portal') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="credit-card" :href="route('system.payment-gateway-settings.index')" :current="request()->routeIs('system.payment-gateway-settings.*')" wire:navigate>
+                                {{ __('Bayaran') }}
                             </flux:sidebar.item>
                             <flux:sidebar.item icon="credit-card" :href="route('system.payment-campaign-settings.index')" :current="request()->routeIs('system.payment-campaign-settings.*')" wire:navigate>
-                                {{ __('Payment Campaign Settings') }}
+                                {{ __('Kempen') }}
                             </flux:sidebar.item>
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
-                                {{ __('Tester Zone') }}
+                                {{ __('Ujian') }}
                             </flux:sidebar.item>
 
                         @endif
 
                         @if (auth()->user()->canManageTeacherUsers())
                             <flux:sidebar.item icon="user-group" :href="route('super-teacher.teachers.index')" :current="request()->routeIs('super-teacher.teachers.*')" wire:navigate>
-                                {{ __('Teachers Room') }}
+                                {{ __('Guru') }}
                             </flux:sidebar.item>
                         @endif
                     </flux:sidebar.group>

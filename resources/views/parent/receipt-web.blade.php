@@ -29,6 +29,11 @@
         .muted { margin-top: 4px; font-size: 14px; color: #52525b; }
         .amount { border-radius: 18px; background: #ecfdf5; padding: 20px; }
         .amount .value { font-size: 38px; color: #047857; }
+        .breakdown { display: grid; gap: 10px; }
+        .breakdown-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #e4e4e7; border-radius: 14px; background: #fafafa; padding: 12px 14px; }
+        .breakdown-row strong { font-size: 16px; color: #111827; }
+        .breakdown-row--accent { border-color: #bbf7d0; background: #f0fdf4; }
+        .breakdown-row--accent strong { color: #047857; }
         .actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
         .wa-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; text-decoration: none; border: 1px solid #22c55e; color: #166534; background: #ecfdf5; }
         .wa-btn:hover { background: #dcfce7; }
@@ -94,6 +99,28 @@
                         <p class="label">Invoice dan masa bayar</p>
                         <p class="muted">Invoice: {{ $displayInvoiceNo ?? ($transaction->provider_invoice_no ?: 'Belum dijana') }}</p>
                         <p class="muted">Bayar pada: {{ $transaction->paid_at?->format('d M Y H:i') ?: 'â€“' }}</p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="label">Pecahan bayaran</p>
+                    <div class="breakdown" style="margin-top: 12px;">
+                        <div class="breakdown-row">
+                            <span>Yuran Dibayar</span>
+                            <strong>RM {{ number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2) }}</strong>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Sumbangan Tambahan</span>
+                            <strong>RM {{ number_format((float) ($receiptContext['donation_paid_this_transaction'] ?? 0), 2) }}</strong>
+                        </div>
+                        <div class="breakdown-row breakdown-row--accent">
+                            <span>Jumlah Dibayar</span>
+                            <strong>RM {{ number_format((float) ($receiptContext['transaction_amount'] ?? $transaction->amount), 2) }}</strong>
+                        </div>
+                        <div class="breakdown-row">
+                            <span>Baki Yuran</span>
+                            <strong>RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}</strong>
+                        </div>
                     </div>
                 </div>
 

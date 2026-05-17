@@ -117,6 +117,24 @@
             margin: 0;
         }
 
+        .breakdown {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        .breakdown td {
+            border: 1px solid #e4e4e7;
+            border-radius: 10px;
+            background: #fafafa;
+            padding: 10px 12px;
+        }
+
+        .breakdown .accent td {
+            border-color: #86efac;
+            background: #ecfdf5;
+        }
+
         .children-title {
             margin: 0 0 10px;
             font-size: 10px;
@@ -221,6 +239,26 @@
                             <p class="muted">Bayar pada: {{ $transaction->paid_at?->format('d M Y H:i') ?: '-' }}</p>
                             <p class="muted">Bill code: {{ $transaction->provider_bill_code ?: '-' }}</p>
                         </td>
+                    </tr>
+                </table>
+
+                <p class="label" style="margin-top: 2px;">Pecahan bayaran</p>
+                <table class="breakdown" style="margin-top: 8px;">
+                    <tr>
+                        <td>Yuran Dibayar</td>
+                        <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td>Sumbangan Tambahan</td>
+                        <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['donation_paid_this_transaction'] ?? 0), 2) }}</td>
+                    </tr>
+                    <tr class="accent">
+                        <td>Jumlah Dibayar</td>
+                        <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['transaction_amount'] ?? $transaction->amount), 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td>Baki Yuran</td>
+                        <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}</td>
                     </tr>
                 </table>
             </div>

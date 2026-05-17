@@ -13,6 +13,7 @@ use App\Models\SiteSetting;
 use App\Models\SocialTag;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\PaymentReportingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +24,10 @@ use Illuminate\View\View;
 
 class TeacherRecordsController extends Controller
 {
-    public function __construct(private readonly SocialTagService $socialTagService)
+    public function __construct(
+        private readonly SocialTagService $socialTagService,
+        private readonly PaymentReportingService $paymentReportingService
+    )
     {
     }
 
@@ -97,6 +101,7 @@ class TeacherRecordsController extends Controller
             ->with('socialTags')
             ->get()
             ->keyBy(fn (FamilyBilling $billing): string => (string) $billing->family_code);
+        $currentYearMetrics = $this->paymentReportingService->familyMetricsForYear($billingYear)->keyBy('family_code');
 
         $allStudentParentEmails = $students
             ->pluck('parent_email')
@@ -394,8 +399,9 @@ class TeacherRecordsController extends Controller
             ]);
 
         $studentsWithResolvedParents = $studentsWithResolvedParents
-            ->map(function (Student $student) use ($outstandingByFamilyCode, $familyBillingsByCode): Student {
+            ->map(function (Student $student) use ($outstandingByFamilyCode, $familyBillingsByCode, $currentYearMetrics): Student {
                 $familyCode = (string) ($student->family_code ?? '');
+                $currentMetric = $familyCode !== '' ? $currentYearMetrics->get($familyCode) : null;
 
                 if ($familyCode !== '' && $outstandingByFamilyCode->has($familyCode)) {
                     $student->setAttribute('current_year_outstanding_balance', (float) $outstandingByFamilyCode->get($familyCode));
@@ -415,6 +421,12 @@ class TeacherRecordsController extends Controller
                         )->values()->all()
                         : []
                 );
+                $student->setAttribute('current_year_payment_status', (string) ($currentMetric['status_label'] ?? 'Belum Mula'));
+                $student->setAttribute('current_year_payment_status_key', (string) ($currentMetric['status_key'] ?? 'not_started'));
+                $student->setAttribute('current_year_payment_plan_label', (string) ($currentMetric['plan_label'] ?? '-'));
+                $student->setAttribute('current_year_paid_amount', (float) ($currentMetric['paid_amount'] ?? 0));
+                $student->setAttribute('current_year_installment_summary', (string) ($currentMetric['paid_installments_summary'] ?? '-'));
+                $student->setAttribute('current_year_donation_total', (float) ($currentMetric['donation_total'] ?? 0));
 
                 return $student;
             })

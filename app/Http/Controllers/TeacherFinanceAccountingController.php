@@ -9,6 +9,7 @@ use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\PaymentCampaignService;
+use App\Services\PaymentReportingService;
 use App\Support\ParentPhone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,7 +19,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeacherFinanceAccountingController extends Controller
 {
-    public function __construct(private readonly PaymentCampaignService $paymentCampaignService)
+    public function __construct(
+        private readonly PaymentCampaignService $paymentCampaignService,
+        private readonly PaymentReportingService $paymentReportingService
+    )
     {
     }
 
@@ -37,6 +41,10 @@ class TeacherFinanceAccountingController extends Controller
             'currentYear' => $dataset['currentYear'],
             'sortBy' => $dataset['sortBy'],
             'sortDir' => $dataset['sortDir'],
+            'paymentStatusFilter' => $dataset['paymentStatusFilter'],
+            'paymentPlanFilter' => $dataset['paymentPlanFilter'],
+            'hasDonationFilter' => $dataset['hasDonationFilter'],
+            'socialTagFilter' => $dataset['socialTagFilter'],
         ]);
     }
 
@@ -56,22 +64,21 @@ class TeacherFinanceAccountingController extends Controller
 
             fputcsv($handle, [
                 'Family Code',
-                'Name',
-                'Class Name',
+                'Nama Penjaga',
+                'Kelas',
                 "Yuran {$yearA}",
                 "Sumbangan {$yearA}",
                 "Yuran {$yearB}",
                 "Sumbangan {$yearB}",
-                "Social Tag {$yearB}",
-                "Available Payment Options {$yearB}",
-                "Selected Payment Plan {$yearB}",
-                "Campaign Name {$yearB}",
-                "Payment Plan {$yearB}",
-                "Total Amount {$yearB}",
-                "Paid Amount {$yearB}",
-                "Balance {$yearB}",
-                "Payment Status {$yearB}",
-                "Paid Instalments {$yearB}",
+                'Social Tag',
+                'Pelan Bayaran',
+                'Jumlah Yuran',
+                'Jumlah Dibayar',
+                'Baki Bayaran',
+                'Ansuran Dibayar',
+                'Status Bayaran',
+                'Sumbangan Tambahan',
+                'Jumlah Kutipan',
             ]);
 
             foreach ($rows as $row) {
@@ -84,15 +91,14 @@ class TeacherFinanceAccountingController extends Controller
                     number_format((float) $row["yuran_{$yearB}"], 2, '.', ''),
                     number_format((float) $row["sumbangan_{$yearB}"], 2, '.', ''),
                     $row['social_tag'],
-                    $row['available_payment_options'],
-                    $row['selected_payment_plan'],
-                    $row['campaign_name'],
                     $row['payment_plan'],
                     number_format((float) $row['plan_total_amount'], 2, '.', ''),
                     number_format((float) $row['plan_paid_amount'], 2, '.', ''),
                     number_format((float) $row['plan_balance_amount'], 2, '.', ''),
-                    $row['plan_payment_status'],
                     $row['paid_installments'],
+                    $row['plan_payment_status'],
+                    number_format((float) ($row['donation_total_current_year'] ?? 0), 2, '.', ''),
+                    number_format((float) ($row['total_collection_current_year'] ?? 0), 2, '.', ''),
                 ]);
             }
 
@@ -108,12 +114,13 @@ class TeacherFinanceAccountingController extends Controller
                 '',
                 '',
                 '',
-                '',
                 number_format((float) $totals['plan_total_amount'], 2, '.', ''),
                 number_format((float) $totals['plan_paid_amount'], 2, '.', ''),
                 number_format((float) $totals['plan_balance_amount'], 2, '.', ''),
                 '',
                 '',
+                number_format((float) ($totals['donation_total_current_year'] ?? 0), 2, '.', ''),
+                number_format((float) ($totals['total_collection_current_year'] ?? 0), 2, '.', ''),
             ]);
 
             fclose($handle);
@@ -128,16 +135,24 @@ class TeacherFinanceAccountingController extends Controller
      *   totals: array<string, float>,
      *   search: string,
      *   classFilter: string,
+     *   paymentStatusFilter: string,
+     *   paymentPlanFilter: string,
+     *   hasDonationFilter: string,
+     *   socialTagFilter: string,
      *   classOptions: \Illuminate\Support\Collection<int, string>,
      *   yearA: int, yearB: int, currentYear: int, sortBy: string, sortDir: string
      * }
-     */
+    */
     private function buildDataset(Request $request): array
     {
         $yearA = (int) $request->integer('year_a', 2025);
         $yearB = (int) $request->integer('year_b', 2026);
         $search = trim((string) $request->query('search', ''));
         $classFilter = trim((string) $request->query('class_name', ''));
+        $paymentStatusFilter = trim((string) $request->query('payment_status', ''));
+        $paymentPlanFilter = trim((string) $request->query('payment_plan', ''));
+        $hasDonationFilter = trim((string) $request->query('has_donation', ''));
+        $socialTagFilter = trim((string) $request->query('social_tag', ''));
         $sortBy = trim((string) $request->query('sort_by', 'current_year'));
         $sortDir = trim((string) $request->query('sort_dir', 'desc'));
 
@@ -158,6 +173,7 @@ class TeacherFinanceAccountingController extends Controller
         $nowYear = (int) now()->year;
         $currentYear = in_array($nowYear, [$yearA, $yearB], true) ? $nowYear : $yearB;
         $activeCampaign = $this->paymentCampaignService->activeCampaign();
+        $currentYearMetrics = $this->paymentReportingService->familyMetricsForYear($currentYear)->keyBy('family_code');
 
         $studentsByFamily = Student::query()
             ->whereNotNull('family_code')
@@ -297,7 +313,8 @@ class TeacherFinanceAccountingController extends Controller
                 $yearA,
                 $yearB,
                 $currentYear,
-                $activeCampaign
+                $activeCampaign,
+                $currentYearMetrics
             ): array {
                 $billingA = $billingByYearAndFamily->get($yearA)?->get($familyCode);
                 $billingB = $billingByYearAndFamily->get($yearB)?->get($familyCode);
@@ -307,6 +324,7 @@ class TeacherFinanceAccountingController extends Controller
                 $legacyA = $legacyPaymentByYearFamily->get((string) $yearA)?->get($familyCode);
                 $legacyB = $legacyPaymentByYearFamily->get((string) $yearB)?->get($familyCode);
                 $currentPlan = $currentBilling ? $paymentPlanByBillingId->get($currentBilling->id) : null;
+                $currentMetric = $currentYearMetrics->get($familyCode);
                 $socialTag = $currentBilling
                     ? (implode(', ', $this->paymentCampaignService->resolveFamilySocialTags($currentBilling)->all()) ?: '-')
                     : '-';
@@ -332,21 +350,18 @@ class TeacherFinanceAccountingController extends Controller
                     "sumbangan_{$yearA}" => $sumbanganA,
                     "yuran_{$yearB}" => $yuranB,
                     "sumbangan_{$yearB}" => $sumbanganB,
-                    'payment_plan' => $currentPlan?->plan_label
-                        ?? ($currentBilling ? 'Bayar Penuh' : '-'),
-                    'plan_total_amount' => round((float) ($currentPlan?->total_amount ?? $currentBilling?->fee_amount ?? 0), 2),
-                    'plan_paid_amount' => round((float) ($currentPlan?->paid_amount ?? $currentBilling?->paid_amount ?? 0), 2),
-                    'plan_balance_amount' => round((float) ($currentPlan?->balance_amount ?? $currentBilling?->outstanding_amount ?? 0), 2),
-                    'plan_payment_status' => $this->formatPlanStatus(
+                    'payment_plan' => $currentMetric['plan_label'] ?? ($currentPlan?->plan_label ?? ($currentBilling ? 'Penuh' : '-')),
+                    'plan_total_amount' => round((float) ($currentMetric['fee_amount'] ?? $currentPlan?->total_amount ?? $currentBilling?->fee_amount ?? 0), 2),
+                    'plan_paid_amount' => round((float) ($currentMetric['paid_amount'] ?? $currentPlan?->paid_amount ?? $currentBilling?->paid_amount ?? 0), 2),
+                    'plan_balance_amount' => round((float) ($currentMetric['balance_amount'] ?? $currentPlan?->balance_amount ?? $currentBilling?->outstanding_amount ?? 0), 2),
+                    'plan_payment_status' => (string) ($currentMetric['status_label'] ?? $this->formatPlanStatus(
                         (string) ($currentPlan?->status ?? $currentBilling?->status ?? 'pending')
-                    ),
-                    'paid_installments' => $currentPlan
-                        ? $currentPlan->paid_installments_summary
-                        : ($currentBilling
-                            ? (((string) $currentBilling->status === 'paid')
-                                ? '1/1 paid'
-                                : ((float) $currentBilling->paid_amount > 0 ? 'Bayaran sebahagian' : '0/1 paid'))
-                            : '-'),
+                    )),
+                    'plan_payment_status_key' => (string) ($currentMetric['status_key'] ?? 'pending'),
+                    'paid_installments' => (string) ($currentMetric['paid_installments_summary'] ?? ($currentPlan?->paid_installments_summary ?? '-')),
+                    'donation_total_current_year' => round((float) ($currentMetric['donation_total'] ?? 0), 2),
+                    'total_collection_current_year' => round((float) ($currentMetric['total_collection'] ?? 0), 2),
+                    'has_donation_current_year' => (float) ($currentMetric['donation_total'] ?? 0) > 0,
                 ];
 
                 $row['current_year_total'] = (float) ($row["yuran_{$currentYear}"] + $row["sumbangan_{$currentYear}"]);
@@ -370,6 +385,32 @@ class TeacherFinanceAccountingController extends Controller
                         || str_contains(mb_strtolower((string) $row['name']), $needle)
                         || str_contains(mb_strtolower((string) $row['class_name']), $needle);
                 })
+                ->values();
+        }
+
+        if ($paymentStatusFilter !== '') {
+            $rows = $rows
+                ->filter(fn (array $row): bool => (string) ($row['plan_payment_status_key'] ?? '') === $paymentStatusFilter)
+                ->values();
+        }
+
+        if ($paymentPlanFilter !== '') {
+            $rows = $rows
+                ->filter(fn (array $row): bool => (string) ($row['payment_plan'] ?? '') === $paymentPlanFilter)
+                ->values();
+        }
+
+        if ($hasDonationFilter !== '') {
+            $rows = $rows
+                ->filter(fn (array $row): bool => $hasDonationFilter === 'yes'
+                    ? (bool) ($row['has_donation_current_year'] ?? false)
+                    : ! (bool) ($row['has_donation_current_year'] ?? false))
+                ->values();
+        }
+
+        if ($socialTagFilter !== '') {
+            $rows = $rows
+                ->filter(fn (array $row): bool => str_contains(mb_strtolower((string) ($row['social_tag'] ?? '')), mb_strtolower($socialTagFilter)))
                 ->values();
         }
 
@@ -416,6 +457,8 @@ class TeacherFinanceAccountingController extends Controller
             'plan_total_amount' => (float) $rows->sum('plan_total_amount'),
             'plan_paid_amount' => (float) $rows->sum('plan_paid_amount'),
             'plan_balance_amount' => (float) $rows->sum('plan_balance_amount'),
+            'donation_total_current_year' => (float) $rows->sum('donation_total_current_year'),
+            'total_collection_current_year' => (float) $rows->sum('total_collection_current_year'),
         ];
 
         return [
@@ -429,6 +472,10 @@ class TeacherFinanceAccountingController extends Controller
             'currentYear' => $currentYear,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
+            'paymentStatusFilter' => $paymentStatusFilter,
+            'paymentPlanFilter' => $paymentPlanFilter,
+            'hasDonationFilter' => $hasDonationFilter,
+            'socialTagFilter' => $socialTagFilter,
         ];
     }
 

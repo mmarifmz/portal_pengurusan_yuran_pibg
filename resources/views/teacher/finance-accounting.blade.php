@@ -6,7 +6,7 @@
         </div>
 
         <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <form method="GET" action="{{ route('teacher.finance-accounting') }}" class="grid gap-3 md:grid-cols-4">
+            <form method="GET" action="{{ route('teacher.finance-accounting') }}" class="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
                 <label class="text-xs font-semibold text-zinc-600">
                     Search
                     <input
@@ -29,6 +29,56 @@
                             <option value="{{ $className }}" @selected($classFilter === $className)>{{ $className }}</option>
                         @endforeach
                     </select>
+                </label>
+
+                <label class="text-xs font-semibold text-zinc-600">
+                    Status Bayaran
+                    <select
+                        name="payment_status"
+                        class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                        <option value="">Semua status</option>
+                        <option value="not_started" @selected(($paymentStatusFilter ?? '') === 'not_started')>Belum Mula</option>
+                        <option value="pending" @selected(($paymentStatusFilter ?? '') === 'pending')>Belum Dibayar</option>
+                        <option value="partial" @selected(($paymentStatusFilter ?? '') === 'partial')>Bayaran Sebahagian</option>
+                        <option value="paid" @selected(($paymentStatusFilter ?? '') === 'paid')>Selesai Dibayar</option>
+                    </select>
+                </label>
+
+                <label class="text-xs font-semibold text-zinc-600">
+                    Pelan Bayaran
+                    <select
+                        name="payment_plan"
+                        class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                        <option value="">Semua pelan</option>
+                        <option value="Penuh" @selected(($paymentPlanFilter ?? '') === 'Penuh')>Penuh</option>
+                        <option value="Ansuran 2 Kali" @selected(($paymentPlanFilter ?? '') === 'Ansuran 2 Kali')>Ansuran 2 Kali</option>
+                        <option value="Ansuran 3 Kali" @selected(($paymentPlanFilter ?? '') === 'Ansuran 3 Kali')>Ansuran 3 Kali</option>
+                    </select>
+                </label>
+
+                <label class="text-xs font-semibold text-zinc-600">
+                    Ada Sumbangan
+                    <select
+                        name="has_donation"
+                        class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                        <option value="">Semua</option>
+                        <option value="yes" @selected(($hasDonationFilter ?? '') === 'yes')>Ya</option>
+                        <option value="no" @selected(($hasDonationFilter ?? '') === 'no')>Tidak</option>
+                    </select>
+                </label>
+
+                <label class="text-xs font-semibold text-zinc-600">
+                    Social Tag
+                    <input
+                        type="search"
+                        name="social_tag"
+                        value="{{ $socialTagFilter ?? '' }}"
+                        placeholder="Contoh: B40"
+                        class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
                 </label>
 
                 <label class="text-xs font-semibold text-zinc-600">
@@ -68,7 +118,7 @@
                     >
                         Export CSV (Excel)
                     </a>
-                    @if ($search !== '' || $classFilter !== '')
+                    @if ($search !== '' || $classFilter !== '' || ($paymentStatusFilter ?? '') !== '' || ($paymentPlanFilter ?? '') !== '' || ($hasDonationFilter ?? '') !== '' || ($socialTagFilter ?? '') !== '')
                         <a
                             href="{{ route('teacher.finance-accounting', ['year_a' => $yearA, 'year_b' => $yearB]) }}"
                             class="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
@@ -159,15 +209,14 @@
                                 @endif
                             </th>
                             <th class="px-5 py-3">Social Tag</th>
-                            <th class="px-5 py-3">Available Payment Options</th>
-                            <th class="px-5 py-3">Selected Payment Plan</th>
-                            <th class="px-5 py-3">Campaign Name</th>
-                            <th class="px-5 py-3">Payment Plan {{ $currentYear }}</th>
-                            <th class="px-5 py-3 text-right">Total Amount {{ $currentYear }}</th>
-                            <th class="px-5 py-3 text-right">Paid Amount {{ $currentYear }}</th>
-                            <th class="px-5 py-3 text-right">Balance {{ $currentYear }}</th>
-                            <th class="px-5 py-3">Payment Status</th>
-                            <th class="px-5 py-3">Paid Instalments</th>
+                            <th class="px-5 py-3">Pelan Bayaran</th>
+                            <th class="px-5 py-3 text-right">Jumlah Yuran</th>
+                            <th class="px-5 py-3 text-right">Jumlah Dibayar</th>
+                            <th class="px-5 py-3 text-right">Baki Bayaran</th>
+                            <th class="px-5 py-3">Ansuran Dibayar</th>
+                            <th class="px-5 py-3">Status Bayaran</th>
+                            <th class="px-5 py-3 text-right">Sumbangan Tambahan</th>
+                            <th class="px-5 py-3 text-right">Jumlah Kutipan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-200 bg-white">
@@ -204,19 +253,31 @@
                                 <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['social_tag'] }}</td>
-                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['available_payment_options'] }}</td>
-                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['selected_payment_plan'] }}</td>
-                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['campaign_name'] }}</td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['payment_plan'] }}</td>
                                 <td class="px-5 py-4 text-right text-zinc-700">RM {{ number_format((float) $row['plan_total_amount'], 2) }}</td>
                                 <td class="px-5 py-4 text-right font-semibold text-emerald-700">RM {{ number_format((float) $row['plan_paid_amount'], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row['plan_balance_amount'] > 0 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold' }}">RM {{ number_format((float) $row['plan_balance_amount'], 2) }}</td>
-                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['plan_payment_status'] }}</td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['paid_installments'] }}</td>
+                                <td class="px-5 py-4">
+                                    @php
+                                        $statusKey = (string) ($row['plan_payment_status_key'] ?? '');
+                                        $statusBadgeClasses = match ($statusKey) {
+                                            'paid' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                                            'partial' => 'border-amber-300 bg-amber-50 text-amber-800',
+                                            'not_started' => 'border-zinc-300 bg-zinc-50 text-zinc-700',
+                                            default => 'border-sky-300 bg-sky-50 text-sky-800',
+                                        };
+                                    @endphp
+                                    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold {{ $statusBadgeClasses }}">
+                                        {{ $row['plan_payment_status'] }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 text-right {{ (float) ($row['donation_total_current_year'] ?? 0) > 0 ? 'font-semibold text-cyan-700' : 'text-zinc-400' }}">RM {{ number_format((float) ($row['donation_total_current_year'] ?? 0), 2) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">RM {{ number_format((float) ($row['total_collection_current_year'] ?? 0), 2) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="17" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
+                                <td colspan="16" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -231,14 +292,13 @@
                             <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
-                            <td class="px-5 py-3"></td>
-                            <td class="px-5 py-3"></td>
-                            <td class="px-5 py-3"></td>
                             <td class="px-5 py-3 text-right">RM {{ number_format((float) $totals['plan_total_amount'], 2) }}</td>
                             <td class="px-5 py-3 text-right text-emerald-700">RM {{ number_format((float) $totals['plan_paid_amount'], 2) }}</td>
                             <td class="px-5 py-3 text-right {{ (float) $totals['plan_balance_amount'] > 0 ? 'text-amber-700' : 'text-emerald-700' }}">RM {{ number_format((float) $totals['plan_balance_amount'], 2) }}</td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
+                            <td class="px-5 py-3 text-right text-cyan-700">RM {{ number_format((float) ($totals['donation_total_current_year'] ?? 0), 2) }}</td>
+                            <td class="px-5 py-3 text-right">RM {{ number_format((float) ($totals['total_collection_current_year'] ?? 0), 2) }}</td>
                         </tr>
                     </tfoot>
                 </table>

@@ -24,6 +24,8 @@ use App\Http\Controllers\VisitorLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\PaymentCampaignSettingController;
+use App\Http\Controllers\PaymentGatewaySettingController;
+use App\Http\Controllers\PaymentPlanController;
 use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\FamilyBilling;
@@ -287,6 +289,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('parent.payments.review');
     Route::post('/review-payment/{familyBilling}/plan', [ParentPaymentController::class, 'selectPlan'])
         ->middleware('role:parent');
+    Route::post('/payment-plan/{paymentPlan}/change', [PaymentPlanController::class, 'changePlan'])
+        ->middleware('role:parent')
+        ->name('payment-plan.change');
     Route::post('/payment/installment/{installment}/pay', [ParentPaymentController::class, 'payInstallment'])
         ->middleware('role:parent')
         ->name('parent.payments.installments.pay');
@@ -361,6 +366,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-campaign-settings', [PaymentCampaignSettingController::class, 'save'])
         ->middleware('role:system_admin')
         ->name('system.payment-campaign-settings.save');
+    Route::get('/system/payment-gateway-settings', [PaymentGatewaySettingController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-gateway-settings.index');
+    Route::post('/system/payment-gateway-settings', [PaymentGatewaySettingController::class, 'save'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-gateway-settings.save');
 
     Route::get('/system/payment-testers', [PaymentTesterUserController::class, 'index'])
         ->middleware('role:system_admin')

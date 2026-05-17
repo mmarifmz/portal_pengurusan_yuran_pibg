@@ -75,7 +75,9 @@ class ReceiptController extends Controller
             '',
             'Saya ingin kongsi resit bayaran PIBG:',
             'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
-            'Jumlah: RM'.number_format((float) $transaction->amount, 2),
+            'Yuran Dibayar: RM'.number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2),
+            'Sumbangan Tambahan: RM'.number_format((float) ($receiptContext['donation_paid_this_transaction'] ?? 0), 2),
+            'Jumlah Dibayar: RM'.number_format((float) $transaction->amount, 2),
             'Order ID: '.$transaction->external_order_display,
             'Resit web: '.$receiptUrl,
         ];
@@ -94,6 +96,8 @@ class ReceiptController extends Controller
      *   has_installment: bool,
      *   installment_label: string|null,
      *   transaction_amount: float,
+     *   yuran_paid_this_transaction: float,
+     *   donation_paid_this_transaction: float,
      *   total_paid_to_date: float|null,
      *   remaining_balance: float|null,
      *   payment_status_label: string|null,
@@ -108,14 +112,22 @@ class ReceiptController extends Controller
         $plan = $installment?->paymentPlan;
 
         if (! $installment || ! $plan) {
+            $billing = $transaction->familyBilling;
+            $billingFeeAmount = (float) ($billing?->fee_amount ?? 0);
+            $billingPaidAmount = (float) ($billing?->paid_amount ?? 0);
+            $yuranPaid = (float) ($transaction->fee_amount_paid ?? min((float) $transaction->amount, $billingFeeAmount));
+            $donationPaid = (float) ($transaction->donation_amount ?? max(0, (float) $transaction->amount - $yuranPaid));
+
             return [
                 'has_installment' => false,
                 'installment_label' => null,
                 'transaction_amount' => round((float) $transaction->amount, 2),
-                'total_paid_to_date' => null,
-                'remaining_balance' => null,
-                'payment_status_label' => null,
-                'fully_paid' => strtolower((string) $transaction->status) === 'success',
+                'yuran_paid_this_transaction' => round($yuranPaid, 2),
+                'donation_paid_this_transaction' => round($donationPaid, 2),
+                'total_paid_to_date' => round($billingPaidAmount, 2),
+                'remaining_balance' => round((float) ($billing?->outstanding_amount ?? 0), 2),
+                'payment_status_label' => $billing && $billing->outstanding_amount <= 0 ? 'Selesai Dibayar' : ((float) $billingPaidAmount > 0 ? 'Bayaran Sebahagian' : ucfirst((string) $transaction->status)),
+                'fully_paid' => $billing ? (float) $billing->outstanding_amount <= 0 : strtolower((string) $transaction->status) === 'success',
             ];
         }
 
@@ -123,6 +135,8 @@ class ReceiptController extends Controller
             'has_installment' => true,
             'installment_label' => sprintf('Ansuran %d/%d', (int) $installment->installment_no, $plan->installments->count()),
             'transaction_amount' => round((float) $transaction->amount, 2),
+            'yuran_paid_this_transaction' => round((float) ($transaction->fee_amount_paid ?? 0), 2),
+            'donation_paid_this_transaction' => round((float) ($transaction->donation_amount ?? 0), 2),
             'total_paid_to_date' => round((float) $plan->paid_amount, 2),
             'remaining_balance' => round((float) $plan->balance_amount, 2),
             'payment_status_label' => (float) $plan->balance_amount <= 0 ? 'Selesai Dibayar' : 'Bayaran Sebahagian',

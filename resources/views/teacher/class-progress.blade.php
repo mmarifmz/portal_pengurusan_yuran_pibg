@@ -4,7 +4,7 @@
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
-                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Progress Bayaran Yuran Mengikut Kelas</h1>
+                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Leaderboard Bayaran Mengikut Kelas</h1>
                     <p class="mt-1 text-sm text-zinc-600">Bagi Sesi {{ $billingYear }}</p>
                 </div>
                 <div class="w-full sm:w-auto">
@@ -21,88 +21,63 @@
             </div>
         </section>
 
-        <section id="classProgressList" class="grid gap-4 lg:grid-cols-2">
-            @foreach ($progressByClass as $index => $row)
-                @php
-                    $progressValue = (float) ($row['progress_percent'] ?? 0);
-                    $safeProgress = max(0, min(100, $progressValue));
-                @endphp
-                <article
-                    class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
-                    data-class-card="1"
-                    data-year-level="{{ $row['year_level'] ?? 'other' }}"
-                >
-                    <div class="flex items-start justify-between gap-3">
-                        <div>
-                            <h2 class="text-base font-bold text-zinc-900">{{ $row['class_name'] }}</h2>
-                            <p class="mt-1 text-xs text-zinc-500">{{ $row['paid_count'] }} / {{ $row['total_students'] }} murid telah menjelaskan</p>
-                        </div>
-                        @if (! empty($row['teacher_whatsapp_url']))
-                            <a
-                                href="{{ $row['teacher_whatsapp_url'] }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-flex shrink-0 items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                            >
-                                Send to class teacher (Whatsapp)
-                            </a>
-                        @else
-                            <span class="inline-flex shrink-0 items-center rounded-xl border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-500">Tiada nombor guru</span>
-                        @endif
-                    </div>
-
-                    <div class="mt-4 flex items-center gap-3">
-                        <div class="h-3 flex-1 overflow-hidden rounded-full bg-zinc-200">
-                            <div class="h-full rounded-full bg-emerald-500 transition-all duration-300" style="width: {{ $safeProgress }}%"></div>
-                        </div>
-                        <span class="text-xs font-semibold text-zinc-700">{{ number_format($safeProgress, 1) }}%</span>
-                        <button
-                            type="button"
-                            class="js-toggle-details inline-flex items-center rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100"
-                            data-target-id="class-progress-details-{{ $index }}"
-                            aria-expanded="false"
-                        >
-                            Expand
-                        </button>
-                    </div>
-
-                    <div id="class-progress-details-{{ $index }}" class="mt-4 hidden rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                        <div class="mb-3 grid gap-3 sm:grid-cols-2">
-                            <div class="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-rose-700">Murid belum menjelaskan Yuran</p>
-                                <p class="mt-1 text-sm font-bold text-rose-700">{{ $row['unpaid_count'] }} out of {{ $row['total_students'] }} total</p>
-                            </div>
-                            <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Murid telah menjelaskan Yuran</p>
-                                <p class="mt-1 text-sm font-bold text-emerald-700">{{ $row['paid_count'] }} out of {{ $row['total_students'] }} total</p>
-                            </div>
-                        </div>
-
-                        <div class="grid gap-3 lg:grid-cols-2">
-                            <div>
-                                <h3 class="text-xs font-semibold uppercase tracking-wide text-rose-700">Belum jelas ({{ $row['unpaid_count'] }})</h3>
-                                <ul class="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-rose-100 bg-white p-2 text-sm text-zinc-700">
-                                    @forelse ($row['unpaid_students'] as $studentName)
-                                        <li>{{ $studentName }}</li>
-                                    @empty
-                                        <li class="text-zinc-500">Tiada murid.</li>
-                                    @endforelse
-                                </ul>
-                            </div>
-                            <div>
-                                <h3 class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Sudah jelas ({{ $row['paid_count'] }})</h3>
-                                <ul class="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-emerald-100 bg-white p-2 text-sm text-zinc-700">
-                                    @forelse ($row['paid_students'] as $studentName)
-                                        <li>{{ $studentName }}</li>
-                                    @empty
-                                        <li class="text-zinc-500">Tiada murid.</li>
-                                    @endforelse
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </article>
-            @endforeach
+        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200 text-sm text-zinc-700">
+                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        <tr>
+                            <th class="px-5 py-3">Kelas</th>
+                            <th class="px-5 py-3 text-right">Jumlah Keluarga</th>
+                            <th class="px-5 py-3 text-right">Selesai Bayar</th>
+                            <th class="px-5 py-3 text-right">Bayaran Sebahagian</th>
+                            <th class="px-5 py-3 text-right">Belum Bayar</th>
+                            <th class="px-5 py-3 text-right">Kutipan Yuran</th>
+                            <th class="px-5 py-3 text-right">Sumbangan Tambahan</th>
+                            <th class="px-5 py-3 text-right">Jumlah Kutipan</th>
+                            <th class="px-5 py-3 text-right">Baki Tertunggak</th>
+                            <th class="px-5 py-3 text-right">Completion %</th>
+                            <th class="px-5 py-3 text-right">Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 bg-white">
+                        @forelse ($leaderboardRows as $row)
+                            <tr data-class-card="1" data-year-level="{{ $row['year_level'] ?? 'other' }}">
+                                <td class="px-5 py-4">
+                                    <p class="font-semibold text-zinc-900">{{ $row['class_name'] }}</p>
+                                    <p class="mt-1 text-xs text-zinc-500">{{ $row['teacher_name'] }}</p>
+                                </td>
+                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">{{ $row['total_families'] }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-emerald-700">{{ $row['fully_paid_families'] }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-amber-600">{{ $row['partial_paid_families'] }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-rose-600">{{ $row['unpaid_families'] }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-emerald-700">RM {{ number_format((float) $row['yuran_collected'], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row['sumbangan_tambahan_collected'] > 0 ? 'font-semibold text-cyan-700' : 'text-zinc-400' }}">RM {{ number_format((float) $row['sumbangan_tambahan_collected'], 2) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">RM {{ number_format((float) $row['jumlah_kutipan'], 2) }}</td>
+                                <td class="px-5 py-4 text-right {{ (float) $row['baki_tertunggak'] > 0 ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700' }}">RM {{ number_format((float) $row['baki_tertunggak'], 2) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">{{ number_format((float) $row['completion_percent'], 2) }}%</td>
+                                <td class="px-5 py-4 text-right">
+                                    @if (! empty($row['teacher_whatsapp_url']))
+                                        <a
+                                            href="{{ $row['teacher_whatsapp_url'] }}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex shrink-0 items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                                        >
+                                            WhatsApp Guru
+                                        </a>
+                                    @else
+                                        <span class="text-xs text-zinc-400">Tiada nombor</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="11" class="px-5 py-8 text-center text-sm text-zinc-500">Tiada data kelas untuk sesi ini.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <div id="classProgressEmpty" class="hidden rounded-2xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500 shadow-sm">
@@ -113,17 +88,17 @@
     <script>
         (function () {
             const filter = document.getElementById('yearLevelFilter');
-            const cards = Array.from(document.querySelectorAll('[data-class-card="1"]'));
+            const rows = Array.from(document.querySelectorAll('[data-class-card="1"]'));
             const emptyState = document.getElementById('classProgressEmpty');
 
             const applyFilter = () => {
                 const value = filter?.value || 'all';
                 let visibleCount = 0;
 
-                cards.forEach((card) => {
-                    const level = card.getAttribute('data-year-level') || 'other';
+                rows.forEach((row) => {
+                    const level = row.getAttribute('data-year-level') || 'other';
                     const visible = value === 'all' || value === level;
-                    card.classList.toggle('hidden', !visible);
+                    row.classList.toggle('hidden', !visible);
                     if (visible) {
                         visibleCount += 1;
                     }
@@ -134,31 +109,7 @@
                 }
             };
 
-            const bindExpandButtons = () => {
-                const buttons = Array.from(document.querySelectorAll('.js-toggle-details'));
-
-                buttons.forEach((button) => {
-                    button.addEventListener('click', () => {
-                        const targetId = button.getAttribute('data-target-id');
-                        if (!targetId) {
-                            return;
-                        }
-
-                        const panel = document.getElementById(targetId);
-                        if (!panel) {
-                            return;
-                        }
-
-                        const isHidden = panel.classList.contains('hidden');
-                        panel.classList.toggle('hidden', !isHidden);
-                        button.textContent = isHidden ? 'Collapse' : 'Expand';
-                        button.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-                    });
-                });
-            };
-
             filter?.addEventListener('change', applyFilter);
-            bindExpandButtons();
             applyFilter();
         }());
     </script>

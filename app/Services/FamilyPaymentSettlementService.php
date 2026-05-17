@@ -6,6 +6,7 @@ use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentInstallment;
 use App\Models\FamilyPaymentPlan;
 use App\Models\FamilyPaymentTransaction;
+use App\Models\PaymentAllocation;
 use Illuminate\Support\Facades\DB;
 
 class FamilyPaymentSettlementService
@@ -28,11 +29,15 @@ class FamilyPaymentSettlementService
 
         DB::transaction(function () use ($transaction, $paidAmount, $invoiceNo, $paymentDate, $gatewayReason): void {
             $freshTransaction = FamilyPaymentTransaction::query()
-                ->with(['familyBilling', 'installment.paymentPlan'])
+                ->with(['familyBilling', 'installment.paymentPlan', 'allocations'])
                 ->lockForUpdate()
                 ->find($transaction->id);
 
-            if (! $freshTransaction || ($freshTransaction->status === 'success' && $freshTransaction->paid_at !== null)) {
+            if (
+                ! $freshTransaction
+                || ($freshTransaction->status === 'success' && $freshTransaction->paid_at !== null)
+                || in_array(strtolower((string) $freshTransaction->status), ['cancelled', 'superseded'], true)
+            ) {
                 return;
             }
 
@@ -66,8 +71,11 @@ class FamilyPaymentSettlementService
 
         $plan = $installment->paymentPlan;
         $billing = $plan?->familyBilling;
-        $feePaid = min((float) $installment->amount, $paidAmount);
-        $donation = max(0, $paidAmount - $feePaid);
+        [$feePaid, $donation] = $this->resolveAllocationBreakdown(
+            $transaction,
+            min((float) $installment->amount, $paidAmount),
+            max(0, $paidAmount - min((float) $installment->amount, $paidAmount))
+        );
 
         $installment->forceFill([
             'status' => FamilyPaymentInstallment::STATUS_PAID,
@@ -88,6 +96,8 @@ class FamilyPaymentSettlementService
                 ? "Paid at {$paymentDate}"
                 : ($gatewayReason !== '' ? $gatewayReason : $transaction->status_reason),
         ])->save();
+
+        $this->markAllocationsPaid($transaction);
 
         if ($plan) {
             $this->planService->recalculatePlan($plan);
@@ -115,8 +125,11 @@ class FamilyPaymentSettlementService
         $feeOutstanding = max(0, (float) $billing->fee_amount - (float) $billing->paid_amount);
         $feeOutstandingAtCheckout = max(0, (float) data_get($transaction->raw_return, 'outstanding_at_checkout', $feeOutstanding));
         $feeOutstanding = min($feeOutstanding, $feeOutstandingAtCheckout);
-        $feePaid = min($feeOutstanding, $paidAmount);
-        $donation = max(0, $paidAmount - $feePaid);
+        [$feePaid, $donation] = $this->resolveAllocationBreakdown(
+            $transaction,
+            min($feeOutstanding, $paidAmount),
+            max(0, $paidAmount - min($feeOutstanding, $paidAmount))
+        );
 
         $billing->forceFill([
             'paid_amount' => min((float) $billing->fee_amount, (float) $billing->paid_amount + $feePaid),
@@ -135,6 +148,75 @@ class FamilyPaymentSettlementService
                 ? "Paid at {$paymentDate}"
                 : ($gatewayReason !== '' ? $gatewayReason : $transaction->status_reason),
         ])->save();
+
+        $this->markAllocationsPaid($transaction);
+    }
+
+    public function syncTransactionAllocationStatus(FamilyPaymentTransaction $transaction): void
+    {
+        $transaction->loadMissing('allocations');
+
+        if ($transaction->allocations->isEmpty()) {
+            return;
+        }
+
+        $normalizedStatus = strtolower(trim((string) $transaction->status));
+        $allocationStatus = match ($normalizedStatus) {
+            'success' => PaymentAllocation::STATUS_PAID,
+            'failed' => PaymentAllocation::STATUS_FAILED,
+            'cancelled', 'superseded' => PaymentAllocation::STATUS_CANCELLED,
+            default => PaymentAllocation::STATUS_PENDING,
+        };
+
+        foreach ($transaction->allocations as $allocation) {
+            if ($allocation->status === PaymentAllocation::STATUS_PAID && $allocationStatus !== PaymentAllocation::STATUS_PAID) {
+                continue;
+            }
+
+            $allocation->forceFill([
+                'status' => $allocationStatus,
+                'billcode' => $transaction->provider_bill_code ?: $allocation->billcode,
+                'order_id' => $transaction->external_order_id ?: $allocation->order_id,
+                'paid_at' => $allocationStatus === PaymentAllocation::STATUS_PAID
+                    ? ($transaction->paid_at ?? now())
+                    : $allocation->paid_at,
+            ])->save();
+        }
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    private function resolveAllocationBreakdown(FamilyPaymentTransaction $transaction, float $fallbackFeePaid, float $fallbackDonation): array
+    {
+        $transaction->loadMissing('allocations');
+
+        if ($transaction->allocations->isEmpty()) {
+            return [round($fallbackFeePaid, 2), round($fallbackDonation, 2)];
+        }
+
+        $feePaid = (float) $transaction->allocations
+            ->where('allocation_type', PaymentAllocation::TYPE_YURAN)
+            ->sum('amount');
+        $donation = (float) $transaction->allocations
+            ->where('allocation_type', PaymentAllocation::TYPE_SUMBANGAN_TAMBAHAN)
+            ->sum('amount');
+
+        return [round($feePaid, 2), round($donation, 2)];
+    }
+
+    private function markAllocationsPaid(FamilyPaymentTransaction $transaction): void
+    {
+        $transaction->loadMissing('allocations');
+
+        foreach ($transaction->allocations as $allocation) {
+            $allocation->forceFill([
+                'status' => PaymentAllocation::STATUS_PAID,
+                'billcode' => $transaction->provider_bill_code ?: $allocation->billcode,
+                'order_id' => $transaction->external_order_id ?: $allocation->order_id,
+                'paid_at' => $transaction->paid_at ?? now(),
+            ])->save();
+        }
     }
 
     private function normalizeGatewayAmount(mixed $amount): float

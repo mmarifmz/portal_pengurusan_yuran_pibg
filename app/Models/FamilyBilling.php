@@ -49,9 +49,21 @@ class FamilyBilling extends Model
         return $this->hasMany(FamilyPaymentTransaction::class);
     }
 
+    public function paymentAllocations(): HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
+
+    public function paymentPlans(): HasMany
+    {
+        return $this->hasMany(FamilyPaymentPlan::class);
+    }
+
     public function paymentPlan(): HasOne
     {
-        return $this->hasOne(FamilyPaymentPlan::class);
+        return $this->hasOne(FamilyPaymentPlan::class)
+            ->where('status', '!=', FamilyPaymentPlan::STATUS_CANCELLED)
+            ->latest('id');
     }
 
     public function paymentInstallments(): HasMany

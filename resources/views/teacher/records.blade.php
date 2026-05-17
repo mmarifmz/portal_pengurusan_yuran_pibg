@@ -382,14 +382,27 @@
                                     </td>
                                     @php
                                         $displayOutstanding = (float) ($student->current_year_outstanding_balance ?? $student->outstanding_balance);
+                                        $paidAmount = (float) ($student->current_year_paid_amount ?? 0);
                                     @endphp
                                     <td class="px-5 py-4 text-right font-semibold {{ $displayOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
                                         RM {{ number_format($displayOutstanding, 2) }}
+                                        <p class="mt-1 text-xs font-medium text-zinc-500">
+                                            Dibayar: RM {{ number_format($paidAmount, 2) }}
+                                        </p>
                                     </td>
                                     <td class="px-5 py-4">
+                                        @php
+                                            $paymentStatusKey = (string) ($student->current_year_payment_status_key ?? 'not_started');
+                                            $paymentStatusBadgeClasses = match ($paymentStatusKey) {
+                                                'paid' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                                                'partial' => 'border-amber-300 bg-amber-50 text-amber-800',
+                                                'pending' => 'border-sky-300 bg-sky-50 text-sky-800',
+                                                default => 'border-zinc-300 bg-zinc-50 text-zinc-700',
+                                            };
+                                        @endphp
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <span class="text-sm font-medium {{ $student->status === 'active' ? 'text-emerald-600' : 'text-amber-600' }}">
-                                                {{ ucfirst($student->status) }}
+                                            <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $paymentStatusBadgeClasses }}">
+                                                {{ $student->current_year_payment_status ?? 'Belum Mula' }}
                                             </span>
                                             @if ($student->is_duplicate)
                                                 <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
@@ -397,6 +410,17 @@
                                                 </span>
                                             @endif
                                         </div>
+                                        <p class="mt-2 text-xs text-zinc-600">
+                                            Pelan: {{ $student->current_year_payment_plan_label ?? '-' }}
+                                        </p>
+                                        <p class="mt-1 text-xs text-zinc-500">
+                                            Ansuran dibayar: {{ $student->current_year_installment_summary ?? '-' }}
+                                        </p>
+                                        @if ((float) ($student->current_year_donation_total ?? 0) > 0)
+                                            <p class="mt-1 text-xs font-medium text-cyan-700">
+                                                Sumbangan tambahan: RM {{ number_format((float) $student->current_year_donation_total, 2) }}
+                                            </p>
+                                        @endif
                                     </td>
                                     <td class="px-5 py-4 text-right">
                                         @if (filled($student->family_code))

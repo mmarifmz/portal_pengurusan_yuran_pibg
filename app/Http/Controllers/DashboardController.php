@@ -12,9 +12,15 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
+use App\Services\PaymentReportingService;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly PaymentReportingService $paymentReportingService
+    ) {
+    }
+
     public function index(Request $request): View|RedirectResponse
     {
         $user = $request->user();
@@ -172,22 +178,25 @@ class DashboardController extends Controller
                 });
         }
 
-        $totalFamilies = $familyBillings->count();
         $totalStudents = $students->count();
-        $familiesPaid = $familyBillings->filter(fn (FamilyBilling $billing) => $billing->outstanding_amount <= 0)->count();
+        $dashboardStats = $this->paymentReportingService->dashboardStats($selectedDashboardYear);
+        $totalFamilies = (int) ($dashboardStats['total_families'] ?? $familyBillings->count());
+        $familiesPaid = (int) ($dashboardStats['fully_paid_families'] ?? 0);
+        $familiesPartial = (int) ($dashboardStats['partial_paid_families'] ?? 0);
+        $familiesUnpaid = (int) ($dashboardStats['unpaid_families'] ?? 0);
         $tuitionCollected = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => min((float) ($payment['amount_paid'] ?? 0), $yuranThreshold))
-            : (float) $portalFamilyTransactionTotals->sum('yuran');
+            : (float) ($dashboardStats['total_yuran_collected'] ?? 0);
         $donationCollected = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum(fn (array $payment): float => max(0, (float) ($payment['amount_paid'] ?? 0) - $yuranThreshold))
-            : (float) $portalFamilyTransactionTotals->sum('sumbangan');
+            : (float) ($dashboardStats['total_sumbangan_tambahan_collected'] ?? 0);
         $totalCollected = $tuitionCollected + $donationCollected;
         $totalBilled = $useLegacyKpiSource
             ? (float) $legacyPaymentTransactions->sum('amount_due')
             : (float) $familyBillings->sum('fee_amount');
         $totalOutstanding = $useLegacyKpiSource
             ? max(0, $totalBilled - $tuitionCollected)
-            : (float) $familyBillings->sum(fn (FamilyBilling $billing) => $billing->outstanding_amount);
+            : (float) ($dashboardStats['total_outstanding_balance'] ?? 0);
 
         if ($useLegacyKpiSource) {
             $totalFamilies = (int) $legacyPaymentTransactions->pluck('family_code')->filter()->unique()->count();
@@ -218,20 +227,13 @@ class DashboardController extends Controller
                 ->sortByDesc('collected')
                 ->values();
         } else {
-            $classCollection = $portalFamilyTransactionTotals
-                ->groupBy('class_name')
-                ->map(function ($group, string $className): array {
-                    /** @var \Illuminate\Support\Collection<int, array<string, float|string>> $group */
-                    $yuran = (float) $group->sum('yuran');
-                    $sumbangan = (float) $group->sum('sumbangan');
-                    return [
-                        'class_name' => $className,
-                        'yuran' => round($yuran, 2),
-                        'sumbangan' => round($sumbangan, 2),
-                        'collected' => round($yuran + $sumbangan, 2),
-                    ];
-                })
-                ->sortByDesc('collected')
+            $classCollection = $this->paymentReportingService->classLeaderboard($selectedDashboardYear)
+                ->map(fn (array $row): array => [
+                    'class_name' => (string) $row['class_name'],
+                    'yuran' => round((float) ($row['yuran_collected'] ?? 0), 2),
+                    'sumbangan' => round((float) ($row['sumbangan_tambahan_collected'] ?? 0), 2),
+                    'collected' => round((float) ($row['jumlah_kutipan'] ?? 0), 2),
+                ])
                 ->values();
         }
 
@@ -581,6 +583,8 @@ class DashboardController extends Controller
             'useLegacyKpiSource' => $useLegacyKpiSource,
             'totalFamilies' => $totalFamilies,
             'familiesPaid' => $familiesPaid,
+            'familiesPartial' => $familiesPartial,
+            'familiesUnpaid' => $familiesUnpaid,
             'totalStudents' => $totalStudents,
             'tuitionCollected' => $tuitionCollected,
             'donationCollected' => $donationCollected,

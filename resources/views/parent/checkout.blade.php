@@ -4,7 +4,71 @@
         $prefilledDonation = (float) ($defaultDonation ?? 0);
         $prefilledTotal = $baseAmount + $prefilledDonation;
         $showInstallmentPlanner = empty($alreadyPaidCurrentYear) && (float) $familyBilling->outstanding_amount > 0;
+        $showPlanSelector = $showInstallmentPlanner && (! $paymentPlan || ! empty($forcePlanSelection));
+        $paymentGatewayNotice = $paymentGatewaySetting->parentPaymentNotice();
+        $showGatewayMethods = $paymentGatewaySetting->enable_fpx || $paymentGatewaySetting->enable_duitnow_qr;
     @endphp
+
+    <style>
+        .change-plan-box {
+            margin-top: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .btn-change-plan {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            color: #047857;
+            border: 2px solid #10b981;
+            border-radius: 999px;
+            padding: 14px 22px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.18);
+            transition: all 0.18s ease;
+        }
+
+        .btn-change-plan:hover {
+            background: #ecfdf5;
+            color: #065f46;
+            border-color: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
+        }
+
+        .btn-change-plan:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.18);
+        }
+
+        .btn-change-plan i {
+            font-size: 20px;
+        }
+
+        .change-plan-hint {
+            margin: 0;
+            color: #047857;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 640px) {
+            .btn-change-plan {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .change-plan-box {
+                width: 100%;
+            }
+        }
+    </style>
 
     <div class="space-y-6">
         @if (session('status'))
@@ -40,11 +104,95 @@
                         <p style="color:rgba(236,253,243,0.92);">Yuran asas dikenakan sekali setahun bagi setiap keluarga.</p>
                     @endif
                 </div>
+
+                @if ($showInstallmentPlanner && $paymentPlan && empty($forcePlanSelection))
+                    <div class="mt-5 rounded-3xl border p-5" style="border-color:rgba(255,255,255,0.22);background:rgba(255,255,255,0.94);box-shadow:0 18px 36px rgba(12,48,34,0.12);">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold text-emerald-700">{{ $paymentPlan->plan_label }}</p>
+                                <h3 class="text-2xl font-extrabold tracking-tight text-zinc-900">Ringkasan Ansuran</h3>
+                            </div>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold" style="background:#dcfce7;color:#047857;">
+                                {{ ucfirst((string) $paymentPlan->status) }}
+                            </span>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                            <div class="rounded-2xl border px-4 py-3 text-sm" style="border-color:#d5e7dc;background:#f8fffb;">
+                                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Yuran</p>
+                                <p class="mt-1 text-lg font-bold text-zinc-900">RM {{ number_format((float) $paymentPlan->total_amount, 2) }}</p>
+                            </div>
+                            <div class="rounded-2xl border px-4 py-3 text-sm" style="border-color:#d5e7dc;background:#f8fffb;">
+                                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Dibayar</p>
+                                <p class="mt-1 text-lg font-bold text-emerald-700">RM {{ number_format((float) $paymentPlan->paid_amount, 2) }}</p>
+                            </div>
+                            <div class="rounded-2xl border px-4 py-3 text-sm" style="border-color:#d5e7dc;background:#f8fffb;">
+                                <p class="text-xs uppercase tracking-wide text-zinc-500">Baki Bayaran</p>
+                                <p class="mt-1 text-lg font-bold text-amber-700">RM {{ number_format((float) $paymentPlan->balance_amount, 2) }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-600">
+                                <span>Status Bayaran</span>
+                                <span>{{ $paymentPlanProgress }}%</span>
+                            </div>
+                            <div class="h-3 overflow-hidden rounded-full bg-emerald-100">
+                                <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ $paymentPlanProgress }}%;"></div>
+                            </div>
+                        </div>
+
+                        @if ($showGatewayMethods)
+                            <div class="mt-4 rounded-2xl border px-4 py-4" style="border-color:#d5e7dc;background:#f4fbf7;">
+                                <div class="mb-3 flex flex-wrap gap-2 text-sm font-semibold text-zinc-900">
+                                    @if ($paymentGatewaySetting->enable_fpx)
+                                        <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 px-3 py-1.5" style="background:#ffffff;color:#166a4c;">
+                                            <i class="ph ph-bank text-base"></i>
+                                            FPX / Internet Banking
+                                        </span>
+                                    @endif
+
+                                    @if ($paymentGatewaySetting->enable_duitnow_qr)
+                                        <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 px-3 py-1.5" style="background:#ffffff;color:#166a4c;">
+                                            <i class="ph ph-qr-code text-base"></i>
+                                            DuitNow QR
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <p class="text-sm leading-relaxed text-zinc-700">{{ $paymentGatewayNotice }}</p>
+                                <p class="mt-2 text-sm leading-relaxed text-emerald-800">
+                                    Anda masih boleh memilih atau menukar kaedah pembayaran di halaman ToyyibPay sebelum bayaran disahkan.
+                                </p>
+                            </div>
+                        @endif
+
+                        <div class="change-plan-box">
+                            @if (! empty($canChangePaymentPlan))
+                                <button
+                                    type="button"
+                                    data-open-change-plan-modal
+                                    class="btn-change-plan"
+                                >
+                                    <i class="ph ph-arrows-clockwise"></i>
+                                    <span>Tukar Pilihan Bayaran</span>
+                                </button>
+                                <p class="change-plan-hint">
+                                    Belum buat bayaran? Anda boleh kembali dan pilih kaedah bayaran lain.
+                                </p>
+                            @else
+                                <p class="text-sm font-medium text-zinc-600">
+                                    Pilihan bayaran tidak boleh ditukar kerana bayaran telah dibuat.
+                                </p>
+                            @endif
+                        </div>
+                    </div>
+                @endif
             </div>
 
             <div class="flex-1 rounded-3xl border border-zinc-200 bg-white p-6 shadow-lg">
                 <h3 class="text-3xl font-extrabold tracking-tight text-zinc-800">Maklumat Pembayaran</h3>
-                <p class="mt-2 text-sm text-zinc-600">Sistem akan memindahkan anda ke platform ToyyibPay untuk pilihan FPX atau kad.</p>
+                <p class="mt-2 text-sm text-zinc-600">{{ $paymentGatewayNotice }}</p>
                 @if (! empty($alreadyPaidCurrentYear))
                     <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
                         Terima kasih dan tahniah. Yuran PIBG tahun semasa telah selesai, dan anda masih boleh memberi <span class="font-extrabold">Sumbangan Tambahan</span> sepanjang tahun.
@@ -65,22 +213,13 @@
                     @endif
                 </div>
 
-                @if (! empty($campaignSetting) && $showInstallmentPlanner)
-                    <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                        <p class="font-semibold text-zinc-900">Tetapan Kempen Bayaran</p>
-                        <p class="mt-1">Kempen: {{ $campaignSetting->campaign_name }}</p>
-                        <p class="mt-1">Tag Sosial: {{ $familySocialTag ?: 'Tiada' }}</p>
-                        <p class="mt-1">Pilihan Bayaran Yang Layak: {{ $availablePaymentOptionLabels !== [] ? implode(', ', $availablePaymentOptionLabels) : 'Tiada pilihan buat masa ini' }}</p>
-                    </div>
-                @endif
-
                 @if ($errors->has('payment_gateway') || $errors->has('payment_plan'))
                     <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                         {{ $errors->first('payment_gateway') ?: $errors->first('payment_plan') }}
                     </div>
                 @endif
 
-                @if ($showInstallmentPlanner && ! $paymentPlan)
+                @if ($showPlanSelector)
                     <div class="mt-5 space-y-4">
                         <div>
                             <h4 class="text-lg font-bold text-zinc-900">Pilih Pelan Bayaran</h4>
@@ -117,37 +256,9 @@
                     </div>
                 @elseif ($showInstallmentPlanner && $paymentPlan)
                     <div class="mt-5 space-y-4">
-                        <div class="rounded-2xl border border-zinc-200 bg-[color:var(--brand-soft)] p-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-semibold text-emerald-700">{{ $paymentPlan->plan_label }}</p>
-                                    <h4 class="text-xl font-extrabold text-zinc-900">Ringkasan Ansuran</h4>
-                                </div>
-                                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">{{ ucfirst((string) $paymentPlan->status) }}</span>
-                            </div>
-                            <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
-                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Yuran</p>
-                                    <p class="mt-1 text-lg font-bold text-zinc-900">RM {{ number_format((float) $paymentPlan->total_amount, 2) }}</p>
-                                </div>
-                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
-                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Dibayar</p>
-                                    <p class="mt-1 text-lg font-bold text-emerald-700">RM {{ number_format((float) $paymentPlan->paid_amount, 2) }}</p>
-                                </div>
-                                <div class="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm">
-                                    <p class="text-xs uppercase tracking-wide text-zinc-500">Baki Bayaran</p>
-                                    <p class="mt-1 text-lg font-bold text-amber-700">RM {{ number_format((float) $paymentPlan->balance_amount, 2) }}</p>
-                                </div>
-                            </div>
-                            <div class="mt-4">
-                                <div class="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-600">
-                                    <span>Status Bayaran</span>
-                                    <span>{{ $paymentPlanProgress }}%</span>
-                                </div>
-                                <div class="h-3 overflow-hidden rounded-full bg-zinc-200">
-                                    <div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {{ $paymentPlanProgress }}%;"></div>
-                                </div>
-                            </div>
+                        <div>
+                            <h4 class="text-lg font-bold text-zinc-900">Maklumat Pembayar</h4>
+                            <p class="mt-1 text-sm text-zinc-600">Isi maklumat di bawah, kemudian pilih ansuran untuk diteruskan ke halaman ToyyibPay.</p>
                         </div>
 
                         <form method="POST" class="space-y-4">
@@ -187,6 +298,13 @@
                                 @foreach ($paymentPlan->installments as $installment)
                                     @php
                                         $isPaidInstallment = (string) $installment->status === \App\Models\FamilyPaymentInstallment::STATUS_PAID;
+                                        $donationChoice = (string) old("installment_donation_choice.{$installment->id}", '0');
+                                        $donationCustom = (string) old("installment_donation_custom.{$installment->id}", '');
+                                        $resolvedDonationAmount = $donationChoice === 'other'
+                                            ? (is_numeric($donationCustom) ? (float) $donationCustom : 0.0)
+                                            : (is_numeric($donationChoice) ? (float) $donationChoice : 0.0);
+                                        $installmentAmount = (float) $installment->amount;
+                                        $installmentTotalPreview = $installmentAmount + max(0, $resolvedDonationAmount);
                                     @endphp
                                     <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-4">
                                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -198,13 +316,111 @@
                                             @if ($isPaidInstallment)
                                                 <span class="inline-flex items-center rounded-xl bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-700">Selesai Dibayar</span>
                                             @else
-                                                <button
-                                                    type="submit"
-                                                    formaction="{{ route('parent.payments.installments.pay', $installment) }}"
-                                                    class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                                                >
-                                                    Bayar Sekarang
-                                                </button>
+                                                <div class="w-full space-y-4 sm:max-w-md sm:text-right">
+                                                    <div
+                                                        class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-left"
+                                                        data-installment-donation-card
+                                                        data-base-amount="{{ number_format($installmentAmount, 2, '.', '') }}"
+                                                    >
+                                                        <div class="flex items-start justify-between gap-3">
+                                                            <div>
+                                                                <p class="text-sm font-bold text-zinc-900">Sumbangan Tambahan PIBG</p>
+                                                                <p class="mt-1 text-xs leading-relaxed text-zinc-600">
+                                                                    Sumbangan tambahan adalah pilihan. Jumlah ini akan direkodkan berasingan daripada yuran.
+                                                                </p>
+                                                            </div>
+                                                            <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                                                                Pilihan
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="mt-3 flex flex-wrap gap-2">
+                                                            @foreach ([0, 10, 20, 50] as $presetAmount)
+                                                                @php
+                                                                    $presetValue = (string) $presetAmount;
+                                                                    $isSelectedPreset = $donationChoice === $presetValue;
+                                                                @endphp
+                                                                <label class="cursor-pointer">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name="installment_donation_choice[{{ $installment->id }}]"
+                                                                        value="{{ $presetValue }}"
+                                                                        class="sr-only"
+                                                                        data-installment-donation-choice
+                                                                        @checked($isSelectedPreset)
+                                                                    >
+                                                                    <span class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition {{ $isSelectedPreset ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm' : 'border-emerald-200 bg-white text-emerald-800 hover:border-emerald-400 hover:bg-emerald-50' }}">
+                                                                        RM{{ number_format((float) $presetAmount, 0) }}
+                                                                    </span>
+                                                                </label>
+                                                            @endforeach
+
+                                                            <label class="cursor-pointer">
+                                                                <input
+                                                                    type="radio"
+                                                                    name="installment_donation_choice[{{ $installment->id }}]"
+                                                                    value="other"
+                                                                    class="sr-only"
+                                                                    data-installment-donation-choice
+                                                                    @checked($donationChoice === 'other')
+                                                                >
+                                                                <span class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition {{ $donationChoice === 'other' ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm' : 'border-emerald-200 bg-white text-emerald-800 hover:border-emerald-400 hover:bg-emerald-50' }}">
+                                                                    Lain-lain
+                                                                </span>
+                                                            </label>
+                                                        </div>
+
+                                                        <div class="{{ $donationChoice === 'other' ? '' : 'hidden' }} mt-3" data-installment-custom-wrap>
+                                                            <label class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Masukkan jumlah sumbangan</label>
+                                                            <div class="mt-1 flex overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                                                                <span class="inline-flex items-center border-r border-emerald-200 px-3 py-2 text-sm font-semibold text-zinc-700">RM</span>
+                                                                <input
+                                                                    type="number"
+                                                                    name="installment_donation_custom[{{ $installment->id }}]"
+                                                                    min="1"
+                                                                    max="1000"
+                                                                    step="0.01"
+                                                                    value="{{ $donationCustom }}"
+                                                                    class="w-full border-0 px-3 py-2 text-sm text-zinc-800 focus:ring-0"
+                                                                    placeholder="Minimum RM1"
+                                                                    data-installment-custom-input
+                                                                >
+                                                            </div>
+                                                        </div>
+
+                                                        <x-auth-session-status class="mt-2 text-xs text-red-600" :status="$errors->first('installment_donation_choice.'.$installment->id)" />
+                                                        <x-auth-session-status class="mt-1 text-xs text-red-600" :status="$errors->first('installment_donation_custom.'.$installment->id)" />
+
+                                                        <div class="mt-3 rounded-2xl border border-emerald-100 bg-white px-3 py-3 text-sm">
+                                                            <div class="flex items-center justify-between gap-3">
+                                                                <span class="font-semibold text-zinc-700">Jumlah bayaran</span>
+                                                                <strong class="text-base font-extrabold text-emerald-700" data-installment-total-label>
+                                                                    RM {{ number_format($installmentTotalPreview, 2) }}
+                                                                </strong>
+                                                            </div>
+                                                            <p class="mt-1 text-xs text-zinc-600">
+                                                                Yuran: RM {{ number_format($installmentAmount, 2) }}
+                                                                <span data-installment-breakdown>
+                                                                    @if ($resolvedDonationAmount > 0)
+                                                                        + Sumbangan: RM {{ number_format($resolvedDonationAmount, 2) }}
+                                                                    @else
+                                                                        + Sumbangan: RM 0.00
+                                                                    @endif
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="sm:text-right">
+                                                        <button
+                                                            type="submit"
+                                                            formaction="{{ route('parent.payments.installments.pay', $installment) }}"
+                                                            class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                                                        >
+                                                            Bayar Sekarang
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             @endif
                                         </div>
                                     </div>
@@ -380,6 +596,48 @@
         </section>
     </div>
 
+    @if ($showInstallmentPlanner && $paymentPlan && empty($forcePlanSelection) && ! empty($canChangePaymentPlan))
+        <div
+            data-change-plan-modal
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-zinc-950/50 px-4"
+            aria-hidden="true"
+        >
+            <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 rounded-full bg-emerald-100 p-2 text-emerald-700">
+                        <i class="ph ph-pencil-simple text-lg"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-lg font-extrabold text-zinc-900">Tukar pilihan bayaran?</h3>
+                        <p class="mt-2 text-sm leading-relaxed text-zinc-600">
+                            Pilihan bayaran semasa akan dibatalkan dan anda boleh memilih semula Bayaran Penuh atau Ansuran. Teruskan?
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex flex-wrap justify-end gap-3">
+                    <button
+                        type="button"
+                        data-close-change-plan-modal
+                        class="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                    >
+                        Batal
+                    </button>
+
+                    <form method="POST" action="{{ route('payment-plan.change', $paymentPlan) }}">
+                        @csrf
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                            Ya, Tukar Pilihan
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
     @push('scripts')
         <script>
             (() => {
@@ -432,6 +690,118 @@
                 });
 
                 refreshBreakdown();
+            })();
+
+            (() => {
+                const modal = document.querySelector('[data-change-plan-modal]');
+                const openButton = document.querySelector('[data-open-change-plan-modal]');
+                const closeButtons = document.querySelectorAll('[data-close-change-plan-modal]');
+
+                if (!modal || !openButton) {
+                    return;
+                }
+
+                const openModal = () => {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                    modal.setAttribute('aria-hidden', 'false');
+                };
+
+                const closeModal = () => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    modal.setAttribute('aria-hidden', 'true');
+                };
+
+                openButton.addEventListener('click', openModal);
+                closeButtons.forEach((button) => button.addEventListener('click', closeModal));
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) {
+                        closeModal();
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeModal();
+                    }
+                });
+            })();
+
+            (() => {
+                const cards = document.querySelectorAll('[data-installment-donation-card]');
+
+                if (!cards.length) {
+                    return;
+                }
+
+                const toMoney = (value) => `RM ${Number(value).toFixed(2)}`;
+
+                cards.forEach((card) => {
+                    const baseAmount = Number(card.dataset.baseAmount || '0');
+                    const choiceInputs = card.querySelectorAll('[data-installment-donation-choice]');
+                    const customWrap = card.querySelector('[data-installment-custom-wrap]');
+                    const customInput = card.querySelector('[data-installment-custom-input]');
+                    const totalLabel = card.querySelector('[data-installment-total-label]');
+                    const breakdownLabel = card.querySelector('[data-installment-breakdown]');
+
+                    if (!choiceInputs.length || !customWrap || !customInput || !totalLabel || !breakdownLabel) {
+                        return;
+                    }
+
+                    const refreshChipState = () => {
+                        choiceInputs.forEach((input) => {
+                            const chip = input.nextElementSibling;
+                            if (!(chip instanceof HTMLElement)) {
+                                return;
+                            }
+
+                            chip.classList.toggle('border-emerald-600', input.checked);
+                            chip.classList.toggle('bg-emerald-600', input.checked);
+                            chip.classList.toggle('text-white', input.checked);
+                            chip.classList.toggle('shadow-sm', input.checked);
+                            chip.classList.toggle('border-emerald-200', !input.checked);
+                            chip.classList.toggle('bg-white', !input.checked);
+                            chip.classList.toggle('text-emerald-800', !input.checked);
+                        });
+                    };
+
+                    const selectedChoice = () => {
+                        const checked = Array.from(choiceInputs).find((input) => input.checked);
+
+                        return checked ? checked.value : '0';
+                    };
+
+                    const donationAmount = () => {
+                        if (selectedChoice() === 'other') {
+                            const customValue = Number((customInput.value || '').trim());
+
+                            return Number.isFinite(customValue) && customValue > 0 ? customValue : 0;
+                        }
+
+                        const presetValue = Number(selectedChoice());
+
+                        return Number.isFinite(presetValue) && presetValue > 0 ? presetValue : 0;
+                    };
+
+                    const refresh = () => {
+                        const choice = selectedChoice();
+                        const donation = donationAmount();
+                        const total = baseAmount + donation;
+
+                        customWrap.classList.toggle('hidden', choice !== 'other');
+                        totalLabel.textContent = toMoney(total);
+                        breakdownLabel.textContent = `+ Sumbangan: ${toMoney(donation)}`;
+                        refreshChipState();
+                    };
+
+                    choiceInputs.forEach((input) => {
+                        input.addEventListener('change', refresh);
+                    });
+
+                    customInput.addEventListener('input', refresh);
+
+                    refresh();
+                });
             })();
         </script>
     @endpush
