@@ -241,6 +241,21 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/class-progress', [TeacherClassProgressController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress');
+    Route::get('/admin/classes/{class}/whatsapp-preview', [TeacherClassProgressController::class, 'whatsappPreview'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('admin.classes.whatsapp-preview');
+    Route::post('/admin/classes/{class}/whatsapp-queue', [TeacherClassProgressController::class, 'queueWhatsapp'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('admin.classes.whatsapp-queue');
+    Route::get('/admin/classes/whatsapp-batch-preview', [TeacherClassProgressController::class, 'batchWhatsappPreview'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('admin.classes.whatsapp-batch-preview');
+    Route::post('/admin/classes/whatsapp-batch-queue', [TeacherClassProgressController::class, 'batchQueueWhatsapp'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('admin.classes.whatsapp-batch-queue');
+    Route::get('/admin/whatsapp-queue', [TeacherClassProgressController::class, 'whatsappQueueIndex'])
+        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('admin.whatsapp-queue.index');
     
     Route::get('/teacher/contribution-leaderboard', [TeacherContributionLeaderboardController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
@@ -416,6 +431,15 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/super-teacher/teachers', [TeacherUserManagementController::class, 'store'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.store');
+    Route::post('/super-teacher/teachers/import', [TeacherUserManagementController::class, 'import'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.import');
+    Route::get('/super-teacher/teachers/import/sample', [TeacherUserManagementController::class, 'downloadSampleCsv'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.import.sample');
+    Route::get('/super-teacher/teachers/import/failed-rows', [TeacherUserManagementController::class, 'downloadFailedRows'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.import.failed-rows');
     Route::patch('/super-teacher/teachers/{user}', [TeacherUserManagementController::class, 'update'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.update');
@@ -425,6 +449,18 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/super-teacher/teachers/{user}/whatsapp-notifications', [TeacherUserManagementController::class, 'updateWhatsappNotifications'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.update-whatsapp-notifications');
+    Route::post('/super-teacher/teachers/whatsapp-notifications/enable-all', [TeacherUserManagementController::class, 'enableWhatsappForAllAssignedTeachers'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.enable-whatsapp-all');
+    Route::post('/super-teacher/teachers/whatsapp-notifications/disable-all', [TeacherUserManagementController::class, 'disableWhatsappForAll'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.disable-whatsapp-all');
+    Route::post('/super-teacher/teachers/{user}/send-invite', [TeacherUserManagementController::class, 'sendInvite'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.send-invite');
+    Route::post('/super-teacher/teachers/send-invite-all', [TeacherUserManagementController::class, 'sendInviteToAllActiveTeachers'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.send-invite-all');
     Route::delete('/super-teacher/teachers/{user}', [TeacherUserManagementController::class, 'destroy'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.destroy');

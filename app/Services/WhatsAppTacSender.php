@@ -8,6 +8,10 @@ use RuntimeException;
 
 class WhatsAppTacSender
 {
+    public function __construct(private readonly WaSenderService $waSenderService)
+    {
+    }
+
     public function sendTac(string $phone, string $code, ?string $familyCode = null): array
     {
         $familyCodeText = filled($familyCode) ? $familyCode : 'SSP-XXXX';
@@ -85,50 +89,10 @@ class WhatsAppTacSender
 
     private function sendViaWasender(string $phone, string $message): array
     {
-        $apiKey = (string) config('services.wasender.api_key');
-        $baseUrl = (string) config('services.wasender.base_url', 'https://www.wasenderapi.com/api');
-        $maxRetries = max(0, (int) config('services.wasender.retry_attempts', 2));
-        $maxRetryDelaySeconds = max(1, (int) config('services.wasender.max_retry_delay_seconds', 10));
-
-        if (blank($apiKey)) {
-            throw new RuntimeException('Missing Wasender API configuration.');
-        }
-
-        $attempt = 0;
-
-        do {
-            $response = Http::asJson()
-                ->acceptJson()
-                ->withToken($apiKey)
-                ->baseUrl($baseUrl)
-                ->post('/send-message', [
-                    'to' => $this->normalizePhoneToE164($phone),
-                    'text' => $message,
-                ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-
-                return [
-                    'provider' => 'wasender',
-                    'enabled' => true,
-                    'status' => Arr::get($data, 'data.status', 'queued'),
-                    'message_id' => Arr::get($data, 'data.msgId'),
-                    'jid' => Arr::get($data, 'data.jid'),
-                    'response' => $data,
-                ];
-            }
-
-            $retryAfterSeconds = $this->extractWasenderRetryAfter($response->json(), $response->body());
-            $shouldRetry = $retryAfterSeconds !== null && $attempt < $maxRetries;
-
-            if (! $shouldRetry) {
-                throw new RuntimeException('Wasender WhatsApp send failed: '.$response->body());
-            }
-
-            sleep(min($maxRetryDelaySeconds, max(1, $retryAfterSeconds)));
-            $attempt++;
-        } while (true);
+        return [
+            'enabled' => true,
+            ...$this->waSenderService->sendText($phone, $message),
+        ];
     }
 
     private function extractWasenderRetryAfter(mixed $json, string $body): ?int

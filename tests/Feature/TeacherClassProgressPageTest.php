@@ -3,6 +3,11 @@
 use App\Models\FamilyBilling;
 use App\Models\Student;
 use App\Models\User;
+use Shetabit\Visitor\Middlewares\LogVisits;
+
+beforeEach(function () {
+    $this->withoutMiddleware(LogVisits::class);
+});
 
 it('allows teacher roles to access class progress page', function () {
     $teacher = User::factory()->create([
@@ -41,11 +46,11 @@ it('allows teacher roles to access class progress page', function () {
     $response = $this->actingAs($teacher)->get(route('teacher.class-progress'));
 
     $response->assertOk();
-    $response->assertSee('Progress Bayaran Yuran Mengikut Kelas');
+    $response->assertSee('Leaderboard Bayaran Mengikut Kelas');
     $response->assertSee('Tapis Tahun');
-    $response->assertSee('Send to class teacher (Whatsapp)');
-    $response->assertSee('Murid belum menjelaskan Yuran');
-    $response->assertSee('Murid telah menjelaskan Yuran');
+    $response->assertSee('Blast WhatsApp Report to All Class Teachers');
+    $response->assertSee('WhatsApp Guru');
+    $response->assertSee('View WhatsApp Queue');
 });
 
 it('blocks parent from class progress page', function () {

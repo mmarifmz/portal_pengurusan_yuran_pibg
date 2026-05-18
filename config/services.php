@@ -49,6 +49,7 @@ return [
 
     'wasender' => [
         'enabled' => env('WASENDER_ENABLED', false),
+        'api_url' => env('WASENDER_API_URL', env('WASENDER_BASE_URL', 'https://www.wasenderapi.com/api')),
         'base_url' => env('WASENDER_BASE_URL', 'https://www.wasenderapi.com/api'),
         'api_key' => env('WASENDER_API_KEY'),
         'webhook_secret' => env('WASENDER_WEBHOOK_SECRET'),

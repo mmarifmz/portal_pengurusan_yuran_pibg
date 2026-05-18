@@ -1,6 +1,8 @@
 <?php
 
+use App\Jobs\SendQueuedWhatsAppMessage;
 use App\Services\LegacyFamilyBillingImporter;
+use App\Services\TeacherUserImportService;
 use App\Services\WhatsAppTacSender;
 use App\Models\AdminProvisionAudit;
 use App\Models\FamilyBillingPhone;
@@ -8,11 +10,13 @@ use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
+use App\Models\WhatsAppMessageQueue;
 use App\Support\ParentPhone;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Validator;
 
 Artisan::command('inspire', function () {
@@ -79,6 +83,118 @@ Artisan::command('billing:import-legacy-families {path : Full path to the legacy
         $this->comment('Dry run only: no database rows were written.');
     }
 })->purpose('Import last-year family billing history by matching against the current-year student dataset.');
+
+Artisan::command('teachers:import
+    {path : CSV path, for example storage/app/imports/teachers.csv}
+    {--assign-class : Auto assign class based on the Class column}
+    {--enable-wa : Enable WhatsApp notifications for eligible teachers after import}
+    {--send-invite : Send or prepare teacher dashboard invites after import}', function (TeacherUserImportService $teacherUserImportService) {
+    $path = trim((string) $this->argument('path'));
+    $resolvedPath = str_starts_with($path, DIRECTORY_SEPARATOR) ? $path : base_path($path);
+
+    try {
+        $summary = $teacherUserImportService->import($resolvedPath, [
+            'assign_class' => (bool) $this->option('assign-class'),
+            'enable_whatsapp' => (bool) $this->option('enable-wa'),
+            'send_invite' => (bool) $this->option('send-invite'),
+        ], null, basename($resolvedPath));
+    } catch (\Throwable $exception) {
+        $this->error($exception->getMessage());
+
+        return self::FAILURE;
+    }
+
+    $this->info('Teacher import summary');
+    $this->line('Filename: '.$summary['filename']);
+    $this->line('Total rows: '.$summary['total_rows']);
+    $this->line('Created: '.$summary['created']);
+    $this->line('Updated: '.$summary['updated']);
+    $this->line('Assigned to class: '.$summary['assigned_to_class']);
+    $this->line('No class matched: '.$summary['no_class_matched']);
+    $this->line('Class assignment skipped: '.$summary['class_assignment_skipped']);
+    $this->line('Duplicate emails updated: '.$summary['duplicate_emails_updated']);
+    $this->line('WhatsApp enabled: '.$summary['whatsapp_enabled']);
+    $this->line('Invite sent: '.$summary['invite_sent']);
+    $this->line('Invite manual: '.$summary['invite_manual']);
+    $this->line('Failed rows: '.$summary['failed_rows_count']);
+
+    if ($summary['warnings'] !== []) {
+        $this->newLine();
+        $this->warn('Warnings:');
+
+        foreach ($summary['warnings'] as $warning) {
+            $this->line('- '.$warning);
+        }
+    }
+
+    if ($summary['manual_invites'] !== []) {
+        $this->newLine();
+        $this->warn('Manual invite messages:');
+
+        foreach ($summary['manual_invites'] as $invite) {
+            $this->line('--- '.$invite['name'].' / '.$invite['phone'].' ---');
+            $this->line($invite['message']);
+            $this->newLine();
+        }
+    }
+
+    if ($summary['failed_rows'] !== []) {
+        $this->newLine();
+        $this->warn('Failed rows:');
+
+        foreach ($summary['failed_rows'] as $row) {
+            $this->line(sprintf(
+                '- Row %s | %s | %s',
+                $row['row_number'] ?? '?',
+                $row['email'] ?? 'no-email',
+                $row['error'] ?? 'Unknown error'
+            ));
+        }
+    }
+
+    return self::SUCCESS;
+})->purpose('Import teacher users from CSV with optional class assignment, WhatsApp enablement, and dashboard invites.');
+
+Artisan::command('whatsapp:process-queue {--limit=20 : Maximum number of pending WhatsApp messages to process}', function () {
+    $limit = max(1, (int) $this->option('limit'));
+
+    $messages = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_PENDING)
+        ->orderBy('queued_at')
+        ->limit($limit)
+        ->get(['id', 'class_name', 'recipient_name', 'message_part']);
+
+    if ($messages->isEmpty()) {
+        $this->comment('No pending WhatsApp queue messages to process.');
+
+        return self::SUCCESS;
+    }
+
+    foreach ($messages as $message) {
+        try {
+            SendQueuedWhatsAppMessage::dispatchSync($message->id);
+            $this->line(sprintf(
+                'Processed queue message #%d for %s (%s).',
+                $message->id,
+                $message->class_name,
+                $message->message_part
+            ));
+        } catch (\Throwable $exception) {
+            $this->error(sprintf(
+                'Failed queue message #%d for %s: %s',
+                $message->id,
+                $message->class_name,
+                $exception->getMessage()
+            ));
+        }
+
+        usleep(300000);
+    }
+
+    return self::SUCCESS;
+})->purpose('Process pending WhatsApp queue messages for class payment reports.');
+
+Schedule::command('whatsapp:process-queue --limit=20')->everyMinute();
 
 Artisan::command('system:admin:provision
     {--name= : Name for the admin account}

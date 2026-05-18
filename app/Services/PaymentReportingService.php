@@ -173,13 +173,14 @@ class PaymentReportingService
             });
 
         return $familyMetrics
-            ->map(function (array $metric, string $familyCode) use ($dominantClassByFamily): array {
+            ->map(function (array $metric, string $familyCode) use ($dominantClassByFamily, $billingYear): array {
                 $metric['class_name'] = (string) ($dominantClassByFamily->get($familyCode) ?? 'Unassigned');
+                $metric['billing_year'] = $billingYear;
 
                 return $metric;
             })
             ->groupBy('class_name')
-            ->map(function (Collection $rows, string $className): array {
+            ->map(function (Collection $rows, string $className) use ($billingYear): array {
                 $totalFamilies = $rows->count();
                 $fullyPaid = $rows->where('status_key', 'paid')->count();
                 $partialPaid = $rows->where('status_key', 'partial')->count();
@@ -190,6 +191,7 @@ class PaymentReportingService
 
                 return [
                     'class_name' => $className,
+                    'billing_year' => $billingYear,
                     'total_families' => $totalFamilies,
                     'fully_paid_families' => $fullyPaid,
                     'partial_paid_families' => $partialPaid,
