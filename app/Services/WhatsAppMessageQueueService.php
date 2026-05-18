@@ -39,7 +39,9 @@ class WhatsAppMessageQueueService
                     'queue_batch_id' => $batchId,
                     'billing_year' => (int) $message['billing_year'],
                     'class_name' => (string) $message['class_name'],
-                    'teacher_user_id' => (int) $message['teacher_user_id'],
+                    'teacher_user_id' => isset($message['teacher_user_id']) && $message['teacher_user_id'] !== ''
+                        ? (int) $message['teacher_user_id']
+                        : null,
                     'recipient_name' => (string) $message['recipient_name'],
                     'recipient_phone' => (string) $message['recipient_phone'],
                     'message_type' => (string) $message['message_type'],

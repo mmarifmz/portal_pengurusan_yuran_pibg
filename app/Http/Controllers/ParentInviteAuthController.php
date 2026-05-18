@@ -58,7 +58,7 @@ class ParentInviteAuthController extends Controller
         }
 
         $parent = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where('phone', $phone)
             ->first();
 
@@ -91,7 +91,7 @@ class ParentInviteAuthController extends Controller
         $request->session()->put('parent_child_selection_completed', false);
         $request->session()->forget('parent_selected_family_billing_id');
 
-        return redirect()->route('parent.dashboard')
+        return redirect()->route('parent.payments.checkout', $familyBilling)
             ->with('status', 'Akses berjaya. Nombor telefon anda telah didaftarkan ke portal secara manual.');
     }
 
@@ -120,6 +120,7 @@ class ParentInviteAuthController extends Controller
             'password' => Str::random(40),
             'email_verified_at' => now(),
         ]);
+        $parent->assignRole('parent');
 
         Student::query()
             ->where('family_code', $familyBilling->family_code)

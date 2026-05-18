@@ -363,7 +363,7 @@ class TeacherFamilyLoginMonitorController extends Controller
         }
 
         $parent = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where('phone', $phone)
             ->first();
 
@@ -440,6 +440,7 @@ class TeacherFamilyLoginMonitorController extends Controller
             'password' => Str::random(40),
             'email_verified_at' => now(),
         ]);
+        $parent->assignRole('parent');
 
         Student::query()
             ->where('family_code', $familyBilling->family_code)

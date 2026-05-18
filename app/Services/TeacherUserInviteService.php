@@ -23,13 +23,14 @@ class TeacherUserInviteService
      */
     public function send(User $teacher): array
     {
-        $dashboardUrl = route('teacher.dashboard', absolute: true);
+        $usesExistingAccount = $teacher->hasMultipleRoles() || $teacher->role !== 'teacher';
+        $dashboardUrl = route($usesExistingAccount ? 'dashboard' : 'teacher.dashboard', absolute: true);
         $resetUrl = route('password.reset', [
             'token' => Password::broker()->createToken($teacher),
             'email' => $teacher->email,
         ], absolute: true);
 
-        $message = $this->buildMessage($teacher, $dashboardUrl, $resetUrl);
+        $message = $this->buildMessage($teacher, $dashboardUrl, $resetUrl, $usesExistingAccount);
 
         if (! $teacher->isTeacher()) {
             return [
@@ -119,9 +120,20 @@ class TeacherUserInviteService
         }
     }
 
-    private function buildMessage(User $teacher, string $dashboardUrl, string $resetUrl): string
+    private function buildMessage(User $teacher, string $dashboardUrl, string $resetUrl, bool $usesExistingAccount): string
     {
         $className = filled($teacher->class_name) ? (string) $teacher->class_name : 'Belum ditetapkan';
+
+        if ($usesExistingAccount) {
+            return implode("\n\n", [
+                "Assalamualaikum / Salam Sejahtera {$teacher->name},",
+                'Akses Guru Kelas untuk Portal Yuran PIBG SK Sri Petaling telah diaktifkan pada akaun sedia ada cikgu.',
+                "Kelas: {$className}",
+                "Sila login menggunakan akaun sedia ada melalui pautan berikut:\n{$dashboardUrl}",
+                'Selepas login, cikgu boleh pilih Teacher Dashboard untuk melihat status bayaran kelas.',
+                'Terima kasih.',
+            ]);
+        }
 
         return implode("\n\n", [
             "Assalamualaikum / Salam Sejahtera {$teacher->name},",

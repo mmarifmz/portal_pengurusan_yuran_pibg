@@ -12,7 +12,7 @@ class EnsureUserRole
     {
         $user = $request->user();
 
-        abort_unless($user && in_array($user->role, $roles, true), 403, 'Unauthorized role access.');
+        abort_unless($user && $user->hasAnyRole($roles), 403, 'Unauthorized role access.');
 
         return $next($request);
     }

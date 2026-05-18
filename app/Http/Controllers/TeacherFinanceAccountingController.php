@@ -268,7 +268,7 @@ class TeacherFinanceAccountingController extends Controller
             ->values();
 
         $parentUsers = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where(function ($query) use ($studentParentPhones, $studentParentEmails): void {
                 if ($studentParentPhones->isNotEmpty()) {
                     $query->orWhereIn('phone', $studentParentPhones->all());

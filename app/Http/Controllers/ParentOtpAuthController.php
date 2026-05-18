@@ -57,7 +57,7 @@ class ParentOtpAuthController extends Controller
 
         $selectedBilling = null;
         $parent = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where('phone', $phone)
             ->first();
         $isPaymentTester = (bool) $parent?->isParentTester();
@@ -281,11 +281,9 @@ class ParentOtpAuthController extends Controller
         $otp->update(['used_at' => now()]);
 
         $user = User::query()
-            ->where('id', $otp->user_id)
-            ->where('role', 'parent')
-            ->first();
+            ->find($otp->user_id);
 
-        if (! $user) {
+        if (! $user || ! $user->hasRole('parent')) {
             return back()->withErrors([
                 'pin' => 'Unable to authenticate this parent account.',
             ]);
@@ -370,7 +368,7 @@ class ParentOtpAuthController extends Controller
         }
 
         $existingParent = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where('phone', ParentPhone::sanitizeInput($phone))
             ->first();
 
@@ -406,6 +404,7 @@ class ParentOtpAuthController extends Controller
             'password' => Str::random(40),
             'email_verified_at' => now(),
         ]);
+        $parent->assignRole('parent');
 
         $this->registerFamilyPhoneIfPossible($sanitizedPhone, $familyBilling);
 
@@ -560,7 +559,7 @@ class ParentOtpAuthController extends Controller
 
     private function isParentAccessDisabled(User $user): bool
     {
-        return $user->role === 'parent'
+        return $user->hasRole('parent')
             && $user->is_active !== null
             && (bool) $user->is_active === false;
     }
@@ -587,6 +586,9 @@ class ParentOtpAuthController extends Controller
         Auth::login($user, false);
         $request->session()->regenerate();
 
+        $intendedCheckoutId = (int) $request->session()->get('parent_login_intended_checkout', 0);
+        $returnUrl = (string) $request->session()->get('parent_otp_return_url', route('parent.search'));
+
         ParentLoginAudit::query()->create([
             'user_id' => $user->id,
             'phone' => $phone,
@@ -606,8 +608,27 @@ class ParentOtpAuthController extends Controller
         $request->session()->put('parent_child_selection_completed', false);
         $request->session()->forget('parent_selected_family_billing_id');
 
-        return redirect()->route('parent.dashboard')
+        if ($intendedCheckoutId > 0) {
+            $billing = FamilyBilling::query()->find($intendedCheckoutId);
+
+            if ($billing && $this->userCanAccessFamilyBilling($user, $billing)) {
+                $request->session()->put('parent_child_selection_completed', true);
+                $request->session()->put('parent_selected_family_billing_id', $billing->id);
+
+                return redirect()
+                    ->route('parent.payments.checkout', $billing)
+                    ->with('status', $defaultStatusMessage);
+            }
+        }
+
+        if ($user->isStaff()) {
+            return redirect()
+                ->route('dashboard')
+                ->with('status', $defaultStatusMessage);
+        }
+
+        return redirect()
+            ->to($returnUrl !== '' ? $returnUrl : route('parent.search'))
             ->with('status', $defaultStatusMessage);
     }
 }
-

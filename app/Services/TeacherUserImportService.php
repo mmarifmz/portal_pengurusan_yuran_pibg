@@ -16,8 +16,10 @@ class TeacherUserImportService
 {
     private const REQUIRED_COLUMNS = ['Name', 'Phone', 'Email', 'Group', 'Class'];
 
-    public function __construct(private readonly TeacherUserInviteService $teacherUserInviteService)
-    {
+    public function __construct(
+        private readonly TeacherUserInviteService $teacherUserInviteService,
+        private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
+    ) {
     }
 
     /**
@@ -28,6 +30,7 @@ class TeacherUserImportService
      *   created:int,
      *   updated:int,
      *   assigned_to_class:int,
+     *   converted_existing_users:int,
      *   no_class_matched:int,
      *   class_assignment_skipped:int,
      *   duplicate_emails_updated:int,
@@ -58,6 +61,7 @@ class TeacherUserImportService
             'created' => 0,
             'updated' => 0,
             'assigned_to_class' => 0,
+            'converted_existing_users' => 0,
             'no_class_matched' => 0,
             'class_assignment_skipped' => 0,
             'duplicate_emails_updated' => 0,
@@ -118,6 +122,7 @@ class TeacherUserImportService
             $summary['created'] += $result['created'] ? 1 : 0;
             $summary['updated'] += $result['updated'] ? 1 : 0;
             $summary['assigned_to_class'] += $result['assigned_to_class'] ? 1 : 0;
+            $summary['converted_existing_users'] += $result['converted_existing_user'] ? 1 : 0;
             $summary['no_class_matched'] += $result['no_class_matched'] ? 1 : 0;
             $summary['class_assignment_skipped'] += $result['class_assignment_skipped'] ? 1 : 0;
             $summary['duplicate_emails_updated'] += $result['duplicate_email_updated'] ? 1 : 0;
@@ -176,6 +181,7 @@ class TeacherUserImportService
      *   created:bool,
      *   updated:bool,
      *   assigned_to_class:bool,
+     *   converted_existing_user:bool,
      *   no_class_matched:bool,
      *   class_assignment_skipped:bool,
      *   duplicate_email_updated:bool,
@@ -206,17 +212,20 @@ class TeacherUserImportService
             return $this->failedRow('Invalid email address.');
         }
 
-        $existing = User::query()
-            ->whereRaw('LOWER(email) = ?', [$email])
-            ->first();
-
-        if ($existing !== null && ! $existing->isTeacher()) {
-            return $this->failedRow('This email already belongs to a non-teacher account.');
+        $match = $this->teacherRoleAssignmentService->matchExistingUser($email, $phone);
+        if ($match['conflict'] !== null) {
+            return $this->failedRow($match['conflict']);
         }
 
-        $phoneConflict = $this->findPhoneConflict($phone, $existing?->id);
-        if ($phoneConflict !== null) {
-            return $this->failedRow('This WhatsApp number already belongs to another user.');
+        /** @var User|null $existing */
+        $existing = $match['user'];
+
+        if ($existing !== null
+            && $match['matched_by'] === 'phone'
+            && $existing->hasRole('teacher')
+            && filled($existing->email)
+            && mb_strtolower(trim((string) $existing->email)) !== $email) {
+            return $this->failedRow('This WhatsApp number already belongs to another teacher account.');
         }
 
         $matchedClassName = null;
@@ -244,6 +253,7 @@ class TeacherUserImportService
         $wasCreated = false;
         $wasUpdated = false;
         $assignedToClass = false;
+        $convertedExistingUser = false;
         $whatsappEnabled = false;
         $inviteStatus = null;
         $manualInvite = null;
@@ -258,50 +268,66 @@ class TeacherUserImportService
             &$wasCreated,
             &$wasUpdated,
             &$assignedToClass,
+            &$convertedExistingUser,
             &$whatsappEnabled,
             &$inviteStatus,
             &$manualInvite,
-            &$classOwners
+            &$classOwners,
+            &$warnings,
+            $rowNumber,
+            $match
         ): void {
             $user = $existing ?? new User();
+            $existingName = trim((string) $user->getRawOriginal('name'));
 
             if ($existing === null) {
+                $user->name = $name;
                 $user->password = Str::password(16);
                 $user->invite_status = 'pending';
+                $user->role = 'teacher';
                 $wasCreated = true;
             } else {
                 $wasUpdated = true;
             }
 
-            $user->name = $name;
-            $user->email = $email;
-            $user->phone = $phone;
-            $user->role = 'teacher';
-            $user->is_active = true;
-
-            if ($matchedClassName !== null) {
-                $user->class_name = $matchedClassName;
-                $assignedToClass = true;
+            if ($existing !== null
+                && ! $existing->hasRole('teacher')
+                && $existingName !== ''
+                && mb_strtoupper($existingName) !== mb_strtoupper($name)) {
+                $warnings[] = "Row {$rowNumber}: kept existing user name [{$existingName}] instead of imported name [{$name}] to avoid overwriting a populated profile.";
             }
 
+            $user->email = $email;
+            $user->phone = $phone;
             $user->save();
 
-            $existing = $user;
+            $assignment = $this->teacherRoleAssignmentService->assignTeacherRole(
+                $user,
+                [
+                    'name' => $name,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'class_name' => $matchedClassName,
+                    'enable_whatsapp' => (bool) $options['enable_whatsapp'],
+                    'name_update_mode' => $existing === null || $existing->hasRole('teacher') ? 'always' : 'if_blank',
+                    'matched_by' => $match['matched_by'],
+                ],
+                null,
+                'import'
+            );
 
-            if ($matchedClassName !== null) {
+            $user = $assignment['user'];
+            $existing = $user;
+            $assignedToClass = $assignment['assigned_to_class'];
+            $convertedExistingUser = $assignment['converted_existing_user'];
+            $whatsappEnabled = $assignment['whatsapp_enabled'];
+
+            if ($matchedClassName !== null && $assignedToClass) {
                 $classOwners[$this->normalizeClassKey($matchedClassName)] = $user->id;
             }
 
-            if ($options['enable_whatsapp']
-                && $user->is_active
-                && filled($user->phone)
-                && filled($user->class_name)
-                && ! $user->receive_whatsapp_notifications) {
-                $user->forceFill([
-                    'receive_whatsapp_notifications' => true,
-                ])->save();
-
-                $whatsappEnabled = true;
+            if ($convertedExistingUser) {
+                $warnings[] = "Row {$rowNumber}: converted existing user to also act as class teacher.";
             }
 
             if ($options['send_invite']) {
@@ -324,6 +350,7 @@ class TeacherUserImportService
             'created' => $wasCreated,
             'updated' => $wasUpdated,
             'assigned_to_class' => $assignedToClass,
+            'converted_existing_user' => $convertedExistingUser,
             'no_class_matched' => $noClassMatched,
             'class_assignment_skipped' => $classAssignmentSkipped,
             'duplicate_email_updated' => $wasUpdated,
@@ -335,7 +362,7 @@ class TeacherUserImportService
     }
 
     /**
-     * @return array{failed:bool,error:string,created:bool,updated:bool,assigned_to_class:bool,no_class_matched:bool,class_assignment_skipped:bool,duplicate_email_updated:bool,whatsapp_enabled:bool,invite_status:?string,manual_invite:?array{name:string,phone:string,message:string},warnings:array<int, string>}
+     * @return array{failed:bool,error:string,created:bool,updated:bool,assigned_to_class:bool,converted_existing_user:bool,no_class_matched:bool,class_assignment_skipped:bool,duplicate_email_updated:bool,whatsapp_enabled:bool,invite_status:?string,manual_invite:?array{name:string,phone:string,message:string},warnings:array<int, string>}
      */
     private function failedRow(string $message): array
     {
@@ -345,6 +372,7 @@ class TeacherUserImportService
             'created' => false,
             'updated' => false,
             'assigned_to_class' => false,
+            'converted_existing_user' => false,
             'no_class_matched' => false,
             'class_assignment_skipped' => false,
             'duplicate_email_updated' => false,
@@ -402,7 +430,7 @@ class TeacherUserImportService
     private function buildClassOwnerMap(): array
     {
         return User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
             ->get(['id', 'class_name'])
@@ -410,16 +438,6 @@ class TeacherUserImportService
                 $this->normalizeClassKey((string) $user->class_name) => (int) $user->id,
             ])
             ->all();
-    }
-
-    private function findPhoneConflict(string $normalizedPhone, ?int $ignoreUserId = null): ?User
-    {
-        return User::query()
-            ->whereNotNull('phone')
-            ->where('phone', '!=', '')
-            ->when($ignoreUserId !== null, fn ($query) => $query->where('id', '!=', $ignoreUserId))
-            ->whereIn('phone', MalaysianPhone::variants($normalizedPhone))
-            ->first();
     }
 
     private function normalizeClassKey(string $value): string

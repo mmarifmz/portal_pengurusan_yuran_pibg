@@ -1,6 +1,6 @@
 <x-layouts::app :title="__('School Calendar')" class="space-y-6">
     @php
-        $isParent = auth()->user()?->isParent();
+        $isParent = auth()->user()?->isParentOnly();
         $calendarTitle = $isParent
             ? 'Aktiviti & program semasa'
             : "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})";

@@ -1231,20 +1231,12 @@ class ParentPaymentController extends Controller
 
         $ownedFamilyCodes = $this->resolveOwnedFamilyCodes((string) $request->user()?->phone);
 
-        if (! ($selectionCompleted && $selectedBillingId === (int) $familyBilling->id)) {
-            abort_unless(
-                $ownedFamilyCodes->contains($familyBilling->family_code),
-                403,
-                'Please select your child from Carian Nama Murid before opening checkout.'
-            );
-
-            $request->session()->put('parent_selected_family_billing_id', (int) $familyBilling->id);
-            $request->session()->put('parent_child_selection_completed', true);
-
-            return;
-        }
-
         abort_unless($ownedFamilyCodes->contains($familyBilling->family_code), 403, 'Unauthorized family billing access.');
+        abort_if(
+            ! ($selectionCompleted && $selectedBillingId === (int) $familyBilling->id),
+            403,
+            'Please select your child from Carian Nama Murid before opening checkout.'
+        );
     }
 
     private function testerAmount(): float

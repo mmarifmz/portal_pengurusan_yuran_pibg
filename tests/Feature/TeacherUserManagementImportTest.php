@@ -178,6 +178,92 @@ it('updates invite status when a teacher invite is sent', function () {
     expect($teacher->teacher_invite_sent_at)->not->toBeNull();
 });
 
+it('converts an existing parent user into a teacher during import without creating a duplicate', function () {
+    $admin = makeTeacherManager();
+    seedTeacherClass('5 CEMPAKA');
+
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Parent Teacher',
+        'email' => 'parent.teacher@example.test',
+        'phone' => '+60139906160',
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('super-teacher.teachers.import'), [
+        'teachers_csv' => teacherCsvUpload(implode("\n", [
+            'Name,Phone,Email,Group,Class',
+            'Cikgu Parent Teacher,0139906160,parent.teacher@example.test,TAHAP 2,5 CEMPAKA',
+        ])),
+        'auto_assign_class' => '1',
+        'enable_whatsapp_notifications' => '1',
+    ]);
+
+    $response
+        ->assertRedirect(route('super-teacher.teachers.index'))
+        ->assertSessionHas('teacher_import_summary', function (array $summary): bool {
+            return ($summary['converted_existing_users'] ?? 0) === 1;
+        });
+
+    expect(User::query()->where('email', 'parent.teacher@example.test')->count())->toBe(1);
+    expect($parent->fresh()->hasRole('parent'))->toBeTrue();
+    expect($parent->fresh()->hasRole('teacher'))->toBeTrue();
+    expect($parent->fresh()->class_name)->toBe('5 CEMPAKA');
+    expect($parent->fresh()->receive_whatsapp_notifications)->toBeTrue();
+});
+
+it('allows assigning an existing parent user as teacher while keeping parent access', function () {
+    $admin = makeTeacherManager();
+    seedTeacherClass('6 DELIMA');
+
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Pn Laila',
+        'email' => 'laila.parent@example.test',
+        'phone' => '+60128887766',
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('super-teacher.teachers.assign-existing'), [
+        'user_id' => $parent->id,
+        'class_name' => '6 DELIMA',
+        'enable_whatsapp_notifications' => '1',
+        'send_teacher_invite' => '0',
+    ]);
+
+    $response->assertRedirect(route('super-teacher.teachers.index', ['existing_user_search' => '']));
+
+    expect(User::query()->where('email', 'laila.parent@example.test')->count())->toBe(1);
+    expect($parent->fresh()->hasRole('parent'))->toBeTrue();
+    expect($parent->fresh()->hasRole('teacher'))->toBeTrue();
+    expect($parent->fresh()->class_name)->toBe('6 DELIMA');
+});
+
+it('existing parent teacher invite uses existing-account wording without reset password', function () {
+    config()->set('services.whatsapp.enabled', false);
+
+    $admin = makeTeacherManager();
+    $user = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Teacher Parent',
+        'email' => 'teacher.parent@example.test',
+        'phone' => '+60135557777',
+        'class_name' => '4 ANGSANA',
+        'is_active' => true,
+    ]);
+    $user->assignRole('teacher');
+
+    $response = $this->actingAs($admin)->post(route('super-teacher.teachers.send-invite', $user));
+
+    $response
+        ->assertRedirect(route('super-teacher.teachers.index'))
+        ->assertSessionHas('teacher_manual_invites', function (array $manualInvites): bool {
+            $message = (string) ($manualInvites[0]['message'] ?? '');
+
+            return str_contains($message, 'akaun sedia ada')
+                && str_contains($message, 'Teacher Dashboard')
+                && ! str_contains($message, 'Tetapkan kata laluan');
+        });
+});
+
 it('keeps failed-row csv available after the import summary page loads', function () {
     $admin = makeTeacherManager();
     seedTeacherClass('2 AKASIA');

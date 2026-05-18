@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendQueuedWhatsAppMessage;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\FamilyBillingPhone;
@@ -10,8 +11,13 @@ use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
+use App\Models\WhatsAppMessageQueue;
+use App\Models\WhatsAppQueueBatch;
+use App\Services\ClassTeacherWhatsAppReportService;
+use App\Services\WhatsAppMessageQueueService;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\WhatsAppTacSender;
+use App\Support\MalaysianPhone;
 use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,13 +28,13 @@ use Illuminate\View\View;
 
 class PaymentTesterUserController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, WhatsAppMessageQueueService $whatsAppMessageQueueService): View
     {
         $keyword = trim((string) $request->string('q')->toString());
         $hasPaymentTesterColumn = Schema::hasColumn('users', 'is_payment_tester');
 
         $parentUsersQuery = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->when($keyword !== '', function ($query) use ($keyword): void {
                 $query->where(function ($nested) use ($keyword): void {
                     $nested->where('name', 'like', "%{$keyword}%")
@@ -73,6 +79,15 @@ class PaymentTesterUserController extends Controller
             ->limit(80)
             ->get();
 
+        $blastTestClassOptions = Student::query()
+            ->where('billing_year', now()->year)
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->distinct()
+            ->orderBy('class_name')
+            ->pluck('class_name')
+            ->values();
+
         return view('system.payment-testers', [
             'parentUsers' => $parentUsers,
             'keyword' => $keyword,
@@ -82,6 +97,9 @@ class PaymentTesterUserController extends Controller
             'portalTestInvites' => $portalTestInvites,
             'successfulPaymentSamples' => $successfulPaymentSamples,
             'portalTestFamilyCode' => 'TEST-DUMMY-PORTAL',
+            'blastTestClassOptions' => $blastTestClassOptions,
+            'whatsappQueueDashboard' => $whatsAppMessageQueueService->dashboardSnapshot(),
+            'recentWhatsappBlastBatches' => $this->recentWhatsappBlastBatches(),
         ]);
     }
 
@@ -110,7 +128,7 @@ class PaymentTesterUserController extends Controller
         }
 
         $parent = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->where('phone', $phone)
             ->first();
 
@@ -128,6 +146,7 @@ class PaymentTesterUserController extends Controller
                 'email_verified_at' => now(),
                 'is_payment_tester' => true,
             ]);
+            $parent->assignRole('parent');
         } elseif (! $parent->is_payment_tester) {
             $parent->forceFill(['is_payment_tester' => true])->save();
         }
@@ -175,7 +194,7 @@ class PaymentTesterUserController extends Controller
 
     public function update(Request $request, User $user): RedirectResponse
     {
-        abort_unless($user->role === 'parent', 404);
+        abort_unless($user->hasRole('parent'), 404);
 
         if (! Schema::hasColumn('users', 'is_payment_tester')) {
             return redirect()
@@ -287,6 +306,74 @@ class PaymentTesterUserController extends Controller
             ));
     }
 
+    public function queueWhatsappBlastStatusTest(
+        Request $request,
+        ClassTeacherWhatsAppReportService $classTeacherWhatsAppReportService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'billing_year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'class_name' => ['required', 'string', 'max:100'],
+            'tester_phone' => ['required', 'string', 'max:25'],
+            'process_now' => ['nullable', 'boolean'],
+        ]);
+
+        $testerPhone = MalaysianPhone::normalize((string) $validated['tester_phone']);
+        if ($testerPhone === null) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'WhatsApp blast status test failed: tester phone number is invalid.');
+        }
+
+        try {
+            $preview = $classTeacherWhatsAppReportService->previewForClass(
+                (int) $validated['billing_year'],
+                trim((string) $validated['class_name'])
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'WhatsApp blast status test failed: '.$exception->getMessage());
+        }
+
+        $preview = $this->applyTesterPhoneOverride($preview, $testerPhone, $request->user()?->name);
+
+        if (! (bool) ($preview['queue_eligibility']['ready'] ?? false)) {
+            return redirect()
+                ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+                ->with('error', 'WhatsApp blast status test cannot be queued yet: '.implode(' ', (array) ($preview['queue_eligibility']['errors'] ?? [])));
+        }
+
+        $queued = $classTeacherWhatsAppReportService->queueBatchPreviews([$preview], $request->user());
+
+        if ($request->boolean('process_now')) {
+            $messageIds = WhatsAppMessageQueue::query()
+                ->where('queue_batch_id', $queued['batch_id'])
+                ->pluck('id');
+
+            foreach ($messageIds as $messageId) {
+                try {
+                    SendQueuedWhatsAppMessage::dispatchSync((int) $messageId);
+                } catch (\Throwable) {
+                    // Keep processing the rest so the status board shows mixed outcomes.
+                }
+            }
+        }
+
+        $batchSummary = $this->summarizeWhatsappBlastBatch((string) $queued['batch_id']);
+
+        return redirect()
+            ->route('system.payment-testers.index', ['q' => (string) $request->query('q', '')])
+            ->with('status', sprintf(
+                'WhatsApp blast status test queued for %s to %s. Batch %s | Pending: %d | Sent: %d | Failed: %d.',
+                trim((string) $validated['class_name']),
+                $testerPhone,
+                (string) $queued['batch_id'],
+                (int) ($batchSummary['pending_messages_count'] ?? 0),
+                (int) ($batchSummary['sent_messages_count'] ?? 0),
+                (int) ($batchSummary['failed_messages_count'] ?? 0),
+            ));
+    }
+
     public function resetParentPhone(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -316,7 +403,7 @@ class PaymentTesterUserController extends Controller
                 ->delete();
 
             $parentUsersDeleted = User::query()
-                ->where('role', 'parent')
+                ->withRole('parent')
                 ->whereIn('phone', $variants)
                 ->delete();
 
@@ -379,7 +466,7 @@ class PaymentTesterUserController extends Controller
         }
 
         $existingTargetParentCount = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->whereIn('phone', ParentPhone::variants($toPhone))
             ->count();
 
@@ -391,7 +478,7 @@ class PaymentTesterUserController extends Controller
 
         $summary = DB::transaction(function () use ($fromVariants, $fromNormalized, $toPhone, $toNormalized): array {
             $parentUsersUpdated = User::query()
-                ->where('role', 'parent')
+                ->withRole('parent')
                 ->whereIn('phone', $fromVariants)
                 ->update(['phone' => $toPhone]);
 
@@ -479,5 +566,90 @@ class PaymentTesterUserController extends Controller
                 'notes' => 'Dummy family for portal login invite testing. Use billing year 2099 so this record is not part of current operational statistics.',
             ]
         );
+    }
+
+    private function recentWhatsappBlastBatches()
+    {
+        return WhatsAppQueueBatch::query()
+            ->with('queuedBy:id,name')
+            ->where('message_type', WhatsAppMessageQueue::MESSAGE_TYPE_CLASS_PAYMENT_REPORT)
+            ->withCount([
+                'messages as pending_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_PENDING),
+                'messages as sending_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_SENDING),
+                'messages as sent_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_SENT),
+                'messages as failed_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_FAILED),
+            ])
+            ->latest('id')
+            ->limit(12)
+            ->get()
+            ->map(fn (WhatsAppQueueBatch $batch): array => $this->summarizeWhatsappBlastBatch($batch->batch_id, $batch))
+            ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $preview
+     * @return array<string, mixed>
+     */
+    private function applyTesterPhoneOverride(array $preview, string $testerPhone, ?string $queuedByName = null): array
+    {
+        $displayName = trim((string) $queuedByName);
+        $displayName = $displayName !== '' ? $displayName.' (Tester)' : 'Ujian Super Admin';
+
+        $preview['delivery_target_name'] = $displayName;
+        $preview['delivery_target_phone'] = $testerPhone;
+        $preview['queue_eligibility']['ready'] = true;
+        $preview['queue_eligibility']['errors'] = [];
+        $preview['queue_eligibility']['status'] = 'ready';
+        $preview['queue_eligibility']['status_label'] = 'Ready';
+
+        return $preview;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function summarizeWhatsappBlastBatch(string $batchId, ?WhatsAppQueueBatch $batch = null): array
+    {
+        $batch ??= WhatsAppQueueBatch::query()
+            ->with('queuedBy:id,name')
+            ->withCount([
+                'messages as pending_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_PENDING),
+                'messages as sending_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_SENDING),
+                'messages as sent_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_SENT),
+                'messages as failed_messages_count' => fn ($query) => $query->where('status', WhatsAppMessageQueue::STATUS_FAILED),
+            ])
+            ->where('batch_id', $batchId)
+            ->firstOrFail();
+
+        $totalMessages = (int) ($batch->total_messages_queued ?? 0);
+        $sentCount = (int) ($batch->sent_messages_count ?? 0);
+        $failedCount = (int) ($batch->failed_messages_count ?? 0);
+        $pendingCount = (int) ($batch->pending_messages_count ?? 0);
+        $sendingCount = (int) ($batch->sending_messages_count ?? 0);
+
+        $status = 'pending';
+        if ($totalMessages > 0 && ($sentCount + $failedCount) >= $totalMessages && $failedCount === 0) {
+            $status = 'sent';
+        } elseif ($failedCount > 0) {
+            $status = 'failed';
+        } elseif ($sendingCount > 0) {
+            $status = 'sending';
+        }
+
+        return [
+            'batch_id' => (string) $batch->batch_id,
+            'class_names' => (array) data_get($batch->meta, 'class_names', []),
+            'source' => (string) $batch->source,
+            'queued_by_name' => (string) ($batch->queuedBy?->name ?? '-'),
+            'created_at' => $batch->created_at,
+            'total_messages_queued' => $totalMessages,
+            'total_classes_selected' => (int) ($batch->total_classes_selected ?? 0),
+            'total_classes_queued' => (int) ($batch->total_classes_queued ?? 0),
+            'pending_messages_count' => $pendingCount,
+            'sending_messages_count' => $sendingCount,
+            'sent_messages_count' => $sentCount,
+            'failed_messages_count' => $failedCount,
+            'status' => $status,
+        ];
     }
 }

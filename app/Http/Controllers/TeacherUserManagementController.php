@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Services\TeacherUserImportService;
 use App\Services\TeacherUserInviteService;
+use App\Services\TeacherRoleAssignmentService;
 use App\Support\MalaysianPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,12 +20,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeacherUserManagementController extends Controller
 {
-    public function __construct(private readonly TeacherUserInviteService $teacherUserInviteService)
-    {
+    public function __construct(
+        private readonly TeacherUserInviteService $teacherUserInviteService,
+        private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
+    ) {
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
+        $existingUserSearch = trim((string) $request->query('existing_user_search', ''));
         $classOptions = Student::query()
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
@@ -34,13 +38,20 @@ class TeacherUserManagementController extends Controller
             ->values();
 
         $teacherUsers = User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->loadMissing('roles');
+
+        $existingUserMatches = $existingUserSearch !== ''
+            ? $this->searchAssignableUsers($existingUserSearch)
+            : collect();
 
         return view('teacher.users', [
             'teacherUsers' => $teacherUsers,
             'classOptions' => $classOptions,
+            'existingUserSearch' => $existingUserSearch,
+            'existingUserMatches' => $existingUserMatches,
         ]);
     }
 
@@ -51,12 +62,23 @@ class TeacherUserManagementController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
-            'email' => ['required', 'string', 'email', 'max:120', 'unique:users,email'],
-            'phone' => $this->phoneRules($normalizedPhone),
+            'email' => ['required', 'string', 'email', 'max:120'],
+            'phone' => $this->phoneFormatRules($normalizedPhone),
             'class_name' => ['nullable', 'string', Rule::in($allowedClasses)],
             'receive_whatsapp_notifications' => ['nullable', 'boolean'],
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => ['nullable', 'confirmed', Password::min(8)],
         ]);
+
+        $match = $this->teacherRoleAssignmentService->matchExistingUser(
+            (string) $validated['email'],
+            $normalizedPhone,
+        );
+
+        if ($match['conflict'] !== null) {
+            throw ValidationException::withMessages([
+                'email' => $match['conflict'],
+            ]);
+        }
 
         $className = $validated['class_name'] ?: null;
         $receiveWhatsappNotifications = $this->resolveWhatsappPreference(
@@ -65,7 +87,46 @@ class TeacherUserManagementController extends Controller
             (bool) ($validated['receive_whatsapp_notifications'] ?? false)
         );
 
-        User::create([
+        /** @var User|null $existingUser */
+        $existingUser = $match['user'];
+        if ($existingUser !== null) {
+            if ($existingUser->hasRole('teacher')) {
+                throw ValidationException::withMessages([
+                    'email' => 'A teacher account with this email or WhatsApp number already exists.',
+                ]);
+            }
+
+            $result = $this->teacherRoleAssignmentService->assignTeacherRole(
+                $existingUser,
+                [
+                    'name' => $validated['name'],
+                    'email' => mb_strtolower(trim((string) $validated['email'])),
+                    'phone' => $normalizedPhone,
+                    'class_name' => $className,
+                    'enable_whatsapp' => $receiveWhatsappNotifications,
+                    'name_update_mode' => 'if_blank',
+                    'matched_by' => $match['matched_by'],
+                ],
+                $request->user(),
+                'manual'
+            );
+
+            return redirect()
+                ->route('super-teacher.teachers.index')
+                ->with('status', sprintf(
+                    'Existing user %s was upgraded with Teacher access%s.',
+                    $result['user']->name,
+                    $className ? " and assigned to {$className}" : ''
+                ));
+        }
+
+        if (blank($validated['password'] ?? null)) {
+            throw ValidationException::withMessages([
+                'password' => 'A password is required only when creating a brand new teacher account.',
+            ]);
+        }
+
+        $teacher = User::create([
             'name' => $validated['name'],
             'email' => mb_strtolower(trim((string) $validated['email'])),
             'phone' => $normalizedPhone,
@@ -76,6 +137,7 @@ class TeacherUserManagementController extends Controller
             'invite_status' => 'pending',
             'password' => $validated['password'],
         ]);
+        $teacher->assignRole('teacher');
 
         return redirect()
             ->route('super-teacher.teachers.index')
@@ -84,7 +146,7 @@ class TeacherUserManagementController extends Controller
 
     public function update(Request $request, User $user): RedirectResponse
     {
-        abort_unless($user->role === 'teacher', 404);
+        abort_unless($user->hasRole('teacher'), 404);
 
         $allowedClasses = $this->allowedClassNames();
         $normalizedPhone = null;
@@ -229,7 +291,7 @@ class TeacherUserManagementController extends Controller
 
     public function destroy(Request $request, User $user): RedirectResponse
     {
-        abort_unless($user->role === 'teacher', 404);
+        abort_unless($user->hasRole('teacher'), 404);
 
         if ($request->user()?->id === $user->id) {
             throw ValidationException::withMessages([
@@ -246,7 +308,7 @@ class TeacherUserManagementController extends Controller
 
     public function updateStatus(Request $request, User $user): RedirectResponse
     {
-        abort_unless($user->role === 'teacher', 404);
+        abort_unless($user->hasRole('teacher'), 404);
 
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
@@ -268,7 +330,7 @@ class TeacherUserManagementController extends Controller
 
     public function updateWhatsappNotifications(Request $request, User $user): RedirectResponse
     {
-        abort_unless($user->role === 'teacher', 404);
+        abort_unless($user->hasRole('teacher'), 404);
 
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
@@ -294,7 +356,7 @@ class TeacherUserManagementController extends Controller
     public function enableWhatsappForAllAssignedTeachers(): RedirectResponse
     {
         $teachers = User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->orderBy('name')
             ->get();
 
@@ -323,7 +385,7 @@ class TeacherUserManagementController extends Controller
     public function disableWhatsappForAll(): RedirectResponse
     {
         $teachers = User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->orderBy('name')
             ->get();
 
@@ -351,7 +413,7 @@ class TeacherUserManagementController extends Controller
 
     public function sendInvite(User $user): RedirectResponse
     {
-        abort_unless($user->role === 'teacher', 404);
+        abort_unless($user->hasRole('teacher'), 404);
 
         $result = $this->teacherUserInviteService->send($user);
 
@@ -378,7 +440,7 @@ class TeacherUserManagementController extends Controller
     public function sendInviteToAllActiveTeachers(): RedirectResponse
     {
         $teachers = User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -421,6 +483,72 @@ class TeacherUserManagementController extends Controller
         return redirect()
             ->route('super-teacher.teachers.index')
             ->with('status', "Teacher invites processed. Sent {$sent}, manual {$manual}, failed {$failed}, skipped {$skipped}.")
+            ->with('teacher_manual_invites', $manualInvites);
+    }
+
+    public function assignExisting(Request $request): RedirectResponse
+    {
+        $allowedClasses = $this->allowedClassNames();
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'class_name' => ['required', 'string', Rule::in($allowedClasses)],
+            'enable_whatsapp_notifications' => ['nullable', 'boolean'],
+            'send_teacher_invite' => ['nullable', 'boolean'],
+        ]);
+
+        $user = User::query()->findOrFail((int) $validated['user_id']);
+        $className = trim((string) $validated['class_name']);
+
+        $existingClassTeacher = User::query()
+            ->withRole('teacher')
+            ->where('class_name', $className)
+            ->where('id', '!=', $user->id)
+            ->first();
+
+        if ($existingClassTeacher !== null) {
+            throw ValidationException::withMessages([
+                'class_name' => "The class {$className} is already assigned to another teacher user.",
+            ]);
+        }
+
+        $result = $this->teacherRoleAssignmentService->assignTeacherRole(
+            $user,
+            [
+                'class_name' => $className,
+                'enable_whatsapp' => (bool) $request->boolean('enable_whatsapp_notifications'),
+                'name_update_mode' => 'never',
+            ],
+            $request->user(),
+            'manual'
+        );
+
+        $manualInvites = [];
+        if ($request->boolean('send_teacher_invite')) {
+            $invite = $this->teacherUserInviteService->send($result['user']);
+
+            if ($invite['status'] === 'failed') {
+                throw ValidationException::withMessages([
+                    'send_teacher_invite' => $invite['error'] ?? 'Unable to send the teacher invite.',
+                ]);
+            }
+
+            if ($invite['status'] === 'manual') {
+                $manualInvites[] = [
+                    'name' => (string) $result['user']->name,
+                    'phone' => (string) $result['user']->phone,
+                    'message' => $invite['message'],
+                ];
+            }
+        }
+
+        return redirect()
+            ->route('super-teacher.teachers.index', ['existing_user_search' => (string) $request->input('existing_user_search', '')])
+            ->with('status', sprintf(
+                'Existing user %s is now assigned as class teacher for %s.',
+                $result['user']->name,
+                $className
+            ))
             ->with('teacher_manual_invites', $manualInvites);
     }
 
@@ -469,6 +597,26 @@ class TeacherUserManagementController extends Controller
         ];
     }
 
+    /**
+     * @param  ?string  $normalizedPhone
+     * @return array<int, mixed>
+     */
+    private function phoneFormatRules(?string &$normalizedPhone): array
+    {
+        return [
+            'nullable',
+            'string',
+            'max:25',
+            function (string $attribute, mixed $value, \Closure $fail) use (&$normalizedPhone): void {
+                $normalizedPhone = MalaysianPhone::normalize($value);
+
+                if ($value !== null && trim((string) $value) !== '' && $normalizedPhone === null) {
+                    $fail('Please enter a valid Malaysian WhatsApp number (e.g. +60123456789 or 0123456789).');
+                }
+            },
+        ];
+    }
+
     private function findPhoneConflict(string $normalizedPhone, ?int $ignoreUserId = null): ?User
     {
         return User::query()
@@ -493,5 +641,27 @@ class TeacherUserManagementController extends Controller
         return $user->is_active
             && filled($user->class_name)
             && filled($user->phone);
+    }
+
+    private function searchAssignableUsers(string $keyword)
+    {
+        $keyword = trim($keyword);
+
+        if ($keyword === '') {
+            return collect();
+        }
+
+        return User::query()
+            ->where(function ($query) use ($keyword): void {
+                $query->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('email', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%");
+            })
+            ->orderBy('name')
+            ->limit(25)
+            ->get()
+            ->loadMissing('roles')
+            ->reject(fn (User $user): bool => $user->hasRole('teacher'))
+            ->values();
     }
 }

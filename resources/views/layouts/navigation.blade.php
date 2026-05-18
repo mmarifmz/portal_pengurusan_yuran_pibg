@@ -17,7 +17,7 @@
                             {{ __('Teacher') }}
                         </x-nav-link>
                     @endif
-                    @if (in_array(Auth::user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
+                    @if (Auth::user()->hasAnyRole(['teacher', 'super_teacher', 'system_admin']))
                         <x-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">
                             {{ __('Family Login Monitor') }}
                         </x-nav-link>
@@ -112,7 +112,7 @@
                     {{ __('Teacher') }}
                 </x-responsive-nav-link>
             @endif
-            @if (in_array(Auth::user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
+            @if (Auth::user()->hasAnyRole(['teacher', 'super_teacher', 'system_admin']))
                 <x-responsive-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">
                     {{ __('Family Login Monitor') }}
                 </x-responsive-nav-link>

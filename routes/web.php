@@ -415,6 +415,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-testers/payment-success-whatsapp-test', [PaymentTesterUserController::class, 'sendPaymentSuccessWhatsappTest'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.payment-success-whatsapp-test');
+    Route::post('/system/payment-testers/whatsapp-blast-status-test', [PaymentTesterUserController::class, 'queueWhatsappBlastStatusTest'])
+        ->middleware('role:system_admin')
+        ->name('system.payment-testers.whatsapp-blast-status-test');
     Route::post('/system/payment-testers/parent-phone/reset', [PaymentTesterUserController::class, 'resetParentPhone'])
         ->middleware('role:system_admin')
         ->name('system.payment-testers.parent-phone.reset');
@@ -434,6 +437,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/super-teacher/teachers/import', [TeacherUserManagementController::class, 'import'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.import');
+    Route::post('/super-teacher/teachers/assign-existing', [TeacherUserManagementController::class, 'assignExisting'])
+        ->middleware('role:super_teacher,system_admin')
+        ->name('super-teacher.teachers.assign-existing');
     Route::get('/super-teacher/teachers/import/sample', [TeacherUserManagementController::class, 'downloadSampleCsv'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.import.sample');

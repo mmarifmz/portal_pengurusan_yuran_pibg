@@ -7,6 +7,7 @@ use App\Models\LegacyStudentPayment;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\SchoolCalendarEvent;
 use App\Models\Student;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,8 +26,14 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        if ($user?->isParent()) {
+        if ($user?->isParentOnly()) {
             return redirect()->route('parent.dashboard');
+        }
+
+        if ($user?->isParent() && $user->isStaff()) {
+            return view('dashboard-role-switcher', [
+                'roleCards' => $this->buildRoleCards($user),
+            ]);
         }
 
         $role = $user?->isParent() ? 'parent' : 'staff';
@@ -781,5 +788,31 @@ Portal Yuran:
 
         $year = (int) ($matches[1] ?? 0);
         return $year > 0 ? $year : null;
+    }
+
+    /**
+     * @return array<int, array{title:string,description:string,url:string}>
+     */
+    private function buildRoleCards(User $user): array
+    {
+        $cards = [];
+
+        if ($user->hasRole('parent')) {
+            $cards[] = [
+                'title' => 'Parent Portal',
+                'description' => 'Lihat anak, resit, dan status bayaran keluarga anda.',
+                'url' => route('parent.dashboard'),
+            ];
+        }
+
+        if ($user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta'])) {
+            $cards[] = [
+                'title' => $user->hasAnyRole(['teacher', 'super_teacher']) ? 'Teacher Dashboard' : 'Staff Dashboard',
+                'description' => 'Buka paparan guru/staf untuk semakan kutipan dan tindakan kelas.',
+                'url' => route($user->hasAnyRole(['teacher', 'super_teacher']) ? 'teacher.dashboard' : 'dashboard'),
+            ];
+        }
+
+        return $cards;
     }
 }

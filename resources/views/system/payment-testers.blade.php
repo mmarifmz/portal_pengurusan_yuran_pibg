@@ -123,6 +123,135 @@
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-zinc-900">WhatsApp Blast Status Test</h2>
+                    <p class="mt-1 text-sm text-zinc-500">Select a class, enter the tester phone number, then queue the same class WhatsApp blast content through the real batch processor and monitor its status here.</p>
+                </div>
+                <a href="{{ route('admin.whatsapp-queue.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                    Open Queue Page
+                </a>
+            </div>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pending</p>
+                    <p class="mt-1 text-xl font-bold text-zinc-900">{{ $whatsappQueueDashboard['pending'] ?? 0 }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sending</p>
+                    <p class="mt-1 text-xl font-bold text-zinc-900">{{ $whatsappQueueDashboard['sending'] ?? 0 }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sent Today</p>
+                    <p class="mt-1 text-xl font-bold text-emerald-700">{{ $whatsappQueueDashboard['sent_today'] ?? 0 }}</p>
+                </div>
+                <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Failed Today</p>
+                    <p class="mt-1 text-xl font-bold text-rose-700">{{ $whatsappQueueDashboard['failed_today'] ?? 0 }}</p>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ route('system.payment-testers.whatsapp-blast-status-test', ['q' => $keyword]) }}" class="mt-5 grid gap-3 lg:grid-cols-5">
+                @csrf
+                <label class="text-sm font-medium text-zinc-700">
+                    Billing Year
+                    <input
+                        name="billing_year"
+                        type="number"
+                        min="2000"
+                        max="2100"
+                        value="{{ old('billing_year', now()->year) }}"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <label class="text-sm font-medium text-zinc-700 lg:col-span-2">
+                    Class
+                    <select name="class_name" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" @disabled($blastTestClassOptions->isEmpty())>
+                        <option value="">Select class for blast status test</option>
+                        @foreach ($blastTestClassOptions as $className)
+                            <option value="{{ $className }}" @selected(old('class_name') === $className)>{{ $className }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="text-sm font-medium text-zinc-700">
+                    Tester Phone Number
+                    <input
+                        name="tester_phone"
+                        type="text"
+                        value="{{ old('tester_phone', $defaultWhatsappTestPhone) }}"
+                        placeholder="60123456789"
+                        class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                </label>
+                <div class="self-end">
+                    <button
+                        type="submit"
+                        @disabled($blastTestClassOptions->isEmpty())
+                        class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Queue Blast Status Test
+                    </button>
+                </div>
+                <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700 lg:col-span-4">
+                    <input type="hidden" name="process_now" value="0">
+                    <input type="checkbox" name="process_now" value="1" @checked(old('process_now')) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                    Process queued test immediately to update sent/failed status right away
+                </label>
+                <p class="text-xs text-zinc-500 lg:col-span-5">
+                    The selected class controls the message content. The tester phone number is used as the delivery target for this Ujian-only blast test.
+                </p>
+            </form>
+
+            <div class="mt-5 overflow-x-auto">
+                <table class="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                        <tr>
+                            <th class="px-4 py-3">Batch</th>
+                            <th class="px-4 py-3">Classes</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Messages</th>
+                            <th class="px-4 py-3">Queued By</th>
+                            <th class="px-4 py-3">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200">
+                        @forelse ($recentWhatsappBlastBatches as $batch)
+                            <tr>
+                                <td class="px-4 py-3 font-mono text-xs text-zinc-800">{{ $batch['batch_id'] }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ implode(', ', $batch['class_names'] ?: ['-']) }}</td>
+                                <td class="px-4 py-3">
+                                    @php
+                                        $statusClasses = match ($batch['status']) {
+                                            'sent' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                            'failed' => 'border-rose-200 bg-rose-50 text-rose-700',
+                                            'sending' => 'border-sky-200 bg-sky-50 text-sky-700',
+                                            default => 'border-zinc-200 bg-zinc-50 text-zinc-700',
+                                        };
+                                    @endphp
+                                    <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $statusClasses }}">{{ strtoupper($batch['status']) }}</span>
+                                    <p class="mt-2 text-xs text-zinc-500">
+                                        P: {{ $batch['pending_messages_count'] }} |
+                                        S: {{ $batch['sending_messages_count'] }} |
+                                        Sent: {{ $batch['sent_messages_count'] }} |
+                                        Failed: {{ $batch['failed_messages_count'] }}
+                                    </p>
+                                </td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $batch['total_messages_queued'] }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ $batch['queued_by_name'] }}</td>
+                                <td class="px-4 py-3 text-zinc-700">{{ optional($batch['created_at'])->format('d M Y H:i:s') ?: '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-zinc-500">No WhatsApp blast test batch found yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Parent Phone Repair Utility</h2>
             <p class="mt-1 text-sm text-zinc-500">Reset a phone for fresh parent testing, or correct mistyped parent phone numbers.</p>
 

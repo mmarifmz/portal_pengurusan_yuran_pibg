@@ -113,9 +113,9 @@ class ClassTeacherWhatsAppReportService
                 $messages[] = [
                     'billing_year' => (int) $preview['billing_year'],
                     'class_name' => (string) $preview['class_name'],
-                    'teacher_user_id' => (int) $preview['teacher_id'],
-                    'recipient_name' => (string) $preview['teacher_name'],
-                    'recipient_phone' => (string) $preview['teacher_phone'],
+                    'teacher_user_id' => $preview['teacher_id'] ?? null,
+                    'recipient_name' => (string) ($preview['delivery_target_name'] ?? $preview['teacher_name']),
+                    'recipient_phone' => (string) ($preview['delivery_target_phone'] ?? $preview['teacher_phone']),
                     'message_type' => WhatsAppMessageQueue::MESSAGE_TYPE_CLASS_PAYMENT_REPORT,
                     'message_part' => (string) $message['message_part'],
                     'message_segment' => (int) $message['segment'],
@@ -185,7 +185,7 @@ class ClassTeacherWhatsAppReportService
             ->values();
 
         $teachersByClass = User::query()
-            ->whereIn('role', ['teacher', 'super_teacher'])
+            ->withAnyRole(['teacher', 'super_teacher'])
             ->whereIn('class_name', $classNames->all())
             ->orderByRaw("case when role = 'teacher' then 0 else 1 end")
             ->orderBy('name')

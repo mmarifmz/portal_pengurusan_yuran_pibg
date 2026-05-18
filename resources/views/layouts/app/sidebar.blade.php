@@ -47,7 +47,7 @@
 </head>
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
         @php
-            $sidebarHomeRoute = auth()->user()?->isParent() ? route('parent.dashboard') : route('dashboard');
+            $sidebarHomeRoute = auth()->user()?->isParentOnly() ? route('parent.dashboard') : route('dashboard');
         @endphp
         <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
@@ -63,13 +63,13 @@
 
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid gap-1">
-                    @if (! auth()->user()->isParent())
+                    @if (! auth()->user()->isParentOnly())
                         <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
                         </flux:sidebar.item>
                     @endif
 
-                    @if (! auth()->user()->isParent())
+                    @if (! auth()->user()->isParentOnly())
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
                             {{ __('School Calendar') }}
                         </flux:sidebar.item>
@@ -118,7 +118,7 @@
                     @endif
                 </flux:sidebar.group>
 
-                @if (! auth()->user()->isParent() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
+                @if (! auth()->user()->isParentOnly() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
                     <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">
                         @if (auth()->user()->isSystemAdmin())
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
@@ -144,7 +144,7 @@
                     </flux:sidebar.group>
                 @endif
 
-                @if (! auth()->user()->isParent() && auth()->user()->isSystemAdmin())
+                @if (! auth()->user()->isParentOnly() && auth()->user()->isSystemAdmin())
                     <flux:sidebar.group :heading="__('System Admin')" class="grid gap-1 mt-2">
                         <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
                             {{ __('Student Import') }}

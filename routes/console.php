@@ -160,6 +160,10 @@ Artisan::command('whatsapp:process-queue {--limit=20 : Maximum number of pending
 
     $messages = WhatsAppMessageQueue::query()
         ->where('status', WhatsAppMessageQueue::STATUS_PENDING)
+        ->where(function ($query): void {
+            $query->whereNull('queued_at')
+                ->orWhere('queued_at', '<=', now());
+        })
         ->orderBy('queued_at')
         ->limit($limit)
         ->get(['id', 'class_name', 'recipient_name', 'message_part']);
@@ -187,14 +191,251 @@ Artisan::command('whatsapp:process-queue {--limit=20 : Maximum number of pending
                 $exception->getMessage()
             ));
         }
-
-        usleep(300000);
     }
 
     return self::SUCCESS;
 })->purpose('Process pending WhatsApp queue messages for class payment reports.');
 
-Schedule::command('whatsapp:process-queue --limit=20')->everyMinute();
+Artisan::command('whatsapp:queue-status {--show=10 : Number of recent rows to show} {--stuck-minutes=15 : Mark sending rows older than this as stuck}', function () {
+    $show = max(1, (int) $this->option('show'));
+    $stuckMinutes = max(1, (int) $this->option('stuck-minutes'));
+    $stuckCutoff = now()->subMinutes($stuckMinutes);
+
+    $pendingQuery = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_PENDING);
+
+    $readyPending = (clone $pendingQuery)
+        ->where(function ($query): void {
+            $query->whereNull('queued_at')
+                ->orWhere('queued_at', '<=', now());
+        })
+        ->count();
+
+    $deferredPending = (clone $pendingQuery)
+        ->where('queued_at', '>', now())
+        ->count();
+
+    $sending = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_SENDING)
+        ->count();
+
+    $stuckSending = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_SENDING)
+        ->where(function ($query) use ($stuckCutoff): void {
+            $query->where('sending_at', '<=', $stuckCutoff)
+                ->orWhere(function ($nested) use ($stuckCutoff): void {
+                    $nested->whereNull('sending_at')
+                        ->where('updated_at', '<=', $stuckCutoff);
+                });
+        })
+        ->count();
+
+    $sent = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_SENT)
+        ->count();
+
+    $failed = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_FAILED)
+        ->count();
+
+    $rateLimited = WhatsAppMessageQueue::query()
+        ->where(function ($query): void {
+            $query->where('error_message', 'like', '%Rate limited by Wasender%')
+                ->orWhere('error_message', 'like', '%account protection%')
+                ->orWhere('error_message', 'like', '%retry_after%');
+        })
+        ->count();
+
+    $this->info('WhatsApp queue status');
+    $this->line('Pending ready: '.$readyPending);
+    $this->line('Pending deferred: '.$deferredPending);
+    $this->line('Sending: '.$sending);
+    $this->line('Stuck sending: '.$stuckSending);
+    $this->line('Sent: '.$sent);
+    $this->line('Failed: '.$failed);
+    $this->line('Rate-limited rows: '.$rateLimited);
+
+    $recentFailed = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_FAILED)
+        ->latest('failed_at')
+        ->limit($show)
+        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'failed_at', 'error_message']);
+
+    if ($recentFailed->isNotEmpty()) {
+        $this->newLine();
+        $this->warn('Recent failed rows');
+        $this->table(
+            ['ID', 'Batch', 'Class', 'Phone', 'Part', 'Failed At', 'Error'],
+            $recentFailed->map(fn (WhatsAppMessageQueue $message): array => [
+                $message->id,
+                $message->queue_batch_id,
+                $message->class_name,
+                $message->recipient_phone,
+                $message->message_part,
+                optional($message->failed_at)->format('Y-m-d H:i:s') ?: '-',
+                mb_strimwidth((string) ($message->error_message ?? '-'), 0, 100, '...'),
+            ])->all()
+        );
+    }
+
+    $recentDeferred = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_PENDING)
+        ->where('queued_at', '>', now())
+        ->orderBy('queued_at')
+        ->limit($show)
+        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'queued_at', 'error_message']);
+
+    if ($recentDeferred->isNotEmpty()) {
+        $this->newLine();
+        $this->warn('Deferred pending rows');
+        $this->table(
+            ['ID', 'Batch', 'Class', 'Phone', 'Part', 'Next Try At', 'Reason'],
+            $recentDeferred->map(fn (WhatsAppMessageQueue $message): array => [
+                $message->id,
+                $message->queue_batch_id,
+                $message->class_name,
+                $message->recipient_phone,
+                $message->message_part,
+                optional($message->queued_at)->format('Y-m-d H:i:s') ?: '-',
+                mb_strimwidth((string) ($message->error_message ?? '-'), 0, 100, '...'),
+            ])->all()
+        );
+    }
+
+    return self::SUCCESS;
+})->purpose('Show WhatsApp queue counts, failed rows, and deferred retry rows.');
+
+Artisan::command('whatsapp:retry-failed {--limit=20 : Maximum failed rows to reset} {--batch-id= : Only retry one queue batch} {--rate-limited-only : Retry only Wasender rate-limited failures} {--dry-run : Show failed rows without resetting them}', function () {
+    $limit = max(1, (int) $this->option('limit'));
+    $retrySpacingSeconds = max(1, (int) ceil((float) config('services.wasender.min_interval_seconds', 5.5)));
+
+    $query = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_FAILED);
+
+    $batchId = trim((string) $this->option('batch-id'));
+    if ($batchId !== '') {
+        $query->where('queue_batch_id', $batchId);
+    }
+
+    if ((bool) $this->option('rate-limited-only')) {
+        $query->where(function ($nested): void {
+            $nested->where('error_message', 'like', '%Rate limited by Wasender%')
+                ->orWhere('error_message', 'like', '%account protection%')
+                ->orWhere('error_message', 'like', '%retry_after%');
+        });
+    }
+
+    $messages = $query
+        ->orderBy('failed_at')
+        ->limit($limit)
+        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'failed_at', 'error_message']);
+
+    if ($messages->isEmpty()) {
+        $this->comment('No failed WhatsApp queue rows matched the retry filters.');
+
+        return self::SUCCESS;
+    }
+
+    $this->table(
+        ['ID', 'Batch', 'Class', 'Phone', 'Part', 'Failed At', 'Error'],
+        $messages->map(fn (WhatsAppMessageQueue $message): array => [
+            $message->id,
+            $message->queue_batch_id,
+            $message->class_name,
+            $message->recipient_phone,
+            $message->message_part,
+            optional($message->failed_at)->format('Y-m-d H:i:s') ?: '-',
+            mb_strimwidth((string) ($message->error_message ?? '-'), 0, 100, '...'),
+        ])->all()
+    );
+
+    if ((bool) $this->option('dry-run')) {
+        $this->comment('Dry run only: no rows were reset.');
+
+        return self::SUCCESS;
+    }
+
+    $baseQueuedAt = now();
+
+    foreach ($messages as $index => $message) {
+        $message->forceFill([
+            'status' => WhatsAppMessageQueue::STATUS_PENDING,
+            'queued_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
+            'sending_at' => null,
+            'failed_at' => null,
+            'error_message' => null,
+        ])->save();
+    }
+
+    $this->info('Reset '.$messages->count().' failed WhatsApp queue rows back to pending.');
+
+    return self::SUCCESS;
+})->purpose('Reset failed WhatsApp queue rows back to pending, with optional rate-limit filtering.');
+
+Artisan::command('whatsapp:retry-stuck {--minutes=15 : Treat sending rows older than this as stuck} {--limit=20 : Maximum stuck rows to reset} {--dry-run : Show stuck rows without resetting them}', function () {
+    $minutes = max(1, (int) $this->option('minutes'));
+    $limit = max(1, (int) $this->option('limit'));
+    $retrySpacingSeconds = max(1, (int) ceil((float) config('services.wasender.min_interval_seconds', 5.5)));
+    $cutoff = now()->subMinutes($minutes);
+
+    $messages = WhatsAppMessageQueue::query()
+        ->where('status', WhatsAppMessageQueue::STATUS_SENDING)
+        ->where(function ($query) use ($cutoff): void {
+            $query->where('sending_at', '<=', $cutoff)
+                ->orWhere(function ($nested) use ($cutoff): void {
+                    $nested->whereNull('sending_at')
+                        ->where('updated_at', '<=', $cutoff);
+                });
+        })
+        ->orderBy('sending_at')
+        ->limit($limit)
+        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'sending_at', 'updated_at']);
+
+    if ($messages->isEmpty()) {
+        $this->comment('No stuck WhatsApp queue rows were found.');
+
+        return self::SUCCESS;
+    }
+
+    $this->table(
+        ['ID', 'Batch', 'Class', 'Phone', 'Part', 'Sending At', 'Updated At'],
+        $messages->map(fn (WhatsAppMessageQueue $message): array => [
+            $message->id,
+            $message->queue_batch_id,
+            $message->class_name,
+            $message->recipient_phone,
+            $message->message_part,
+            optional($message->sending_at)->format('Y-m-d H:i:s') ?: '-',
+            optional($message->updated_at)->format('Y-m-d H:i:s') ?: '-',
+        ])->all()
+    );
+
+    if ((bool) $this->option('dry-run')) {
+        $this->comment('Dry run only: no rows were reset.');
+
+        return self::SUCCESS;
+    }
+
+    $baseQueuedAt = now();
+
+    foreach ($messages as $index => $message) {
+        $message->forceFill([
+            'status' => WhatsAppMessageQueue::STATUS_PENDING,
+            'queued_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
+            'sending_at' => null,
+            'failed_at' => null,
+            'error_message' => 'Recovered from stuck sending state via artisan retry command.',
+        ])->save();
+    }
+
+    $this->info('Reset '.$messages->count().' stuck WhatsApp queue rows back to pending.');
+
+    return self::SUCCESS;
+})->purpose('Reset stale sending WhatsApp queue rows back to pending.');
+
+Schedule::command('whatsapp:process-queue --limit=10')
+    ->everyMinute()
+    ->withoutOverlapping(2);
 
 Artisan::command('system:admin:provision
     {--name= : Name for the admin account}

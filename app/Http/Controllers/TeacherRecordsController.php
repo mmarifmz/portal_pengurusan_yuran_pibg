@@ -63,7 +63,7 @@ class TeacherRecordsController extends Controller
             ->pluck('user_id');
 
         $onboardedParentUsers = User::query()
-            ->where('role', 'parent')
+            ->withRole('parent')
             ->whereIn('id', $onboardedParentUserIds)
             ->get(['email', 'phone']);
 

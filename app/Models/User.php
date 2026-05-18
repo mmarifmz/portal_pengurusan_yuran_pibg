@@ -4,11 +4,15 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
@@ -18,6 +22,19 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    protected static function booted(): void
+    {
+        static::created(function (self $user): void {
+            $user->syncPrimaryRoleAssignment();
+        });
+
+        static::updated(function (self $user): void {
+            if ($user->wasChanged('role')) {
+                $user->syncPrimaryRoleAssignment();
+            }
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -59,53 +76,212 @@ class User extends Authenticatable
         return mb_strtoupper($name);
     }
 
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'user_roles')->withTimestamps();
+    }
+
+    public function scopeWithRole(Builder $query, string $role): Builder
+    {
+        return $query->where(function (Builder $builder) use ($role): void {
+            $builder
+                ->where('users.role', $role)
+                ->orWhereExists(function ($subQuery) use ($role): void {
+                    $subQuery
+                        ->selectRaw('1')
+                        ->from('user_roles')
+                        ->join('roles', 'roles.id', '=', 'user_roles.role_id')
+                        ->whereColumn('user_roles.user_id', 'users.id')
+                        ->where('roles.name', $role);
+                });
+        });
+    }
+
+    /**
+     * @param  array<int, string>  $roles
+     */
+    public function scopeWithAnyRole(Builder $query, array $roles): Builder
+    {
+        $roles = collect($roles)
+            ->map(fn ($role): string => trim((string) $role))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($roles === []) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $builder) use ($roles): void {
+            $builder
+                ->whereIn('users.role', $roles)
+                ->orWhereExists(function ($subQuery) use ($roles): void {
+                    $subQuery
+                        ->selectRaw('1')
+                        ->from('user_roles')
+                        ->join('roles', 'roles.id', '=', 'user_roles.role_id')
+                        ->whereColumn('user_roles.user_id', 'users.id')
+                        ->whereIn('roles.name', $roles);
+                });
+        });
+    }
+
+    public function hasRole(string $role): bool
+    {
+        $role = trim($role);
+
+        if ($role === '') {
+            return false;
+        }
+
+        if ($this->role === $role) {
+            return true;
+        }
+
+        if (! $this->roleTablesAvailable()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('roles')) {
+            /** @var Collection<int, Role> $roles */
+            $roles = $this->roles;
+
+            return $roles->contains(fn (Role $item): bool => $item->name === $role);
+        }
+
+        return $this->roles()->where('name', $role)->exists();
+    }
+
+    /**
+     * @param  array<int, string>  $roles
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        foreach ($roles as $role) {
+            if ($this->hasRole((string) $role)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function roleNames(): array
+    {
+        $roles = collect();
+
+        if (filled($this->role)) {
+            $roles->push((string) $this->role);
+        }
+
+        if ($this->roleTablesAvailable()) {
+            $pivotRoles = $this->relationLoaded('roles')
+                ? $this->roles
+                : $this->roles()->get(['roles.name']);
+
+            $roles = $roles->merge(
+                $pivotRoles->map(fn ($role): string => (string) $role->name)
+            );
+        }
+
+        return $roles
+            ->map(fn ($role): string => trim((string) $role))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function hasMultipleRoles(): bool
+    {
+        return count($this->roleNames()) > 1;
+    }
+
+    public function assignRole(string $role): void
+    {
+        $role = trim($role);
+
+        if ($role === '' || ! $this->exists || ! $this->roleTablesAvailable()) {
+            return;
+        }
+
+        $roleModel = Role::query()->firstOrCreate(['name' => $role]);
+        $this->roles()->syncWithoutDetaching([$roleModel->id]);
+    }
+
+    public function isParentOnly(): bool
+    {
+        return $this->hasRole('parent') && ! $this->isStaff();
+    }
+
     public function isTeacher(): bool
     {
-        return $this->role === 'teacher';
+        return $this->hasRole('teacher');
     }
 
     public function isSuperTeacher(): bool
     {
-        return $this->role === 'super_teacher';
+        return $this->hasRole('super_teacher');
     }
 
     public function isSystemAdmin(): bool
     {
-        return $this->role === 'system_admin';
+        return $this->hasRole('system_admin');
     }
 
     public function isSystemInstaller(): bool
     {
-        return $this->role === 'system_installer';
+        return $this->hasRole('system_installer');
     }
 
     public function isParent(): bool
     {
-        return $this->role === 'parent';
+        return $this->hasRole('parent');
     }
 
     public function isPta(): bool
     {
-        return $this->role === 'pta';
+        return $this->hasRole('pta');
     }
 
     public function isStaff(): bool
     {
-        return in_array($this->role, ['teacher', 'super_teacher', 'system_admin', 'pta'], true);
+        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']);
     }
 
     public function canAccessTeacherRecords(): bool
     {
-        return in_array($this->role, ['teacher', 'super_teacher', 'system_admin', 'pta'], true);
+        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']);
     }
 
     public function canManageTeacherUsers(): bool
     {
-        return in_array($this->role, ['super_teacher', 'system_admin'], true);
+        return $this->hasAnyRole(['super_teacher', 'system_admin']);
     }
 
     public function isParentTester(): bool
     {
         return $this->isParent() && (bool) $this->is_payment_tester;
+    }
+
+    private function syncPrimaryRoleAssignment(): void
+    {
+        $primaryRole = trim((string) $this->getAttribute('role'));
+
+        if ($primaryRole === '' || ! $this->exists || ! $this->roleTablesAvailable()) {
+            return;
+        }
+
+        $role = Role::query()->firstOrCreate(['name' => $primaryRole]);
+        $this->roles()->syncWithoutDetaching([$role->id]);
+    }
+
+    private function roleTablesAvailable(): bool
+    {
+        return Schema::hasTable('roles') && Schema::hasTable('user_roles');
     }
 }

@@ -54,8 +54,9 @@ class FortifyServiceProvider extends ServiceProvider
                 return null;
             }
 
-            // Parent accounts are TAC-only and cannot authenticate by password.
-            if ($user->role === 'parent') {
+            // Parent-only accounts are TAC-only. Dual-role users can still use
+            // their existing staff/admin password if they already have one.
+            if ($user->isParentOnly()) {
                 return null;
             }
 

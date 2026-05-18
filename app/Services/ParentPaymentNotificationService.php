@@ -177,7 +177,7 @@ class ParentPaymentNotificationService
         }
 
         $teachers = User::query()
-            ->where('role', 'teacher')
+            ->withRole('teacher')
             ->where('is_active', true)
             ->where('receive_whatsapp_notifications', true)
             ->whereNotNull('phone')

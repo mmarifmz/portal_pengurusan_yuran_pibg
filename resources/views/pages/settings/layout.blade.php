@@ -46,7 +46,7 @@
 
             <flux:navlist aria-label="{{ __('Settings') }}" class="portal-settings-nav">
                 <flux:navlist.item :href="route('profile.edit')" wire:navigate>{{ __('Profile') }}</flux:navlist.item>
-                @if (! auth()->user()->isParent())
+                @if (! auth()->user()->isParentOnly())
                     <flux:navlist.item :href="route('security.edit')" wire:navigate>{{ __('Security') }}</flux:navlist.item>
                 @endif
             </flux:navlist>

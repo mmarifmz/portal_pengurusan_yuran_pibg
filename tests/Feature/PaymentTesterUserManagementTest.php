@@ -4,6 +4,9 @@ use App\Models\User;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\ParentLoginInvite;
+use App\Models\Student;
+use App\Models\WhatsAppMessageQueue;
+use App\Models\WhatsAppQueueBatch;
 use App\Services\WhatsAppTacSender;
 
 it('allows system admin to view payment tester management page', function () {
@@ -191,4 +194,71 @@ it('allows system admin to send payment success whatsapp simulator message', fun
     $response->assertSessionHas('status');
 
     expect($transaction->fresh()->receipt_notified_at)->toBeNull();
+});
+
+it('shows whatsapp blast status test utility in ujian menu', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $response = $this->actingAs($admin)->get(route('system.payment-testers.index'));
+
+    $response->assertOk();
+    $response->assertSee('WhatsApp Blast Status Test');
+    $response->assertSee('Tester Phone Number');
+});
+
+it('queues whatsapp blast status test batch from ujian page', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email_verified_at' => now(),
+    ]);
+
+    User::factory()->create([
+        'role' => 'teacher',
+        'email' => 'teacher.ujian@example.test',
+        'phone' => '+60123334444',
+        'class_name' => '3 AMANAH',
+        'is_active' => true,
+        'receive_whatsapp_notifications' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'UJIAN-BLAST-1',
+        'billing_year' => now()->year,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'UJ-0001',
+        'family_code' => 'UJIAN-BLAST-1',
+        'full_name' => 'Nur Ujian',
+        'class_name' => '3 AMANAH',
+        'parent_name' => 'Pn Ujian',
+        'parent_phone' => '0123456789',
+        'parent_email' => 'ujian.parent@example.test',
+        'status' => 'active',
+        'billing_year' => now()->year,
+        'annual_fee' => 100,
+        'total_fee' => 100,
+        'paid_amount' => 100,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('system.payment-testers.whatsapp-blast-status-test'), [
+        'billing_year' => now()->year,
+        'class_name' => '3 AMANAH',
+        'tester_phone' => '01140030076',
+        'process_now' => '0',
+    ]);
+
+    $response->assertRedirect(route('system.payment-testers.index', ['q' => '']));
+    $response->assertSessionHas('status');
+
+    expect(WhatsAppQueueBatch::query()->count())->toBe(1);
+    expect(WhatsAppMessageQueue::query()->where('class_name', '3 AMANAH')->count())->toBeGreaterThan(0);
+    expect(WhatsAppMessageQueue::query()->where('class_name', '3 AMANAH')->value('recipient_phone'))->toBe('+601140030076');
 });

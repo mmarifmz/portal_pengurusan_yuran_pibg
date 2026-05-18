@@ -77,8 +77,44 @@ test('parent dashboard lists children and family billing for matching parent pho
     $response = $this->actingAs($parent)->get(route('parent.dashboard'));
 
     $response->assertOk();
-    $response->assertSee('Nur Aina');
+    $response->assertSee('NUR AINA');
     $response->assertSee('FAM-T1');
+});
+
+test('user with both parent and teacher roles can access both dashboards', function () {
+    $user = User::factory()->create([
+        'role' => 'parent',
+        'phone' => '0123456789',
+    ]);
+    $user->assignRole('teacher');
+
+    Student::query()->create([
+        'student_no' => '1B-0002',
+        'family_code' => 'FAM-BOTH',
+        'full_name' => 'Aisyah Humaira',
+        'class_name' => '1 Bestari',
+        'parent_name' => 'Pn Role Dual',
+        'parent_phone' => '0123456789',
+        'parent_email' => 'dual@example.test',
+        'total_fee' => 100,
+        'paid_amount' => 50,
+        'status' => 'active',
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'FAM-BOTH',
+        'billing_year' => now()->year,
+        'fee_amount' => 100,
+        'paid_amount' => 50,
+        'status' => 'partial',
+    ]);
+
+    $this->actingAs($user)->get(route('parent.dashboard'))->assertOk();
+    $this->actingAs($user)->get(route('teacher.dashboard'))->assertOk();
+    $this->actingAs($user)->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Parent Portal')
+        ->assertSee('Teacher Dashboard');
 });
 
 test('public search falls back to name/class when contact phone is new and unregistered', function () {

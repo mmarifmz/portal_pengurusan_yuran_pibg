@@ -11,6 +11,15 @@
                 default => ['Pending', 'border-zinc-200 bg-zinc-50 text-zinc-700'],
             };
         };
+        $roleBadge = static function (string $role): array {
+            return match ($role) {
+                'parent' => ['Parent', 'border-sky-200 bg-sky-50 text-sky-700'],
+                'teacher' => ['Teacher', 'border-emerald-200 bg-emerald-50 text-emerald-700'],
+                'system_admin' => ['Super Admin', 'border-violet-200 bg-violet-50 text-violet-700'],
+                'super_teacher' => ['Super Teacher', 'border-amber-200 bg-amber-50 text-amber-800'],
+                default => [str_replace('_', ' ', ucfirst($role)), 'border-zinc-200 bg-zinc-50 text-zinc-700'],
+            };
+        };
     @endphp
 
     <div class="space-y-6">
@@ -68,6 +77,10 @@
                     <div class="rounded-xl border border-white/70 bg-white px-4 py-3">
                         <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Assigned To Class</p>
                         <p class="mt-1 text-xl font-bold text-zinc-900">{{ $importSummary['assigned_to_class'] ?? 0 }}</p>
+                    </div>
+                    <div class="rounded-xl border border-white/70 bg-white px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Converted Existing Users</p>
+                        <p class="mt-1 text-xl font-bold text-zinc-900">{{ $importSummary['converted_existing_users'] ?? 0 }}</p>
                     </div>
                     <div class="rounded-xl border border-white/70 bg-white px-4 py-3">
                         <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Failed Rows</p>
@@ -169,6 +182,7 @@
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Create New Teacher</h2>
+            <p class="mt-1 text-sm text-zinc-500">If the email or WhatsApp number already belongs to an existing user, the system upgrades that account with Teacher access instead of creating a duplicate.</p>
             <form method="POST" action="{{ route('super-teacher.teachers.store') }}" class="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 @csrf
                 <label class="text-sm font-medium text-zinc-700">
@@ -193,12 +207,12 @@
                     </select>
                 </label>
                 <label class="text-sm font-medium text-zinc-700">
-                    Password
-                    <input name="password" type="password" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    Password (new accounts only)
+                    <input name="password" type="password" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
                 </label>
                 <label class="text-sm font-medium text-zinc-700">
                     Confirm Password
-                    <input name="password_confirmation" type="password" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    <input name="password_confirmation" type="password" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
                 </label>
                 <div class="md:col-span-2 lg:col-span-3">
                     <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
@@ -213,6 +227,75 @@
                     </button>
                 </div>
             </form>
+        </section>
+
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-zinc-900">Assign Existing User as Teacher</h2>
+                    <p class="text-sm text-zinc-500">Search existing parent/admin accounts by name, email, or phone, then add Teacher access without duplicating the user.</p>
+                </div>
+            </div>
+
+            <form method="GET" action="{{ route('super-teacher.teachers.index') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                <label class="text-sm font-medium text-zinc-700">
+                    Search Existing User
+                    <input name="existing_user_search" type="text" value="{{ $existingUserSearch ?? '' }}" placeholder="Name, email, or phone" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                </label>
+                <div class="self-end">
+                    <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                        Search User
+                    </button>
+                </div>
+            </form>
+
+            @if (filled($existingUserSearch ?? ''))
+                @if (($existingUserMatches ?? collect())->isEmpty())
+                    <p class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">No assignable existing user matched that search.</p>
+                @else
+                    <form method="POST" action="{{ route('super-teacher.teachers.assign-existing') }}" class="mt-4 grid gap-3 lg:grid-cols-3">
+                        @csrf
+                        <input type="hidden" name="existing_user_search" value="{{ $existingUserSearch }}">
+                        <label class="text-sm font-medium text-zinc-700 lg:col-span-3">
+                            Matching User
+                            <select name="user_id" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <option value="">Select existing user</option>
+                                @foreach ($existingUserMatches as $matchedUser)
+                                    <option value="{{ $matchedUser->id }}" @selected((string) old('user_id') === (string) $matchedUser->id)>
+                                        {{ $matchedUser->name }} | {{ $matchedUser->email ?: 'No email' }} | {{ $matchedUser->phone ?: 'No phone' }} | Roles: {{ implode(', ', array_map(fn ($role) => str_replace('_', ' ', ucfirst($role)), $matchedUser->roleNames())) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="text-sm font-medium text-zinc-700">
+                            Select Class
+                            <select name="class_name" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100">
+                                <option value="">Choose class</option>
+                                @foreach ($classOptions as $className)
+                                    <option value="{{ $className }}" @selected(old('class_name') === $className)>{{ $className }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <div class="space-y-3 lg:col-span-2">
+                            <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
+                                <input type="hidden" name="enable_whatsapp_notifications" value="0">
+                                <input type="checkbox" name="enable_whatsapp_notifications" value="1" @checked(old('enable_whatsapp_notifications', true)) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                                Enable WhatsApp notifications for this class teacher
+                            </label>
+                            <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
+                                <input type="hidden" name="send_teacher_invite" value="0">
+                                <input type="checkbox" name="send_teacher_invite" value="1" @checked(old('send_teacher_invite', true)) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                                Send teacher access invite using the user’s existing account
+                            </label>
+                        </div>
+                        <div class="lg:col-span-3">
+                            <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                                Assign Existing User as Teacher
+                            </button>
+                        </div>
+                    </form>
+                @endif
+            @endif
         </section>
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -251,6 +334,7 @@
                             <th class="px-4 py-3">Email</th>
                             <th class="px-4 py-3">WhatsApp</th>
                             <th class="px-4 py-3">Class</th>
+                            <th class="px-4 py-3">Roles</th>
                             <th class="px-4 py-3">Account</th>
                             <th class="px-4 py-3">WA Notification</th>
                             <th class="px-4 py-3">Invite Status</th>
@@ -268,6 +352,14 @@
                                 <td class="px-4 py-3 text-zinc-700">{{ $teacherUser->email }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $formatWhatsapp($teacherUser->phone) }}</td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $teacherUser->class_name ?: 'No class assigned' }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach ($teacherUser->roleNames() as $roleName)
+                                            @php([$roleLabel, $roleClasses] = $roleBadge($roleName))
+                                            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $roleClasses }}">{{ $roleLabel }}</span>
+                                        @endforeach
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3">
                                     @if ($teacherUser->is_active)
                                         <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Active</span>
@@ -336,7 +428,7 @@
                                 </td>
                             </tr>
                             <tr id="edit-row-{{ $teacherUser->id }}" class="hidden bg-zinc-50">
-                                <td colspan="9" class="px-4 py-4">
+                                <td colspan="10" class="px-4 py-4">
                                     <form method="POST" action="{{ route('super-teacher.teachers.update', $teacherUser) }}" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                                         @csrf
                                         @method('PATCH')
@@ -386,7 +478,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="px-4 py-6 text-center text-sm text-zinc-500">No teacher users found.</td>
+                                <td colspan="10" class="px-4 py-6 text-center text-sm text-zinc-500">No teacher users found.</td>
                             </tr>
                         @endforelse
                     </tbody>

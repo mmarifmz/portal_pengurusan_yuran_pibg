@@ -1,5 +1,16 @@
 <x-layouts::app :title="__('Dashboard')" class="space-y-6">
-    @if ($role !== 'parent')
+    @if ($role === 'multi_role')
+        <div class="grid gap-5 md:grid-cols-2">
+            @foreach (($roleCards ?? []) as $card)
+                <a href="{{ $card['url'] }}" class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Portal Access</p>
+                    <h2 class="mt-2 text-2xl font-bold text-zinc-900">{{ $card['title'] }}</h2>
+                    <p class="mt-2 text-sm text-zinc-600">{{ $card['description'] }}</p>
+                    <p class="mt-4 text-sm font-semibold text-emerald-700">Open portal</p>
+                </a>
+            @endforeach
+        </div>
+    @elseif ($role !== 'parent')
         <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
             <form method="GET" action="{{ route('dashboard') }}#collection-by-class-section" class="flex flex-wrap items-end justify-between gap-3">
                 <div>
