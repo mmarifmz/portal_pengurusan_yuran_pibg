@@ -79,24 +79,24 @@
                         <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
                             {{ __('Student Directory') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="banknotes" :href="route('teacher.finance-accounting')" :current="request()->routeIs('teacher.finance-accounting*')" wire:navigate>
-                            {{ __('Finance Accounting') }}
-                        </flux:sidebar.item>
-                        <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
-                            {{ __('Payment Funnel') }}
-                        </flux:sidebar.item>
                         <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
                             {{ __('Class Progress') }}
                         </flux:sidebar.item>
                         <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
                             {{ __('Leaderboard Sumbangan') }}
                         </flux:sidebar.item>
+                    @endif
+
+                    @if (auth()->user()->isSystemAdmin())
+                        <flux:sidebar.item icon="banknotes" :href="route('teacher.finance-accounting')" :current="request()->routeIs('teacher.finance-accounting*')" wire:navigate>
+                            {{ __('Finance Accounting') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="funnel" :href="route('system.payment-funnel-monitor.index')" :current="request()->routeIs('system.payment-funnel-monitor.*')" wire:navigate>
+                            {{ __('Payment Funnel') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="tag" :href="route('teacher.social-tags.index')" :current="request()->routeIs('teacher.social-tags.*')" wire:navigate>
                             {{ __('Social Tags') }}
                         </flux:sidebar.item>
-                    @endif
-
-                    @if (in_array(auth()->user()->role, ['teacher', 'super_teacher', 'system_admin'], true))
                         <flux:sidebar.item icon="device-phone-mobile" :href="route('teacher.family-login-monitor')" :current="request()->routeIs('teacher.family-login-monitor')" wire:navigate>
                             {{ __('Parent Access Log') }}
                         </flux:sidebar.item>

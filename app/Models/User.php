@@ -16,7 +16,24 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'role', 'class_name', 'is_payment_tester', 'is_active', 'receive_whatsapp_notifications', 'teacher_invite_sent_at', 'invite_status'])]
+#[Fillable([
+    'name',
+    'email',
+    'phone',
+    'password',
+    'role',
+    'class_name',
+    'is_payment_tester',
+    'is_active',
+    'receive_whatsapp_notifications',
+    'teacher_invite_sent_at',
+    'invite_status',
+    'onboarding_invite_generated_at',
+    'onboarding_invite_sent_manually_at',
+    'onboarding_invite_sent_by',
+    'onboarding_invite_method',
+    'onboarding_invite_status',
+])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -50,6 +67,8 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'receive_whatsapp_notifications' => 'boolean',
             'teacher_invite_sent_at' => 'datetime',
+            'onboarding_invite_generated_at' => 'datetime',
+            'onboarding_invite_sent_manually_at' => 'datetime',
         ];
     }
 
@@ -266,6 +285,15 @@ class User extends Authenticatable
     public function isParentTester(): bool
     {
         return $this->isParent() && (bool) $this->is_payment_tester;
+    }
+
+    public static function onboardingInviteColumnsAvailable(): bool
+    {
+        return Schema::hasColumn('users', 'onboarding_invite_generated_at')
+            && Schema::hasColumn('users', 'onboarding_invite_sent_manually_at')
+            && Schema::hasColumn('users', 'onboarding_invite_sent_by')
+            && Schema::hasColumn('users', 'onboarding_invite_method')
+            && Schema::hasColumn('users', 'onboarding_invite_status');
     }
 
     private function syncPrimaryRoleAssignment(): void

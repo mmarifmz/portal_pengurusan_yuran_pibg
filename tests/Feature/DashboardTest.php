@@ -110,3 +110,23 @@ test('payment funnel billing year filter excludes future years', function () {
     $response->assertSee((string) $currentYear);
     $response->assertDontSee((string) $futureYear);
 });
+
+test('teacher cannot access payment funnel monitor', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+    ]);
+
+    $response = $this->actingAs($teacher)->get(route('system.payment-funnel-monitor.index'));
+
+    $response->assertForbidden();
+});
+
+test('teacher cannot access finance accounting dashboard', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+    ]);
+
+    $response = $this->actingAs($teacher)->get(route('teacher.finance-accounting'));
+
+    $response->assertForbidden();
+});

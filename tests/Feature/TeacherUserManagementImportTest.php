@@ -3,6 +3,7 @@
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Shetabit\Visitor\Middlewares\LogVisits;
 
 beforeEach(function () {
@@ -10,6 +11,8 @@ beforeEach(function () {
 });
 
 it('imports teacher csv rows and creates teacher users', function () {
+    config()->set('teacher.default_password', 'change-this-password');
+
     $admin = makeTeacherManager();
     seedTeacherClass('4 ANGSANA');
 
@@ -30,6 +33,7 @@ it('imports teacher csv rows and creates teacher users', function () {
     expect($teacher)->not->toBeNull();
     expect($teacher->role)->toBe('teacher');
     expect($teacher->is_active)->toBeTrue();
+    expect(Hash::check('change-this-password', (string) $teacher->getAuthPassword()))->toBeTrue();
 });
 
 it('updates an existing teacher instead of creating a duplicate', function () {
@@ -154,7 +158,7 @@ it('batch enables whatsapp only for eligible assigned active teachers', function
 });
 
 it('updates invite status when a teacher invite is sent', function () {
-    config()->set('services.whatsapp.enabled', true);
+    config()->set('teacher.default_password', 'change-this-password');
 
     $admin = makeTeacherManager();
 
@@ -174,8 +178,10 @@ it('updates invite status when a teacher invite is sent', function () {
 
     $teacher->refresh();
 
-    expect($teacher->invite_status)->toBe('sent');
-    expect($teacher->teacher_invite_sent_at)->not->toBeNull();
+    expect($teacher->invite_status)->toBe('manual');
+    expect($teacher->onboarding_invite_status)->toBe('generated');
+    expect($teacher->onboarding_invite_generated_at)->not->toBeNull();
+    expect($teacher->teacher_invite_sent_at)->toBeNull();
 });
 
 it('converts an existing parent user into a teacher during import without creating a duplicate', function () {
@@ -238,8 +244,6 @@ it('allows assigning an existing parent user as teacher while keeping parent acc
 });
 
 it('existing parent teacher invite uses existing-account wording without reset password', function () {
-    config()->set('services.whatsapp.enabled', false);
-
     $admin = makeTeacherManager();
     $user = User::factory()->create([
         'role' => 'parent',
@@ -255,13 +259,40 @@ it('existing parent teacher invite uses existing-account wording without reset p
 
     $response
         ->assertRedirect(route('super-teacher.teachers.index'))
-        ->assertSessionHas('teacher_manual_invites', function (array $manualInvites): bool {
+        ->assertSessionHas('teacher_onboarding_batch', function (array $manualInvites): bool {
             $message = (string) ($manualInvites[0]['message'] ?? '');
 
-            return str_contains($message, 'akaun sedia ada')
-                && str_contains($message, 'Teacher Dashboard')
-                && ! str_contains($message, 'Tetapkan kata laluan');
+            return str_contains($message, 'login sedia ada')
+                && str_contains($message, 'Pautan Login')
+                && ! str_contains($message, 'Kata Laluan Sementara');
         });
+});
+
+it('existing parent converted to teacher does not get password overwritten by default', function () {
+    config()->set('teacher.default_password', 'change-this-password');
+
+    $admin = makeTeacherManager();
+    seedTeacherClass('4 ANGSANA');
+
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Parent Teacher',
+        'email' => 'keep.password@example.test',
+        'phone' => '+60136668888',
+        'password' => 'original-password',
+    ]);
+    $originalHash = $parent->getAuthPassword();
+
+    $this->actingAs($admin)->post(route('super-teacher.teachers.import'), [
+        'teachers_csv' => teacherCsvUpload(implode("\n", [
+            'Name,Phone,Email,Group,Class',
+            'Cikgu Parent Teacher,0136668888,keep.password@example.test,TAHAP 2,4 ANGSANA',
+        ])),
+        'auto_assign_class' => '1',
+    ])->assertRedirect(route('super-teacher.teachers.index'));
+
+    expect($parent->fresh()->getAuthPassword())->toBe($originalHash);
+    expect(Hash::check('original-password', (string) $parent->fresh()->getAuthPassword()))->toBeTrue();
 });
 
 it('keeps failed-row csv available after the import summary page loads', function () {

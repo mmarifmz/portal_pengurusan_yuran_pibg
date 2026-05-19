@@ -7,9 +7,9 @@ use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\User;
 
-it('allows teacher roles to view family login monitor with aggregated data', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('allows system admin to view family login monitor with aggregated data', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -51,7 +51,7 @@ it('allows teacher roles to view family login monitor with aggregated data', fun
         'attempts' => 1,
     ]);
 
-    $response = $this->actingAs($teacher)->get(route('teacher.family-login-monitor'));
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
 
     $response->assertOk();
     $response->assertSee('SSP-M001');
@@ -61,9 +61,9 @@ it('allows teacher roles to view family login monitor with aggregated data', fun
     $response->assertSee('Yes');
 });
 
-it('shows expired tac status for families stuck before login', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('shows expired tac status for system admin when families are stuck before login', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -91,16 +91,16 @@ it('shows expired tac status for families stuck before login', function () {
         'attempts' => 2,
     ]);
 
-    $response = $this->actingAs($teacher)->get(route('teacher.family-login-monitor'));
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
 
     $response->assertOk();
     $response->assertSee('SSP-M002');
     $response->assertSee('Expired TAC (Stuck)');
 });
 
-it('filters tac status to show stuck families only', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('filters tac status to show stuck families only for system admin', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -159,16 +159,16 @@ it('filters tac status to show stuck families only', function () {
         'logged_in_at' => now(),
     ]);
 
-    $response = $this->actingAs($teacher)->get(route('teacher.family-login-monitor', ['tac_status' => 'stuck']));
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor', ['tac_status' => 'stuck']));
 
     $response->assertOk();
     $response->assertSee('SSP-STUCK');
     $response->assertDontSee('SSP-DONE');
 });
 
-it('shows re-send invite button when stuck family already has an invite history', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('shows re-send invite button for system admin when stuck family already has an invite history', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -205,13 +205,24 @@ it('shows re-send invite button when stuck family already has an invite history'
         'expires_at' => now()->addHours(24),
         'sent_at' => now()->subMinutes(5),
         'used_at' => null,
-        'created_by_user_id' => $teacher->id,
+        'created_by_user_id' => $admin->id,
+    ]);
+
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
+
+    $response->assertOk();
+    $response->assertSee('Re-Send Invite');
+});
+
+it('blocks teacher role from viewing family login monitor', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
     ]);
 
     $response = $this->actingAs($teacher)->get(route('teacher.family-login-monitor'));
 
-    $response->assertOk();
-    $response->assertSee('Re-Send Invite');
+    $response->assertForbidden();
 });
 
 it('blocks parent role from viewing family login monitor', function () {

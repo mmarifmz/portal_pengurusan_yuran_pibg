@@ -73,7 +73,7 @@ it('allows teacher roles to access class progress page', function () {
     $response = $this->actingAs($teacher)->get(route('teacher.class-progress'));
 
     $response->assertOk();
-    $response->assertSee('Leaderboard Bayaran Mengikut Kelas');
+    $response->assertSee('Pemantauan Kutipan Yuran & Sumbangan PIBG Mengikut Kelas');
     $response->assertSee('Tapis Tahun');
     $response->assertSee('Kelas Saya');
     $response->assertSee('Senarai Kelas Lain');

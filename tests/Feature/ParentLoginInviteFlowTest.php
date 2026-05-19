@@ -6,9 +6,9 @@ use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\User;
 
-it('sends manual invite from stuck tac row and stores 24-hour token', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('allows system admin to send manual invite from stuck tac row and stores 24-hour token', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -36,7 +36,7 @@ it('sends manual invite from stuck tac row and stores 24-hour token', function (
         'attempts' => 1,
     ]);
 
-    $response = $this->actingAs($teacher)->post(route('teacher.family-login-monitor.invite.send'), [
+    $response = $this->actingAs($admin)->post(route('teacher.family-login-monitor.invite.send'), [
         'family_billing_id' => $family->id,
         'phone' => '0171111222',
     ]);
@@ -48,6 +48,34 @@ it('sends manual invite from stuck tac row and stores 24-hour token', function (
         'phone' => '0171111222',
         'normalized_phone' => '60171111222',
     ]);
+});
+
+it('blocks teacher from sending manual invite from stuck tac row', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $family = FamilyBilling::query()->create([
+        'family_code' => 'SSP-INVT-BLOCK',
+        'billing_year' => 2026,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    FamilyBillingPhone::query()->create([
+        'family_billing_id' => $family->id,
+        'phone' => '0172222333',
+        'normalized_phone' => '60172222333',
+    ]);
+
+    $response = $this->actingAs($teacher)->post(route('teacher.family-login-monitor.invite.send'), [
+        'family_billing_id' => $family->id,
+        'phone' => '0172222333',
+    ]);
+
+    $response->assertForbidden();
 });
 
 it('logs parent in via invite link and redirects to checkout', function () {

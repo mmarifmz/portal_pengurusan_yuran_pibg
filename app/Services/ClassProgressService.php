@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FamilyBilling;
+use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\MalaysianPhone;
@@ -185,22 +186,20 @@ class ClassProgressService
                 'family_code' => $entry['family_code'],
                 'parent_name' => $entry['parent_name'],
                 'parent_phone' => $showPhone ? $entry['parent_phone'] : null,
+                'has_previous_year_payment' => (bool) $entry['previous_year_paid'],
                 'previous_year_paid' => (bool) $entry['previous_year_paid'],
                 'previous_paid_year' => $entry['previous_paid_year'],
+                'previous_paid_year_short' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
                 'previous_year_badge' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
                 'previous_year_tooltip' => $entry['previous_paid_year'] !== null
-                    ? sprintf('Paid previous year (%d)', (int) $entry['previous_paid_year'])
+                    ? sprintf('Bayar tahun %d', (int) $entry['previous_paid_year'])
                     : null,
             ]);
     }
 
     public function hasPaidPreviousYear(string $familyCode, int $previousYear): bool
     {
-        $metric = $this->paymentReportingService
-            ->familyMetricsForYear($previousYear)
-            ->firstWhere('family_code', $familyCode);
-
-        return (bool) ($metric['is_fully_paid'] ?? false);
+        return $this->mostRecentPreviousPaidYearByFamily($previousYear + 1)->get($familyCode) === $previousYear;
     }
 
     public function getPreviousPaidYearBadge(?int $year): ?string
@@ -382,7 +381,7 @@ class ClassProgressService
      */
     private function mostRecentPreviousPaidYearByFamily(int $billingYear): Collection
     {
-        return FamilyBilling::query()
+        $paidFamilyBillingYears = FamilyBilling::query()
             ->with(['paymentPlan.installments'])
             ->where('billing_year', '<', $billingYear)
             ->orderByDesc('billing_year')
@@ -401,5 +400,36 @@ class ClassProgressService
 
                 return $carry;
             }, collect());
+
+        $legacyPaidYears = LegacyStudentPayment::query()
+            ->where('source_year', '<', $billingYear)
+            ->where('payment_status', 'paid')
+            ->whereNotNull('family_code')
+            ->where('family_code', '!=', '')
+            ->orderByDesc('source_year')
+            ->get(['family_code', 'source_year'])
+            ->reduce(function (Collection $carry, LegacyStudentPayment $payment): Collection {
+                $familyCode = trim((string) $payment->family_code);
+
+                if ($familyCode === '' || $carry->has($familyCode)) {
+                    return $carry;
+                }
+
+                $carry->put($familyCode, (int) $payment->source_year);
+
+                return $carry;
+            }, collect());
+
+        return $paidFamilyBillingYears
+            ->merge($legacyPaidYears)
+            ->keys()
+            ->mapWithKeys(function (string $familyCode) use ($paidFamilyBillingYears, $legacyPaidYears): array {
+                return [
+                    $familyCode => max(
+                        (int) ($paidFamilyBillingYears->get($familyCode) ?? 0),
+                        (int) ($legacyPaidYears->get($familyCode) ?? 0),
+                    ),
+                ];
+            });
     }
 }

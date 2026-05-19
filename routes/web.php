@@ -230,13 +230,13 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family.payments.export');
     Route::get('/teacher/family-login-monitor', [TeacherFamilyLoginMonitorController::class, 'index'])
-        ->middleware('role:teacher,super_teacher,system_admin')
+        ->middleware('role:system_admin')
         ->name('teacher.family-login-monitor');
     Route::post('/teacher/family-login-monitor/invite', [TeacherFamilyLoginMonitorController::class, 'sendInvite'])
-        ->middleware('role:teacher,super_teacher,system_admin')
+        ->middleware('role:system_admin')
         ->name('teacher.family-login-monitor.invite.send');
     Route::get('/teacher/finance-accounting', [TeacherFinanceAccountingController::class, 'index'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.finance-accounting');
     Route::get('/teacher/class-progress', [TeacherClassProgressController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
@@ -264,10 +264,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.contribution-leaderboard');
     Route::get('/teacher/social-tags', [TeacherSocialTagController::class, 'index'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.social-tags.index');
     Route::post('/teacher/social-tags/bulk-apply', [TeacherSocialTagController::class, 'bulkApply'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.social-tags.bulk-apply');
     Route::post('/teacher/social-tags/tags', [TeacherSocialTagController::class, 'storeTag'])
         ->middleware('role:system_admin')
@@ -279,7 +279,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:system_admin')
         ->name('teacher.social-tags.tags.destroy');
     Route::get('/teacher/finance-accounting/export', [TeacherFinanceAccountingController::class, 'export'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.finance-accounting.export');
     Route::get('/teacher/records/duplicates/{student}/review', [TeacherRecordsController::class, 'reviewDuplicate'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
@@ -401,10 +401,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:system_admin')
         ->name('system.visitor-logs.export');
     Route::get('/system/payment-funnel-monitor', [PaymentFunnelMonitorController::class, 'index'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('system.payment-funnel-monitor.index');
     Route::post('/system/payment-funnel-monitor/check-gateway', [PaymentFunnelMonitorController::class, 'checkGatewayStatus'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('system.payment-funnel-monitor.check-gateway');
     Route::post('/system/payment-funnel-monitor/deactivate-bill', [PaymentFunnelMonitorController::class, 'deactivateBill'])
         ->middleware('role:system_admin')
@@ -443,6 +443,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/super-teacher/teachers/assign-existing', [TeacherUserManagementController::class, 'assignExisting'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.assign-existing');
+    Route::post('/super-teacher/onboarding-invites/generate', [TeacherUserManagementController::class, 'generateOnboardingInvites'])
+        ->middleware('role:system_admin')
+        ->name('super-teacher.teachers.onboarding-invites.generate');
     Route::get('/super-teacher/teachers/import/sample', [TeacherUserManagementController::class, 'downloadSampleCsv'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.import.sample');
@@ -465,11 +468,14 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.disable-whatsapp-all');
     Route::post('/super-teacher/teachers/{user}/send-invite', [TeacherUserManagementController::class, 'sendInvite'])
-        ->middleware('role:super_teacher,system_admin')
+        ->middleware('role:system_admin')
         ->name('super-teacher.teachers.send-invite');
     Route::post('/super-teacher/teachers/send-invite-all', [TeacherUserManagementController::class, 'sendInviteToAllActiveTeachers'])
-        ->middleware('role:super_teacher,system_admin')
+        ->middleware('role:system_admin')
         ->name('super-teacher.teachers.send-invite-all');
+    Route::post('/super-teacher/teachers/{user}/mark-invite-sent', [TeacherUserManagementController::class, 'markInviteSent'])
+        ->middleware('role:system_admin')
+        ->name('super-teacher.teachers.mark-invite-sent');
     Route::delete('/super-teacher/teachers/{user}', [TeacherUserManagementController::class, 'destroy'])
         ->middleware('role:super_teacher,system_admin')
         ->name('super-teacher.teachers.destroy');

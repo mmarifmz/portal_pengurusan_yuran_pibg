@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\FamilyBilling;
+use App\Models\LegacyStudentPayment;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\WhatsAppMessageQueue;
@@ -179,9 +180,11 @@ it('teacher can load own class details with previous year payer marker', functio
     expect($paidEntries->count())->toBe(1);
     expect($unpaidEntries->count())->toBe(1);
     expect((bool) $unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_paid'])->toBeTrue();
+    expect((bool) $unpaidEntries->firstWhere('family_code', 'SSP-CW2')['has_previous_year_payment'])->toBeTrue();
     expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_paid_year'])->toBe(now()->year - 1);
+    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_paid_year_short'])->toBe(substr((string) (now()->year - 1), -2));
     expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_badge'])->toBe(substr((string) (now()->year - 1), -2));
-    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_tooltip'])->toBe('Paid previous year ('.(now()->year - 1).')');
+    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_tooltip'])->toBe('Bayar tahun '.(now()->year - 1));
 });
 
 it('teacher can view other class details without admin whatsapp access', function () {
@@ -234,6 +237,43 @@ it('summary totals match expanded list totals for own class', function () {
 
     expect(count($details['paid_entries']))->toBe($details['summary']['fully_paid_families'] + $details['summary']['partial_paid_families']);
     expect(count($details['unpaid_entries']))->toBe($details['summary']['unpaid_families']);
+});
+
+it('unpaid family inherits most recent previous paid year from family or legacy history without affecting current totals', function () {
+    [$teacher] = seedClassProgressWhatsappDataset();
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-CW2',
+        'billing_year' => now()->year - 2,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    LegacyStudentPayment::query()->create([
+        'student_no' => 'LEGACY-SSP-CW2',
+        'family_code' => 'SSP-CW2',
+        'student_name' => 'Badrul Hakim',
+        'class_name' => '1 Angsana',
+        'source_year' => now()->year - 1,
+        'payment_status' => 'paid',
+        'amount_due' => 100,
+        'amount_paid' => 100,
+    ]);
+
+    $details = $this->actingAs($teacher)
+        ->getJson(route('teacher.class-progress.details', ['class' => '1 Angsana']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    $entry = collect($details['unpaid_entries'])->firstWhere('family_code', 'SSP-CW2');
+
+    expect($entry['previous_paid_year'])->toBe(now()->year - 1);
+    expect($entry['previous_paid_year_short'])->toBe(substr((string) (now()->year - 1), -2));
+    expect($entry['previous_year_badge'])->toBe(substr((string) (now()->year - 1), -2));
+    expect($entry['previous_year_tooltip'])->toBe('Bayar tahun '.(now()->year - 1));
+    expect($details['summary']['unpaid_families'])->toBe(1);
+    expect((float) $details['summary']['completion_percent'])->toBe(50.0);
 });
 
 function seedClassProgressWhatsappDataset(

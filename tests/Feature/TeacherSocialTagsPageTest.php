@@ -6,9 +6,9 @@ use App\Models\FamilyBilling;
 use App\Models\Student;
 use App\Models\User;
 
-it('shows teacher social tag analytics with hashtag counts', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('shows social tag analytics for system admin with hashtag counts', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -42,7 +42,7 @@ it('shows teacher social tag analytics with hashtag counts', function () {
         'is_rmt' => false,
     ]);
 
-    $response = $this->actingAs($teacher)->get(route('teacher.social-tags.index', [
+    $response = $this->actingAs($admin)->get(route('teacher.social-tags.index', [
         'billing_year' => $billingYear,
     ]));
 
@@ -53,6 +53,17 @@ it('shows teacher social tag analytics with hashtag counts', function () {
     $response->assertSee('#RMT');
     $response->assertSee('Tag Count by Class');
     $response->assertSee('1 Angsana');
+});
+
+it('blocks teacher from teacher social tags page', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $response = $this->actingAs($teacher)->get(route('teacher.social-tags.index'));
+
+    $response->assertForbidden();
 });
 
 it('blocks parent from teacher social tags page', function () {
@@ -66,11 +77,11 @@ it('blocks parent from teacher social tags page', function () {
     $response->assertForbidden();
 });
 
-it('bulk applies selected social tag to matched student family', function () {
+it('allows system admin to bulk apply selected social tag to matched student family', function () {
     $this->withoutMiddleware();
 
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -109,7 +120,7 @@ it('bulk applies selected social tag to matched student family', function () {
         'is_b40' => false,
     ]);
 
-    $response = $this->actingAs($teacher)->post(route('teacher.social-tags.bulk-apply'), [
+    $response = $this->actingAs($admin)->post(route('teacher.social-tags.bulk-apply'), [
         'billing_year' => $billingYear,
         'class_name' => 'all',
         'tag_field' => 'is_b40',
@@ -122,9 +133,9 @@ it('bulk applies selected social tag to matched student family', function () {
     expect(Student::query()->where('family_code', 'SSP-BULK2')->where('is_b40', true)->count())->toBe(0);
 });
 
-it('shows filtered student list when selecting social tag group', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('shows filtered student list for system admin when selecting social tag group', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -154,7 +165,7 @@ it('shows filtered student list when selecting social tag group', function () {
         'is_b40' => false,
     ]);
 
-    $response = $this->actingAs($teacher)->get(route('teacher.social-tags.index', [
+    $response = $this->actingAs($admin)->get(route('teacher.social-tags.index', [
         'billing_year' => $billingYear,
         'tag_filter' => 'is_b40',
     ]));
@@ -198,11 +209,11 @@ it('allows system admin to create, update, and delete unused master social tags'
     expect(SocialTag::query()->whereKey($tag->id)->exists())->toBeFalse();
 });
 
-it('bulk applies real social tags onto family billing assignments', function () {
+it('allows system admin to bulk apply real social tags onto family billing assignments', function () {
     $this->withoutMiddleware();
 
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -231,7 +242,7 @@ it('bulk applies real social tags onto family billing assignments', function () 
         'billing_year' => $billingYear,
     ]);
 
-    $response = $this->actingAs($teacher)->post(route('teacher.social-tags.bulk-apply'), [
+    $response = $this->actingAs($admin)->post(route('teacher.social-tags.bulk-apply'), [
         'billing_year' => $billingYear,
         'class_name' => 'all',
         'social_tag_id' => $socialTag->id,

@@ -130,9 +130,11 @@
                         <h2 class="text-lg font-semibold text-zinc-900">Family Social Tags</h2>
                         <p class="mt-1 text-xs text-zinc-500">Paparan ini mengambil tag sosial terkini untuk bil family tahun {{ $currentBilling->billing_year }}.</p>
                     </div>
-                    <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                        Open Tag Count Page
-                    </a>
+                    @if (auth()->user()->isSystemAdmin())
+                        <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                            Open Tag Count Page
+                        </a>
+                    @endif
                 </div>
                 <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Current Tags</p>

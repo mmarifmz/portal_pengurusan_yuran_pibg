@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ImportTeacherUsersRequest;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\TeacherOnboardingInviteService;
 use App\Services\TeacherUserImportService;
-use App\Services\TeacherUserInviteService;
 use App\Services\TeacherRoleAssignmentService;
 use App\Support\MalaysianPhone;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -21,7 +23,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class TeacherUserManagementController extends Controller
 {
     public function __construct(
-        private readonly TeacherUserInviteService $teacherUserInviteService,
+        private readonly TeacherOnboardingInviteService $teacherOnboardingInviteService,
         private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
     ) {
     }
@@ -42,6 +44,15 @@ class TeacherUserManagementController extends Controller
             ->orderBy('name')
             ->get()
             ->loadMissing('roles');
+        $inviteEligibleTeachers = $teacherUsers
+            ->filter(fn (User $user): bool => $user->is_active && filled($user->phone))
+            ->values();
+        $canManageOnboardingInvites = (bool) $request->user()?->isSystemAdmin();
+        $onboardingBatch = $request->session()->get('teacher_onboarding_batch', []);
+        $onboardingSettings = $request->session()->get('teacher_onboarding_settings', []);
+        $defaultDashboardUrl = $this->teacherOnboardingInviteService->defaultDashboardUrl();
+        $defaultTemporaryPassword = (string) config('teacher.default_password', '');
+        $previewTeacher = $inviteEligibleTeachers->first();
 
         $existingUserMatches = $existingUserSearch !== ''
             ? $this->searchAssignableUsers($existingUserSearch)
@@ -52,6 +63,17 @@ class TeacherUserManagementController extends Controller
             'classOptions' => $classOptions,
             'existingUserSearch' => $existingUserSearch,
             'existingUserMatches' => $existingUserMatches,
+            'inviteEligibleTeachers' => $inviteEligibleTeachers,
+            'canManageOnboardingInvites' => $canManageOnboardingInvites,
+            'onboardingBatch' => is_array($onboardingBatch) ? $onboardingBatch : [],
+            'onboardingDefaultPassword' => (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword),
+            'onboardingDashboardUrl' => (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl),
+            'onboardingResetSelected' => (bool) ($onboardingSettings['reset_passwords'] ?? false),
+            'onboardingPreviewMessage' => $this->teacherOnboardingInviteService->buildPreview(
+                $previewTeacher instanceof User ? $previewTeacher : null,
+                (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword),
+                (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl),
+            ),
         ]);
     }
 
@@ -66,7 +88,6 @@ class TeacherUserManagementController extends Controller
             'phone' => $this->phoneFormatRules($normalizedPhone),
             'class_name' => ['nullable', 'string', Rule::in($allowedClasses)],
             'receive_whatsapp_notifications' => ['nullable', 'boolean'],
-            'password' => ['nullable', 'confirmed', Password::min(8)],
         ]);
 
         $match = $this->teacherRoleAssignmentService->matchExistingUser(
@@ -120,12 +141,6 @@ class TeacherUserManagementController extends Controller
                 ));
         }
 
-        if (blank($validated['password'] ?? null)) {
-            throw ValidationException::withMessages([
-                'password' => 'A password is required only when creating a brand new teacher account.',
-            ]);
-        }
-
         $teacher = User::create([
             'name' => $validated['name'],
             'email' => mb_strtolower(trim((string) $validated['email'])),
@@ -135,8 +150,10 @@ class TeacherUserManagementController extends Controller
             'is_active' => true,
             'receive_whatsapp_notifications' => $receiveWhatsappNotifications,
             'invite_status' => 'pending',
-            'password' => $validated['password'],
-        ]);
+            'password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+        ] + (User::onboardingInviteColumnsAvailable() ? [
+            'onboarding_invite_status' => 'not_generated',
+        ] : []));
         $teacher->assignRole('teacher');
 
         return redirect()
@@ -218,7 +235,12 @@ class TeacherUserManagementController extends Controller
         }
 
         $request->session()->put('teacher_import_summary', $summary);
-        $request->session()->put('teacher_manual_invites', $summary['manual_invites']);
+        $request->session()->put('teacher_onboarding_batch', $summary['manual_invites']);
+        $request->session()->put('teacher_onboarding_settings', [
+            'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+            'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+            'reset_passwords' => false,
+        ]);
 
         return redirect()
             ->route('super-teacher.teachers.index')
@@ -414,76 +436,57 @@ class TeacherUserManagementController extends Controller
     public function sendInvite(User $user): RedirectResponse
     {
         abort_unless($user->hasRole('teacher'), 404);
+        abort_unless(request()->user()?->isSystemAdmin(), 403);
 
-        $result = $this->teacherUserInviteService->send($user);
-
-        if ($result['status'] === 'failed') {
-            throw ValidationException::withMessages([
-                'invite' => $result['error'] ?? 'Unable to send the teacher invite.',
-            ]);
-        }
+        $result = $this->teacherOnboardingInviteService->generateForTeacher(
+            $user,
+            $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+            $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+            false,
+            request()->user(),
+        );
 
         return redirect()
             ->route('super-teacher.teachers.index')
-            ->with('status', $result['status'] === 'sent'
-                ? "Invite sent to {$user->name}."
-                : "Invite prepared for manual sending to {$user->name}.")
-            ->with('teacher_manual_invites', $result['status'] === 'manual'
-                ? [[
-                    'name' => (string) $user->name,
-                    'phone' => (string) $user->phone,
-                    'message' => $result['message'],
-                ]]
-                : []);
+            ->with('status', "Manual WhatsApp onboarding invite generated for {$user->name}.")
+            ->with('teacher_onboarding_settings', [
+                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                'reset_passwords' => false,
+            ])
+            ->with('teacher_onboarding_batch', [$result]);
     }
 
     public function sendInviteToAllActiveTeachers(): RedirectResponse
     {
+        abort_unless(request()->user()?->isSystemAdmin(), 403);
+
         $teachers = User::query()
             ->withRole('teacher')
             ->where('is_active', true)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
             ->orderBy('name')
             ->get();
-
-        $sent = 0;
-        $manual = 0;
-        $failed = 0;
-        $skipped = 0;
-        $manualInvites = [];
-
-        foreach ($teachers as $teacher) {
-            if (blank($teacher->phone)) {
-                $skipped++;
-
-                continue;
-            }
-
-            $result = $this->teacherUserInviteService->send($teacher);
-
-            if ($result['status'] === 'sent') {
-                $sent++;
-
-                continue;
-            }
-
-            if ($result['status'] === 'manual') {
-                $manual++;
-                $manualInvites[] = [
-                    'name' => (string) $teacher->name,
-                    'phone' => (string) $teacher->phone,
-                    'message' => $result['message'],
-                ];
-
-                continue;
-            }
-
-            $failed++;
-        }
+        $results = $this->teacherOnboardingInviteService->generateForTeachers(
+            $teachers,
+            [
+                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                'reset_passwords' => false,
+            ],
+            request()->user(),
+        );
 
         return redirect()
             ->route('super-teacher.teachers.index')
-            ->with('status', "Teacher invites processed. Sent {$sent}, manual {$manual}, failed {$failed}, skipped {$skipped}.")
-            ->with('teacher_manual_invites', $manualInvites);
+            ->with('status', 'Manual WhatsApp onboarding invite links generated for all active teachers with WhatsApp numbers.')
+            ->with('teacher_onboarding_settings', [
+                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                'reset_passwords' => false,
+            ])
+            ->with('teacher_onboarding_batch', $results);
     }
 
     public function assignExisting(Request $request): RedirectResponse
@@ -524,22 +527,14 @@ class TeacherUserManagementController extends Controller
         );
 
         $manualInvites = [];
-        if ($request->boolean('send_teacher_invite')) {
-            $invite = $this->teacherUserInviteService->send($result['user']);
-
-            if ($invite['status'] === 'failed') {
-                throw ValidationException::withMessages([
-                    'send_teacher_invite' => $invite['error'] ?? 'Unable to send the teacher invite.',
-                ]);
-            }
-
-            if ($invite['status'] === 'manual') {
-                $manualInvites[] = [
-                    'name' => (string) $result['user']->name,
-                    'phone' => (string) $result['user']->phone,
-                    'message' => $invite['message'],
-                ];
-            }
+        if ($request->boolean('send_teacher_invite') && $request->user()?->isSystemAdmin()) {
+            $manualInvites[] = $this->teacherOnboardingInviteService->generateForTeacher(
+                $result['user'],
+                $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                false,
+                $request->user(),
+            );
         }
 
         return redirect()
@@ -549,7 +544,78 @@ class TeacherUserManagementController extends Controller
                 $result['user']->name,
                 $className
             ))
-            ->with('teacher_manual_invites', $manualInvites);
+            ->with('teacher_onboarding_settings', [
+                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                'reset_passwords' => false,
+            ])
+            ->with('teacher_onboarding_batch', $manualInvites);
+    }
+
+    public function generateOnboardingInvites(Request $request): RedirectResponse|JsonResponse
+    {
+        abort_unless($request->user()?->isSystemAdmin(), 403);
+
+        $validated = $request->validate([
+            'teacher_ids' => ['nullable', 'array'],
+            'teacher_ids.*' => ['integer', 'exists:users,id'],
+            'temporary_password' => ['required', 'string', 'min:8', 'max:120'],
+            'dashboard_url' => ['required', 'url', 'max:255'],
+            'reset_passwords' => ['nullable', 'boolean'],
+        ]);
+
+        $teachers = $this->selectedInviteTeachers($validated['teacher_ids'] ?? null);
+
+        if ($teachers->isEmpty()) {
+            throw ValidationException::withMessages([
+                'teacher_ids' => 'Select at least one active teacher with a WhatsApp number.',
+            ]);
+        }
+
+        $results = $this->teacherOnboardingInviteService->generateForTeachers(
+            $teachers,
+            [
+                'temporary_password' => (string) $validated['temporary_password'],
+                'dashboard_url' => (string) $validated['dashboard_url'],
+                'reset_passwords' => (bool) ($validated['reset_passwords'] ?? false),
+            ],
+            $request->user(),
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'generated_count' => count($results),
+                'invites' => $results,
+            ]);
+        }
+
+        return redirect()
+            ->route('super-teacher.teachers.index')
+            ->with('status', "Generated {$teachers->count()} manual WhatsApp onboarding invite link(s).")
+            ->with('teacher_onboarding_settings', [
+                'temporary_password' => (string) $validated['temporary_password'],
+                'dashboard_url' => (string) $validated['dashboard_url'],
+                'reset_passwords' => (bool) ($validated['reset_passwords'] ?? false),
+            ])
+            ->with('teacher_onboarding_batch', $results);
+    }
+
+    public function markInviteSent(Request $request, User $user): RedirectResponse
+    {
+        abort_unless($request->user()?->isSystemAdmin(), 403);
+        abort_unless($user->hasRole('teacher'), 404);
+
+        $validated = $request->validate([
+            'confirm_mark_sent' => ['required', 'accepted'],
+        ]);
+
+        unset($validated);
+
+        $this->teacherOnboardingInviteService->markSent($user, $request->user());
+
+        return redirect()
+            ->route('super-teacher.teachers.index')
+            ->with('status', "Manual WhatsApp onboarding invite marked as sent for {$user->name}.");
     }
 
     /**
@@ -565,6 +631,25 @@ class TeacherUserManagementController extends Controller
             ->map(fn ($className) => (string) $className)
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  ?array<int, int|string>  $teacherIds
+     * @return Collection<int, User>
+     */
+    private function selectedInviteTeachers(?array $teacherIds = null): Collection
+    {
+        return User::query()
+            ->withRole('teacher')
+            ->when(
+                is_array($teacherIds) && $teacherIds !== [],
+                fn ($query) => $query->whereIn('id', collect($teacherIds)->map(fn ($id) => (int) $id)->all())
+            )
+            ->where('is_active', true)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->orderBy('name')
+            ->get();
     }
 
     /**

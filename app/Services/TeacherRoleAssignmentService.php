@@ -134,6 +134,10 @@ class TeacherRoleAssignmentService
                 $user->invite_status = 'pending';
             }
 
+            if (User::onboardingInviteColumnsAvailable() && blank($user->onboarding_invite_status)) {
+                $user->onboarding_invite_status = 'not_generated';
+            }
+
             if (($attributes['enable_whatsapp'] ?? false)
                 && filled($user->phone)
                 && filled($user->class_name)) {

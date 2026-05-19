@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Support\MalaysianPhone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use SplFileObject;
 
@@ -17,7 +16,7 @@ class TeacherUserImportService
     private const REQUIRED_COLUMNS = ['Name', 'Phone', 'Email', 'Group', 'Class'];
 
     public function __construct(
-        private readonly TeacherUserInviteService $teacherUserInviteService,
+        private readonly TeacherOnboardingInviteService $teacherOnboardingInviteService,
         private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
     ) {
     }
@@ -282,8 +281,11 @@ class TeacherUserImportService
 
             if ($existing === null) {
                 $user->name = $name;
-                $user->password = Str::password(16);
+                $user->password = $this->teacherOnboardingInviteService->defaultTemporaryPassword();
                 $user->invite_status = 'pending';
+                if (User::onboardingInviteColumnsAvailable()) {
+                    $user->onboarding_invite_status = 'not_generated';
+                }
                 $user->role = 'teacher';
                 $wasCreated = true;
             } else {
@@ -331,16 +333,24 @@ class TeacherUserImportService
             }
 
             if ($options['send_invite']) {
-                $invite = $this->teacherUserInviteService->send($user);
+                $invite = $this->teacherOnboardingInviteService->generateForTeacher(
+                    $user,
+                    $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+                    $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+                    false,
+                    null,
+                );
                 $inviteStatus = $invite['status'];
-
-                if ($invite['status'] === 'manual') {
-                    $manualInvite = [
-                        'name' => (string) $user->name,
-                        'phone' => (string) $user->phone,
-                        'message' => $invite['message'],
-                    ];
-                }
+                $manualInvite = [
+                    'teacher_id' => $invite['teacher_id'],
+                    'name' => $invite['name'],
+                    'phone' => $invite['phone'],
+                    'class_name' => $invite['class_name'],
+                    'status' => $invite['status'],
+                    'status_label' => $invite['status_label'],
+                    'message' => $invite['message'],
+                    'wa_link' => $invite['wa_link'],
+                ];
             }
         });
 
@@ -362,7 +372,7 @@ class TeacherUserImportService
     }
 
     /**
-     * @return array{failed:bool,error:string,created:bool,updated:bool,assigned_to_class:bool,converted_existing_user:bool,no_class_matched:bool,class_assignment_skipped:bool,duplicate_email_updated:bool,whatsapp_enabled:bool,invite_status:?string,manual_invite:?array{name:string,phone:string,message:string},warnings:array<int, string>}
+     * @return array{failed:bool,error:string,created:bool,updated:bool,assigned_to_class:bool,converted_existing_user:bool,no_class_matched:bool,class_assignment_skipped:bool,duplicate_email_updated:bool,whatsapp_enabled:bool,invite_status:?string,manual_invite:?array<string, mixed>,warnings:array<int, string>}
      */
     private function failedRow(string $message): array
     {

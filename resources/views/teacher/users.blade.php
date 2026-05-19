@@ -2,13 +2,12 @@
     @php
         $formatWhatsapp = static fn (?string $phone): string => filled($phone) ? (str_starts_with((string) $phone, '+') ? (string) $phone : '+'.ltrim((string) $phone, '+')) : '—';
         $importSummary = session('teacher_import_summary');
-        $manualInvites = session('teacher_manual_invites', []);
+        $onboardingBatch = is_array($onboardingBatch ?? null) ? $onboardingBatch : [];
         $inviteBadge = static function (?string $status): array {
-            return match ($status ?: 'pending') {
-                'sent' => ['Sent', 'border-emerald-200 bg-emerald-50 text-emerald-700'],
-                'failed' => ['Failed', 'border-rose-200 bg-rose-50 text-rose-700'],
-                'manual' => ['Manual', 'border-amber-200 bg-amber-50 text-amber-700'],
-                default => ['Pending', 'border-zinc-200 bg-zinc-50 text-zinc-700'],
+            return match ($status ?: 'not_generated') {
+                'sent_manual' => ['Sent Manually', 'border-emerald-200 bg-emerald-50 text-emerald-700'],
+                'generated' => ['Generated', 'border-sky-200 bg-sky-50 text-sky-700'],
+                default => ['Not Generated', 'border-zinc-200 bg-zinc-50 text-zinc-700'],
             };
         };
         $roleBadge = static function (string $role): array {
@@ -20,6 +19,9 @@
                 default => [str_replace('_', ' ', ucfirst($role)), 'border-zinc-200 bg-zinc-50 text-zinc-700'],
             };
         };
+        $batchByTeacherId = collect($onboardingBatch)
+            ->filter(fn ($invite) => is_array($invite) && isset($invite['teacher_id']))
+            ->keyBy('teacher_id');
     @endphp
 
     <div class="space-y-6">
@@ -121,23 +123,6 @@
             </section>
         @endif
 
-        @if (is_array($manualInvites) && $manualInvites !== [])
-            <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-                <h2 class="text-lg font-semibold text-zinc-900">Manual Invite Messages</h2>
-                <p class="mt-1 text-sm text-zinc-600">WhatsApp auto-send is unavailable for these invite attempts, so the prepared messages are shown here once for manual sending.</p>
-
-                <div class="mt-4 space-y-4">
-                    @foreach ($manualInvites as $manualInvite)
-                        <div class="rounded-xl border border-white/80 bg-white p-4">
-                            <p class="text-sm font-semibold text-zinc-900">{{ $manualInvite['name'] ?? 'Teacher' }}</p>
-                            <p class="text-xs text-zinc-500">{{ $manualInvite['phone'] ?? 'No phone' }}</p>
-                            <textarea readonly rows="8" class="mt-3 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-800">{{ $manualInvite['message'] ?? '' }}</textarea>
-                        </div>
-                    @endforeach
-                </div>
-            </section>
-        @endif
-
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -168,8 +153,8 @@
                 </label>
                 <label class="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700">
                     <input type="hidden" name="send_teacher_invites" value="0">
-                    <input type="checkbox" name="send_teacher_invites" value="1" @checked(old('send_teacher_invites', true)) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
-                    Send teacher dashboard invite after import
+                    <input type="checkbox" name="send_teacher_invites" value="1" @checked(old('send_teacher_invites', true) && $canManageOnboardingInvites) @disabled(! $canManageOnboardingInvites) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed" />
+                    Prepare manual WhatsApp onboarding invite after import
                 </label>
 
                 <div class="lg:col-span-3">
@@ -182,7 +167,7 @@
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Create New Teacher</h2>
-            <p class="mt-1 text-sm text-zinc-500">If the email or WhatsApp number already belongs to an existing user, the system upgrades that account with Teacher access instead of creating a duplicate.</p>
+            <p class="mt-1 text-sm text-zinc-500">If the email or WhatsApp number already belongs to an existing user, the system upgrades that account with Teacher access instead of creating a duplicate. New teacher accounts will use the configured default onboarding password.</p>
             <form method="POST" action="{{ route('super-teacher.teachers.store') }}" class="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 @csrf
                 <label class="text-sm font-medium text-zinc-700">
@@ -206,14 +191,9 @@
                         @endforeach
                     </select>
                 </label>
-                <label class="text-sm font-medium text-zinc-700">
-                    Password (new accounts only)
-                    <input name="password" type="password" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
-                </label>
-                <label class="text-sm font-medium text-zinc-700">
-                    Confirm Password
-                    <input name="password_confirmation" type="password" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
-                </label>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 md:col-span-2 lg:col-span-2">
+                    Password sementara untuk akaun guru baharu akan menggunakan tetapan semasa dalam <code>TEACHER_DEFAULT_PASSWORD</code>.
+                </div>
                 <div class="md:col-span-2 lg:col-span-3">
                     <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
                         <input type="hidden" name="receive_whatsapp_notifications" value="0">
@@ -284,8 +264,8 @@
                             </label>
                             <label class="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
                                 <input type="hidden" name="send_teacher_invite" value="0">
-                                <input type="checkbox" name="send_teacher_invite" value="1" @checked(old('send_teacher_invite', true)) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
-                                Send teacher access invite using the user’s existing account
+                                <input type="checkbox" name="send_teacher_invite" value="1" @checked(old('send_teacher_invite', true) && $canManageOnboardingInvites) @disabled(! $canManageOnboardingInvites) class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed" />
+                                Prepare manual WhatsApp onboarding invite using the user’s existing account
                             </label>
                         </div>
                         <div class="lg:col-span-3">
@@ -297,6 +277,128 @@
                 @endif
             @endif
         </section>
+
+        @if ($canManageOnboardingInvites)
+            <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-zinc-900">Teacher Onboarding Invite</h2>
+                        <p class="text-sm text-zinc-500">Generate WhatsApp Web invite messages for teachers to access the Teacher Dashboard.</p>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('super-teacher.teachers.onboarding-invites.generate') }}" class="mt-4 grid gap-4 lg:grid-cols-2">
+                    @csrf
+                    @foreach ($inviteEligibleTeachers as $eligibleTeacher)
+                        <input type="hidden" name="teacher_ids[]" value="{{ $eligibleTeacher->id }}" />
+                    @endforeach
+
+                    <label class="text-sm font-medium text-zinc-700">
+                        Basic Temporary Password
+                        <input id="onboardingTemporaryPassword" name="temporary_password" type="text" value="{{ $onboardingDefaultPassword }}" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    </label>
+
+                    <label class="text-sm font-medium text-zinc-700">
+                        Teacher Dashboard URL
+                        <input id="onboardingDashboardUrl" name="dashboard_url" type="url" value="{{ $onboardingDashboardUrl }}" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    </label>
+
+                    <div class="lg:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Gunakan password sementara yang mudah dikongsi tetapi minta guru tukar password selepas login pertama.
+                    </div>
+
+                    <label class="inline-flex items-start gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700 lg:col-span-2">
+                        <input id="resetSelectedTeachers" type="checkbox" name="reset_passwords" value="1" @checked($onboardingResetSelected) class="mt-0.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                        <span>Reset selected teachers to default password before invite</span>
+                    </label>
+
+                    <label class="text-sm font-medium text-zinc-700 lg:col-span-2">
+                        Message Preview
+                        <textarea id="onboardingPreviewMessage" readonly rows="14" class="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-800">{{ $onboardingPreviewMessage }}</textarea>
+                    </label>
+
+                    <div class="lg:col-span-2 flex flex-wrap items-center gap-3">
+                        <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                            Generate Invite Links
+                        </button>
+                        <p class="text-xs text-zinc-500">Mesej akan dibuka secara manual melalui WhatsApp Web. Tiada API WaSender atau queue digunakan.</p>
+                    </div>
+                </form>
+
+                <div class="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-zinc-900">Batch Manual Invite Helper</h3>
+                            <p class="text-sm text-zinc-500">Senarai guru aktif yang mempunyai nombor WhatsApp untuk dibuka secara manual satu demi satu melalui WhatsApp Web.</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 space-y-3">
+                        @forelse ($inviteEligibleTeachers as $eligibleTeacher)
+                            @php
+                                $generatedInvite = $batchByTeacherId->get($eligibleTeacher->id);
+                                [$onboardingStatusLabel, $onboardingStatusClasses] = $inviteBadge($eligibleTeacher->onboarding_invite_status);
+                            @endphp
+                            <div class="rounded-xl border border-white bg-white p-4 shadow-sm" data-onboarding-row="{{ $eligibleTeacher->id }}">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-zinc-900">{{ $eligibleTeacher->name }}</p>
+                                        <p class="mt-1 text-xs text-zinc-500">{{ $eligibleTeacher->class_name ?: 'No class assigned' }} · {{ $formatWhatsapp($eligibleTeacher->phone) }}</p>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $onboardingStatusClasses }}" data-onboarding-status-badge>{{ $onboardingStatusLabel }}</span>
+                                            @if ($eligibleTeacher->onboarding_invite_sent_manually_at)
+                                                <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                                    {{ optional($eligibleTeacher->onboarding_invite_sent_manually_at)->format('d M Y H:i') }}
+                                                </span>
+                                            @elseif ($eligibleTeacher->onboarding_invite_generated_at)
+                                                <span class="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+                                                    {{ optional($eligibleTeacher->onboarding_invite_generated_at)->format('d M Y H:i') }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <div class="w-full max-w-3xl space-y-3">
+                                        <textarea readonly rows="7" class="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-800" data-onboarding-message>{{ $generatedInvite['message'] ?? '' }}</textarea>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                data-generate-whatsapp
+                                                data-teacher-id="{{ $eligibleTeacher->id }}"
+                                                class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                                            >
+                                                Open WhatsApp
+                                            </button>
+                                            <button
+                                                type="button"
+                                                data-copy-message
+                                                class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                                            >
+                                                Copy Message
+                                            </button>
+                                            <form method="POST" action="{{ route('super-teacher.teachers.mark-invite-sent', $eligibleTeacher) }}" class="inline-flex items-center gap-2">
+                                                @csrf
+                                                <label class="inline-flex items-center gap-2 text-xs font-medium text-zinc-700">
+                                                    <input type="checkbox" name="confirm_mark_sent" value="1" class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
+                                                    Mark as sent manually
+                                                </label>
+                                                <button type="submit" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                                                    Mark Sent
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-xl border border-zinc-200 bg-white px-4 py-6 text-sm text-zinc-500">
+                                Tiada guru aktif dengan nombor WhatsApp untuk dijana onboarding invite.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </section>
+        @endif
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -315,12 +417,6 @@
                         @csrf
                         <button type="submit" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                             Disable WA for All
-                        </button>
-                    </form>
-                    <form method="POST" action="{{ route('super-teacher.teachers.send-invite-all') }}" onsubmit="return confirm('Send teacher dashboard invites to all active teachers with WhatsApp numbers?');">
-                        @csrf
-                        <button type="submit" class="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-700">
-                            Send Invite to All Active Teachers
                         </button>
                     </form>
                 </div>
@@ -345,7 +441,7 @@
                     <tbody class="divide-y divide-zinc-200 bg-white">
                         @forelse ($teacherUsers as $teacherUser)
                             @php
-                                [$inviteStatusLabel, $inviteStatusClasses] = $inviteBadge($teacherUser->invite_status);
+                                [$inviteStatusLabel, $inviteStatusClasses] = $inviteBadge($teacherUser->onboarding_invite_status);
                             @endphp
                             <tr>
                                 <td class="px-4 py-3 font-medium text-zinc-900">{{ $teacherUser->name }}</td>
@@ -384,7 +480,7 @@
                                     <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $inviteStatusClasses }}">{{ $inviteStatusLabel }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-xs text-zinc-600">
-                                    {{ optional($teacherUser->teacher_invite_sent_at)->format('d M Y H:i') ?: '—' }}
+                                    {{ optional($teacherUser->onboarding_invite_sent_manually_at)->format('d M Y H:i') ?: optional($teacherUser->onboarding_invite_generated_at)->format('d M Y H:i') ?: '—' }}
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-2">
@@ -410,12 +506,22 @@
                                             </button>
                                         </form>
 
-                                        <form method="POST" action="{{ route('super-teacher.teachers.send-invite', $teacherUser) }}">
-                                            @csrf
-                                            <button type="submit" @disabled(blank($teacherUser->phone) || ! $teacherUser->is_active) class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50">
-                                                Send Invite
-                                            </button>
-                                        </form>
+                                        @if ($canManageOnboardingInvites)
+                                            @if (blank($teacherUser->phone))
+                                                <button type="button" disabled class="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 opacity-70">
+                                                    Missing phone
+                                                </button>
+                                            @else
+                                                <button
+                                                    type="button"
+                                                    data-generate-whatsapp
+                                                    data-teacher-id="{{ $teacherUser->id }}"
+                                                    class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                >
+                                                    Invite via WhatsApp
+                                                </button>
+                                            @endif
+                                        @endif
 
                                         <form method="POST" action="{{ route('super-teacher.teachers.destroy', $teacherUser) }}" onsubmit="return confirm('Delete this teacher account? This action cannot be undone.');">
                                             @csrf
@@ -497,6 +603,97 @@
                 }
 
                 row.classList.toggle('hidden');
+            });
+        });
+
+        const onboardingGenerateUrl = @json($canManageOnboardingInvites ? route('super-teacher.teachers.onboarding-invites.generate') : null);
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const onboardingPasswordInput = document.getElementById('onboardingTemporaryPassword');
+        const onboardingUrlInput = document.getElementById('onboardingDashboardUrl');
+        const onboardingPreview = document.getElementById('onboardingPreviewMessage');
+        const resetSelectedTeachers = document.getElementById('resetSelectedTeachers');
+
+        document.querySelectorAll('[data-copy-message]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const messageField = button.closest('[data-onboarding-row]')?.querySelector('[data-onboarding-message]');
+                const message = messageField?.value || '';
+
+                if (!message) {
+                    return;
+                }
+
+                await navigator.clipboard.writeText(message);
+                button.textContent = 'Copied';
+                window.setTimeout(() => {
+                    button.textContent = 'Copy Message';
+                }, 1500);
+            });
+        });
+
+        document.querySelectorAll('[data-generate-whatsapp]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                if (!onboardingGenerateUrl) {
+                    return;
+                }
+
+                if (resetSelectedTeachers?.checked && !window.confirm('Reset selected teachers to the temporary password before generating this invite?')) {
+                    return;
+                }
+
+                const teacherId = button.getAttribute('data-teacher-id');
+                if (!teacherId) {
+                    return;
+                }
+
+                button.disabled = true;
+
+                try {
+                    const response = await fetch(onboardingGenerateUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            teacher_ids: [teacherId],
+                            temporary_password: onboardingPasswordInput?.value || '',
+                            dashboard_url: onboardingUrlInput?.value || '',
+                            reset_passwords: resetSelectedTeachers?.checked ? 1 : 0,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.message || 'Unable to generate onboarding invite.');
+                    }
+
+                    const invite = Array.isArray(data.invites) ? data.invites[0] : null;
+                    if (!invite) {
+                        throw new Error('Unable to generate onboarding invite.');
+                    }
+
+                    const row = document.querySelector(`[data-onboarding-row="${invite.teacher_id}"]`);
+                    const messageField = row?.querySelector('[data-onboarding-message]');
+                    const statusBadge = row?.querySelector('[data-onboarding-status-badge]');
+                    if (messageField) {
+                        messageField.value = invite.message || '';
+                    }
+                    if (statusBadge) {
+                        statusBadge.textContent = invite.status_label || 'Generated';
+                        statusBadge.className = 'inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700';
+                    }
+                    if (onboardingPreview) {
+                        onboardingPreview.value = invite.message || onboardingPreview.value;
+                    }
+
+                    window.open(invite.wa_link, '_blank', 'noopener');
+                } catch (error) {
+                    window.alert(error.message || 'Unable to generate onboarding invite.');
+                } finally {
+                    button.disabled = false;
+                }
             });
         });
     </script>
