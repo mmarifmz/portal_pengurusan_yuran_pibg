@@ -72,6 +72,13 @@ class PaymentReportingService
             ->flatMap(function (array $metric, string $familyCode) use ($studentsByFamily, $billingYear): array {
                 /** @var Collection<int, Student> $familyStudents */
                 $familyStudents = $studentsByFamily->get($familyCode, collect());
+                $familyStudentNames = $familyStudents
+                    ->pluck('full_name')
+                    ->filter()
+                    ->map(fn ($name): string => trim((string) $name))
+                    ->filter()
+                    ->values()
+                    ->all();
 
                 if ($familyStudents->isEmpty()) {
                     return [];
@@ -80,7 +87,7 @@ class PaymentReportingService
                 return $familyStudents
                     ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
                     ->filter(fn (Collection $classStudents, string $className): bool => $className !== '')
-                    ->map(function (Collection $classStudents, string $className) use ($metric, $familyCode, $billingYear): array {
+                    ->map(function (Collection $classStudents, string $className) use ($metric, $familyCode, $billingYear, $familyStudentNames): array {
                         /** @var Student|null $primaryStudent */
                         $primaryStudent = $classStudents->first();
 
@@ -92,8 +99,11 @@ class PaymentReportingService
                             'student_names' => $classStudents
                                 ->pluck('full_name')
                                 ->filter()
+                                ->map(fn ($name): string => trim((string) $name))
+                                ->filter()
                                 ->values()
                                 ->all(),
+                            'family_student_names' => $familyStudentNames,
                             'parent_name' => $primaryStudent?->parent_name ? (string) $primaryStudent->parent_name : '',
                             'parent_phone' => $primaryStudent?->parent_phone ? (string) $primaryStudent->parent_phone : '',
                         ];

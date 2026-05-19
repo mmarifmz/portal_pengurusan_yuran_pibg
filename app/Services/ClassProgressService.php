@@ -146,17 +146,30 @@ class ClassProgressService
             ->filter(fn (array $entry): bool => in_array((string) $entry['status_key'], ['paid', 'partial'], true))
             ->sortByDesc(fn (array $entry): int => $entry['latest_payment_at']?->getTimestamp() ?? 0)
             ->values()
-            ->map(fn (array $entry): array => [
-                'student_names' => $entry['student_names'],
-                'student_name_display' => implode(', ', $entry['student_names']),
-                'family_code' => $entry['family_code'],
-                'paid_amount' => (float) $entry['paid_amount'],
-                'donation_total' => (float) $entry['donation_total'],
-                'latest_payment_at' => $entry['latest_payment_at']?->format('d M Y'),
-                'status_key' => $entry['status_key'],
-                'status_label' => $entry['status_key'] === 'partial' ? 'Sebahagian' : 'Selesai',
-                'is_partial' => (bool) $entry['is_partial'],
-            ]);
+            ->map(function (array $entry): array {
+                $primaryStudentName = (string) ($entry['student_names'][0] ?? $entry['family_student_names'][0] ?? '');
+                $siblingNames = collect($entry['family_student_names'] ?? [])
+                    ->map(fn ($name): string => trim((string) $name))
+                    ->filter()
+                    ->reject(fn (string $name): bool => $name === $primaryStudentName)
+                    ->values()
+                    ->all();
+
+                return [
+                    'student_names' => $entry['student_names'],
+                    'family_student_names' => $entry['family_student_names'] ?? $entry['student_names'],
+                    'primary_student_name' => $primaryStudentName,
+                    'sibling_names' => $siblingNames,
+                    'student_name_display' => $primaryStudentName,
+                    'family_code' => $entry['family_code'],
+                    'paid_amount' => (float) $entry['paid_amount'],
+                    'donation_total' => (float) $entry['donation_total'],
+                    'latest_payment_at' => $entry['latest_payment_at']?->format('d M Y'),
+                    'status_key' => $entry['status_key'],
+                    'status_label' => $entry['status_key'] === 'partial' ? 'Sebahagian' : 'Selesai',
+                    'is_partial' => (bool) $entry['is_partial'],
+                ];
+            });
     }
 
     /**
@@ -180,21 +193,34 @@ class ClassProgressService
                 [fn (array $entry): string => implode(', ', $entry['student_names']), 'asc'],
             ])
             ->values()
-            ->map(fn (array $entry): array => [
-                'student_names' => $entry['student_names'],
-                'student_name_display' => implode(', ', $entry['student_names']),
-                'family_code' => $entry['family_code'],
-                'parent_name' => $entry['parent_name'],
-                'parent_phone' => $showPhone ? $entry['parent_phone'] : null,
-                'has_previous_year_payment' => (bool) $entry['previous_year_paid'],
-                'previous_year_paid' => (bool) $entry['previous_year_paid'],
-                'previous_paid_year' => $entry['previous_paid_year'],
-                'previous_paid_year_short' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
-                'previous_year_badge' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
-                'previous_year_tooltip' => $entry['previous_paid_year'] !== null
-                    ? sprintf('Bayar tahun %d', (int) $entry['previous_paid_year'])
-                    : null,
-            ]);
+            ->map(function (array $entry) use ($showPhone): array {
+                $primaryStudentName = (string) ($entry['student_names'][0] ?? $entry['family_student_names'][0] ?? '');
+                $siblingNames = collect($entry['family_student_names'] ?? [])
+                    ->map(fn ($name): string => trim((string) $name))
+                    ->filter()
+                    ->reject(fn (string $name): bool => $name === $primaryStudentName)
+                    ->values()
+                    ->all();
+
+                return [
+                    'student_names' => $entry['student_names'],
+                    'family_student_names' => $entry['family_student_names'] ?? $entry['student_names'],
+                    'primary_student_name' => $primaryStudentName,
+                    'sibling_names' => $siblingNames,
+                    'student_name_display' => $primaryStudentName,
+                    'family_code' => $entry['family_code'],
+                    'parent_name' => $entry['parent_name'],
+                    'parent_phone' => $showPhone ? $entry['parent_phone'] : null,
+                    'has_previous_year_payment' => (bool) $entry['previous_year_paid'],
+                    'previous_year_paid' => (bool) $entry['previous_year_paid'],
+                    'previous_paid_year' => $entry['previous_paid_year'],
+                    'previous_paid_year_short' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
+                    'previous_year_badge' => $this->getPreviousPaidYearBadge($entry['previous_paid_year']),
+                    'previous_year_tooltip' => $entry['previous_paid_year'] !== null
+                        ? sprintf('Bayar tahun %d', (int) $entry['previous_paid_year'])
+                        : null,
+                ];
+            });
     }
 
     public function hasPaidPreviousYear(string $familyCode, int $previousYear): bool

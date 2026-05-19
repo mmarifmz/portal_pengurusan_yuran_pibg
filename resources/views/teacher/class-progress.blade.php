@@ -491,6 +491,38 @@
                 });
             }
 
+            function splitStudentNames(entry) {
+                const primaryFromEntry = String(entry.primary_student_name || '').trim();
+                const siblingsFromEntry = Array.isArray(entry.sibling_names)
+                    ? entry.sibling_names.map((name) => String(name || '').trim()).filter((name) => name !== '')
+                    : [];
+
+                if (primaryFromEntry) {
+                    return {
+                        primaryName: primaryFromEntry,
+                        siblingNames: siblingsFromEntry,
+                    };
+                }
+
+                const names = Array.isArray(entry.student_names)
+                    ? entry.student_names.filter((name) => String(name || '').trim() !== '')
+                    : [];
+
+                if (!names.length) {
+                    const fallbackName = String(entry.student_name_display || '').trim();
+
+                    return {
+                        primaryName: fallbackName,
+                        siblingNames: [],
+                    };
+                }
+
+                return {
+                    primaryName: String(names[0] || '').trim(),
+                    siblingNames: names.slice(1).map((name) => String(name || '').trim()).filter((name) => name !== ''),
+                };
+            }
+
             function renderPaidEntries(entries) {
                 if (!entries.length) {
                     return `
@@ -500,11 +532,19 @@
                     `;
                 }
 
-                return entries.map((entry, index) => `
+                return entries.map((entry, index) => {
+                    const { primaryName, siblingNames } = splitStudentNames(entry);
+
+                    return `
                     <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 ${entry.is_partial ? 'border-amber-200 bg-amber-50/70' : ''}">
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                                <p class="font-semibold text-zinc-900">${index + 1}. ${escapeHtml(entry.student_name_display)}</p>
+                                <p class="font-semibold text-zinc-900">${index + 1}. ${escapeHtml(primaryName)}</p>
+                                ${siblingNames.length ? `
+                                    <p class="mt-1 text-xs text-zinc-500">
+                                        Adik-beradik: <span class="font-medium text-zinc-600">${escapeHtml(siblingNames.join(', '))}</span>
+                                    </p>
+                                ` : ''}
                                 <div class="mt-2 flex flex-wrap gap-2 text-xs">
                                     <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
                                         ${formatCurrency(entry.paid_amount)}
@@ -524,7 +564,8 @@
                             ${entry.latest_payment_at ? `<span class="text-xs font-medium text-zinc-500">${escapeHtml(entry.latest_payment_at)}</span>` : ''}
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             }
 
             function renderUnpaidEntries(entries) {
@@ -536,12 +577,15 @@
                     `;
                 }
 
-                return entries.map((entry, index) => `
+                return entries.map((entry, index) => {
+                    const { primaryName, siblingNames } = splitStudentNames(entry);
+
+                    return `
                     <div class="rounded-2xl border px-4 py-4 ${entry.previous_year_paid ? 'border-emerald-200 bg-emerald-50/70' : 'border-zinc-200 bg-zinc-50'}">
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-semibold ${entry.previous_year_paid ? 'text-emerald-700' : 'text-zinc-900'}">${index + 1}. ${escapeHtml(entry.student_name_display)}</p>
+                                    <p class="font-semibold ${entry.previous_year_paid ? 'text-emerald-700' : 'text-zinc-900'}">${index + 1}. ${escapeHtml(primaryName)}</p>
                                     ${entry.previous_year_badge ? `
                                         <span
                                             title="${escapeHtml(entry.previous_year_tooltip || '')}"
@@ -551,6 +595,11 @@
                                         </span>
                                     ` : ''}
                                 </div>
+                                ${siblingNames.length ? `
+                                    <p class="mt-1 text-xs text-zinc-500">
+                                        Adik-beradik: <span class="font-medium text-zinc-600">${escapeHtml(siblingNames.join(', '))}</span>
+                                    </p>
+                                ` : ''}
                                 <div class="mt-2 space-y-1 text-xs text-zinc-600">
                                     ${entry.parent_name ? `<p>Penjaga: <span class="font-medium text-zinc-700">${escapeHtml(entry.parent_name)}</span></p>` : ''}
                                     ${entry.parent_phone ? `<p>Telefon: <span class="font-medium text-zinc-700">${escapeHtml(entry.parent_phone)}</span></p>` : ''}
@@ -558,7 +607,8 @@
                             </div>
                         </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             }
 
             function renderClassDetails(details) {

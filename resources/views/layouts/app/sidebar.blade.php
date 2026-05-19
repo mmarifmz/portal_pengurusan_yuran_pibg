@@ -87,10 +87,10 @@
                             <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
                                 {{ __('Student Directory') }}
                             </flux:sidebar.item>
-                            <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
-                                {{ __('Leaderboard Sumbangan') }}
-                            </flux:sidebar.item>
                         @endif
+                        <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
+                            {{ __('Leaderboard Sumbangan') }}
+                        </flux:sidebar.item>
                     @endif
 
                     @if (auth()->user()->isSystemAdmin())
