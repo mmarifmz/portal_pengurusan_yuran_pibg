@@ -48,6 +48,63 @@ class PaymentReportingService
     }
 
     /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function familyMetricsByClass(int $billingYear): Collection
+    {
+        $familyMetrics = $this->familyMetricsForYear($billingYear)->keyBy('family_code');
+
+        if ($familyMetrics->isEmpty()) {
+            return collect();
+        }
+
+        $studentsByFamily = Student::query()
+            ->active()
+            ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $familyMetrics->keys()->all())
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->orderBy('full_name')
+            ->get(['family_code', 'class_name', 'full_name', 'parent_name', 'parent_phone'])
+            ->groupBy(fn (Student $student): string => (string) $student->family_code);
+
+        return $familyMetrics
+            ->flatMap(function (array $metric, string $familyCode) use ($studentsByFamily, $billingYear): array {
+                /** @var Collection<int, Student> $familyStudents */
+                $familyStudents = $studentsByFamily->get($familyCode, collect());
+
+                if ($familyStudents->isEmpty()) {
+                    return [];
+                }
+
+                return $familyStudents
+                    ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+                    ->filter(fn (Collection $classStudents, string $className): bool => $className !== '')
+                    ->map(function (Collection $classStudents, string $className) use ($metric, $familyCode, $billingYear): array {
+                        /** @var Student|null $primaryStudent */
+                        $primaryStudent = $classStudents->first();
+
+                        return [
+                            ...$metric,
+                            'family_code' => $familyCode,
+                            'billing_year' => $billingYear,
+                            'class_name' => $className,
+                            'student_names' => $classStudents
+                                ->pluck('full_name')
+                                ->filter()
+                                ->values()
+                                ->all(),
+                            'parent_name' => $primaryStudent?->parent_name ? (string) $primaryStudent->parent_name : '',
+                            'parent_phone' => $primaryStudent?->parent_phone ? (string) $primaryStudent->parent_phone : '',
+                        ];
+                    })
+                    ->values()
+                    ->all();
+            })
+            ->values();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function familyMetric(FamilyBilling $billing, float $donationTotal = 0): array
@@ -155,38 +212,13 @@ class PaymentReportingService
      */
     public function classLeaderboard(int $billingYear): Collection
     {
-        $familyMetrics = $this->familyMetricsForYear($billingYear)->keyBy('family_code');
+        $classFamilyMetrics = $this->familyMetricsByClass($billingYear);
 
-        if ($familyMetrics->isEmpty()) {
+        if ($classFamilyMetrics->isEmpty()) {
             return collect();
         }
 
-        $dominantClassByFamily = Student::query()
-            ->active()
-            ->where('billing_year', $billingYear)
-            ->whereIn('family_code', $familyMetrics->keys()->all())
-            ->whereNotNull('class_name')
-            ->where('class_name', '!=', '')
-            ->get(['family_code', 'class_name'])
-            ->groupBy(fn (Student $student): string => (string) $student->family_code)
-            ->map(function (Collection $familyStudents): string {
-                return (string) ($familyStudents
-                    ->pluck('class_name')
-                    ->map(fn ($className): string => trim((string) $className))
-                    ->filter()
-                    ->countBy()
-                    ->sortDesc()
-                    ->keys()
-                    ->first() ?? 'Unassigned');
-            });
-
-        return $familyMetrics
-            ->map(function (array $metric, string $familyCode) use ($dominantClassByFamily, $billingYear): array {
-                $metric['class_name'] = (string) ($dominantClassByFamily->get($familyCode) ?? 'Unassigned');
-                $metric['billing_year'] = $billingYear;
-
-                return $metric;
-            })
+        return $classFamilyMetrics
             ->groupBy('class_name')
             ->map(function (Collection $rows, string $className) use ($billingYear): array {
                 $totalFamilies = $rows->count();

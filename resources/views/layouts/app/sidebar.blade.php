@@ -73,7 +73,7 @@
                         </flux:sidebar.item>
                     @endif
 
-                    @if (! auth()->user()->isParentOnly() && ! $isReadOnlyTeacher)
+                    @if (! auth()->user()->isParentOnly())
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
                             {{ __('School Calendar') }}
                         </flux:sidebar.item>

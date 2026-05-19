@@ -337,6 +337,46 @@ it('summary totals match expanded list totals for own class', function () {
     expect(count($details['unpaid_entries']))->toBe($details['summary']['unpaid_families']);
 });
 
+it('class progress keeps sibling families visible in every related class', function () {
+    [$teacher, , $admin] = seedClassProgressWhatsappDataset();
+
+    Student::query()->create([
+        'student_no' => 'STU-SSP-CW1-ALAMANDA',
+        'family_code' => 'SSP-CW1',
+        'full_name' => 'Aina Sofea Sibling',
+        'class_name' => '1 Alamanda',
+        'parent_name' => 'Parent Aina Sofea',
+        'parent_phone' => '0123456789',
+        'parent_email' => 'aina.sofea@example.test',
+        'status' => 'active',
+        'billing_year' => (int) now()->year,
+        'annual_fee' => 100,
+        'total_fee' => 100,
+        'paid_amount' => 100,
+    ]);
+
+    $angsanaDetails = $this->actingAs($teacher)
+        ->getJson(route('teacher.class-progress.details', ['class' => '1 Angsana']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    $alamandaDetails = $this->actingAs($teacher)
+        ->getJson(route('teacher.class-progress.details', ['class' => '1 Alamanda']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    expect(collect($angsanaDetails['paid_entries'])->pluck('family_code')->all())->toContain('SSP-CW1');
+    expect(collect($alamandaDetails['paid_entries'])->pluck('family_code')->all())->toContain('SSP-CW1');
+    expect($alamandaDetails['summary']['total_families'])->toBe(2);
+
+    $preview = $this->actingAs($admin)
+        ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Alamanda']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    expect((float) $preview['class_stats']['payment_percentage'])->toBe(100.0);
+});
+
 it('unpaid family inherits most recent previous paid year from family or legacy history without affecting current totals', function () {
     [$teacher] = seedClassProgressWhatsappDataset();
 

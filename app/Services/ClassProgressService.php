@@ -216,59 +216,42 @@ class ClassProgressService
      */
     private function buildDataset(int $billingYear): array
     {
-        $familyMetrics = $this->paymentReportingService->familyMetricsForYear($billingYear)->keyBy('family_code');
+        $classFamilyMetrics = $this->paymentReportingService->familyMetricsByClass($billingYear);
+
+        if ($classFamilyMetrics->isEmpty()) {
+            return [
+                'summary_rows' => collect(),
+                'summary_lookup' => collect(),
+                'families' => collect(),
+            ];
+        }
+
         $previousPaidYearByFamily = $this->mostRecentPreviousPaidYearByFamily($billingYear);
 
         $billings = FamilyBilling::query()
             ->with([
                 'paymentTransactions' => fn ($query) => $query->where('status', 'success')->orderByDesc('paid_at'),
-                'students' => fn ($query) => $query->active()->where('billing_year', $billingYear)->orderBy('full_name'),
             ])
             ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $classFamilyMetrics->pluck('family_code')->unique()->all())
             ->get()
             ->keyBy('family_code');
 
-        $families = $familyMetrics
-            ->map(function (array $metric, string $familyCode) use ($billings, $billingYear, $previousPaidYearByFamily): array {
+        $families = $classFamilyMetrics
+            ->map(function (array $metric) use ($billings, $previousPaidYearByFamily): array {
+                $familyCode = (string) $metric['family_code'];
                 /** @var FamilyBilling|null $billing */
                 $billing = $billings->get($familyCode);
-                $students = $billing?->students?->filter(fn (Student $student): bool => trim((string) $student->class_name) !== '') ?? collect();
-                $dominantClass = (string) ($students
-                    ->pluck('class_name')
-                    ->map(fn ($className): string => trim((string) $className))
-                    ->filter()
-                    ->countBy()
-                    ->sortDesc()
-                    ->keys()
-                    ->first() ?? 'Unassigned');
-                $classStudents = $students
-                    ->filter(fn (Student $student): bool => trim((string) $student->class_name) === $dominantClass)
-                    ->values();
-                $primaryStudent = $classStudents->first() ?? $students->first();
                 $latestTransaction = $billing?->paymentTransactions?->first();
-
                 $previousPaidYear = $previousPaidYearByFamily->get($familyCode);
 
                 return [
-                    'family_code' => $familyCode,
-                    'billing_year' => $billingYear,
-                    'class_name' => $dominantClass,
-                    'student_names' => $classStudents->pluck('full_name')->filter()->values()->all(),
-                    'parent_name' => $primaryStudent?->parent_name ? (string) $primaryStudent->parent_name : '',
-                    'parent_phone' => $primaryStudent?->parent_phone ? (string) $primaryStudent->parent_phone : '',
-                    'status_key' => (string) $metric['status_key'],
-                    'is_partial' => (bool) ($metric['is_partial'] ?? false),
-                    'is_fully_paid' => (bool) ($metric['is_fully_paid'] ?? false),
-                    'paid_amount' => (float) ($metric['paid_amount'] ?? 0),
-                    'donation_total' => (float) ($metric['donation_total'] ?? 0),
-                    'total_collection' => (float) ($metric['total_collection'] ?? 0),
-                    'balance_amount' => (float) ($metric['balance_amount'] ?? 0),
+                    ...$metric,
                     'latest_payment_at' => $latestTransaction?->paid_at_for_display,
                     'previous_year_paid' => $previousPaidYear !== null,
                     'previous_paid_year' => $previousPaidYear !== null ? (int) $previousPaidYear : null,
                 ];
             })
-            ->filter(fn (array $family): bool => $family['class_name'] !== 'Unassigned')
             ->values();
 
         $teachersByClass = User::query()
