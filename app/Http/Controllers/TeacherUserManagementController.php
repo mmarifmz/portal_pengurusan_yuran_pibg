@@ -54,7 +54,15 @@ class TeacherUserManagementController extends Controller
         $resolvedTemporaryPassword = (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword);
         $resolvedDashboardUrl = (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl);
         $resolvedResetPasswords = (bool) ($onboardingSettings['reset_passwords'] ?? false);
-        $previewTeacher = $inviteEligibleTeachers->first();
+        $rememberedTeacherIds = collect((array) ($onboardingSettings['teacher_ids'] ?? []))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values();
+        $selectedInviteTeacherIds = $rememberedTeacherIds->isNotEmpty()
+            ? $inviteEligibleTeachers->pluck('id')->intersect($rememberedTeacherIds)->values()
+            : $inviteEligibleTeachers->pluck('id')->values();
+        $previewTeacher = $inviteEligibleTeachers->firstWhere(fn (User $teacher): bool => $selectedInviteTeacherIds->contains($teacher->id))
+            ?? $inviteEligibleTeachers->first();
         $onboardingInvitePreviews = $canManageOnboardingInvites
             ? $inviteEligibleTeachers->mapWithKeys(function (User $teacher) use ($resolvedTemporaryPassword, $resolvedDashboardUrl, $resolvedResetPasswords): array {
                 return [
@@ -83,6 +91,7 @@ class TeacherUserManagementController extends Controller
             'onboardingDefaultPassword' => $resolvedTemporaryPassword,
             'onboardingDashboardUrl' => $resolvedDashboardUrl,
             'onboardingResetSelected' => $resolvedResetPasswords,
+            'selectedInviteTeacherIds' => $selectedInviteTeacherIds->all(),
             'onboardingPreviewMessage' => $this->teacherOnboardingInviteService->buildPreview(
                 $previewTeacher instanceof User ? $previewTeacher : null,
                 $resolvedTemporaryPassword,
@@ -599,6 +608,7 @@ class TeacherUserManagementController extends Controller
             'temporary_password' => (string) $validated['temporary_password'],
             'dashboard_url' => (string) $validated['dashboard_url'],
             'reset_passwords' => (bool) ($validated['reset_passwords'] ?? false),
+            'teacher_ids' => collect($teachers)->pluck('id')->all(),
         ]);
 
         if ($request->expectsJson()) {
@@ -629,6 +639,11 @@ class TeacherUserManagementController extends Controller
             'temporary_password' => (string) ($validated['temporary_password'] ?? $request->session()->get('teacher_onboarding_settings.temporary_password', $this->teacherOnboardingInviteService->defaultTemporaryPassword())),
             'dashboard_url' => (string) ($validated['dashboard_url'] ?? $request->session()->get('teacher_onboarding_settings.dashboard_url', $this->teacherOnboardingInviteService->defaultDashboardUrl())),
             'reset_passwords' => (bool) ($validated['reset_passwords'] ?? $request->session()->get('teacher_onboarding_settings.reset_passwords', false)),
+            'teacher_ids' => collect((array) $request->input('teacher_ids', $request->session()->get('teacher_onboarding_settings.teacher_ids', [])))
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0)
+                ->values()
+                ->all(),
         ]);
 
         $this->teacherOnboardingInviteService->markSent($user, $request->user());
@@ -650,6 +665,11 @@ class TeacherUserManagementController extends Controller
             'temporary_password' => (string) ($settings['temporary_password'] ?? $this->teacherOnboardingInviteService->defaultTemporaryPassword()),
             'dashboard_url' => (string) ($settings['dashboard_url'] ?? $this->teacherOnboardingInviteService->defaultDashboardUrl()),
             'reset_passwords' => (bool) ($settings['reset_passwords'] ?? false),
+            'teacher_ids' => collect((array) ($settings['teacher_ids'] ?? $request->session()->get('teacher_onboarding_settings.teacher_ids', [])))
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0)
+                ->values()
+                ->all(),
         ];
 
         $request->session()->put('teacher_onboarding_settings', $normalized);

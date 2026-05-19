@@ -19,6 +19,10 @@
             };
         };
         $invitePreviewByTeacherId = collect($onboardingInvitePreviews ?? [])->keyBy(fn ($invite, $teacherId) => (int) $teacherId);
+        $selectedInviteTeacherIds = collect(old('teacher_ids', $selectedInviteTeacherIds ?? $inviteEligibleTeachers->pluck('id')->all()))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values();
     @endphp
 
     <div class="space-y-6">
@@ -286,9 +290,44 @@
 
                 <form method="POST" action="{{ route('super-teacher.teachers.onboarding-invites.generate') }}" class="mt-4 grid gap-4 lg:grid-cols-2">
                     @csrf
-                    @foreach ($inviteEligibleTeachers as $eligibleTeacher)
-                        <input type="hidden" name="teacher_ids[]" value="{{ $eligibleTeacher->id }}" />
-                    @endforeach
+
+                    <div class="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 lg:col-span-2">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold text-zinc-900">Select Teachers</p>
+                                <p class="text-xs text-zinc-500">Choose which teachers should receive generated WhatsApp Web invite messages.</p>
+                            </div>
+                            <label class="inline-flex items-center gap-2 text-xs font-semibold text-zinc-700">
+                                <input
+                                    type="checkbox"
+                                    data-select-all-teachers
+                                    @checked($selectedInviteTeacherIds->count() === $inviteEligibleTeachers->count() && $inviteEligibleTeachers->isNotEmpty())
+                                    class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                                >
+                                Select all
+                            </label>
+                        </div>
+
+                        <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            @foreach ($inviteEligibleTeachers as $eligibleTeacher)
+                                <label class="flex items-start gap-3 rounded-xl border border-white bg-white px-3 py-3 text-sm text-zinc-700 shadow-sm">
+                                    <input
+                                        type="checkbox"
+                                        name="teacher_ids[]"
+                                        value="{{ $eligibleTeacher->id }}"
+                                        data-teacher-checkbox
+                                        @checked($selectedInviteTeacherIds->contains($eligibleTeacher->id))
+                                        class="mt-1 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold text-zinc-900">{{ $eligibleTeacher->name }}</span>
+                                        <span class="mt-1 block text-xs text-zinc-500">{{ $eligibleTeacher->class_name ?: 'No class assigned' }}</span>
+                                        <span class="block text-xs text-zinc-500">{{ $formatWhatsapp($eligibleTeacher->phone) }}</span>
+                                    </span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
 
                     <label class="text-sm font-medium text-zinc-700">
                         Basic Temporary Password
@@ -336,7 +375,16 @@
                                 $generatedInvite = $invitePreviewByTeacherId->get($eligibleTeacher->id);
                                 [$onboardingStatusLabel, $onboardingStatusClasses] = $inviteBadge($eligibleTeacher->onboarding_invite_status);
                             @endphp
-                            <div id="onboarding-teacher-{{ $eligibleTeacher->id }}" class="rounded-xl border border-white bg-white p-4 shadow-sm" data-onboarding-row="{{ $eligibleTeacher->id }}" data-wa-phone="{{ $generatedInvite['wa_phone'] ?? '' }}">
+                            <div
+                                id="onboarding-teacher-{{ $eligibleTeacher->id }}"
+                                class="rounded-xl border border-white bg-white p-4 shadow-sm"
+                                data-onboarding-row="{{ $eligibleTeacher->id }}"
+                                data-wa-phone="{{ $generatedInvite['wa_phone'] ?? '' }}"
+                                data-teacher-name="{{ e($eligibleTeacher->name) }}"
+                                data-teacher-email="{{ e($eligibleTeacher->email) }}"
+                                data-class-name="{{ e($eligibleTeacher->class_name ?: 'Belum ditetapkan') }}"
+                                data-uses-existing-account="{{ ($generatedInvite['uses_existing_account'] ?? ($eligibleTeacher->hasMultipleRoles() || $eligibleTeacher->role !== 'teacher')) ? '1' : '0' }}"
+                            >
                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                         <p class="text-sm font-semibold text-zinc-900">{{ $eligibleTeacher->name }}</p>
@@ -379,6 +427,11 @@
                                                 <input type="hidden" name="dashboard_url" value="{{ $onboardingDashboardUrl }}">
                                                 <input type="hidden" name="reset_passwords" value="{{ $onboardingResetSelected ? 1 : 0 }}">
                                                 <input type="hidden" name="scroll_to" value="onboarding-teacher-{{ $eligibleTeacher->id }}">
+                                                <span data-selected-teacher-inputs class="hidden">
+                                                    @foreach ($selectedInviteTeacherIds as $selectedTeacherId)
+                                                        <input type="hidden" name="teacher_ids[]" value="{{ $selectedTeacherId }}">
+                                                    @endforeach
+                                                </span>
                                                 <label class="inline-flex items-center gap-2 text-xs font-medium text-zinc-700">
                                                     <input type="checkbox" name="confirm_mark_sent" value="1" class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
                                                     Mark as sent manually
@@ -399,6 +452,35 @@
                     </div>
                 </div>
             </section>
+        @endif
+
+        @if ($canManageOnboardingInvites)
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    const selectAll = document.querySelector('[data-select-all-teachers]');
+                    const checkboxes = Array.from(document.querySelectorAll('[data-teacher-checkbox]'));
+
+                    if (!selectAll || checkboxes.length === 0) {
+                        return;
+                    }
+
+                    const syncSelectAllState = () => {
+                        selectAll.checked = checkboxes.every((checkbox) => checkbox.checked);
+                    };
+
+                    selectAll.addEventListener('change', function () {
+                        checkboxes.forEach((checkbox) => {
+                            checkbox.checked = selectAll.checked;
+                        });
+                    });
+
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.addEventListener('change', syncSelectAllState);
+                    });
+
+                    syncSelectAllState();
+                });
+            </script>
         @endif
 
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -614,6 +696,7 @@
         const onboardingPreview = document.getElementById('onboardingPreviewMessage');
         const resetSelectedTeachers = document.getElementById('resetSelectedTeachers');
         const onboardingRows = Array.from(document.querySelectorAll('[data-onboarding-row]'));
+        const onboardingTeacherCheckboxes = Array.from(document.querySelectorAll('[data-teacher-checkbox]'));
 
         function buildWhatsAppWebUrl(waPhone, message) {
             if (!waPhone || !message) {
@@ -623,11 +706,76 @@
             return `https://wa.me/${String(waPhone).replace(/^\+/, '')}?text=${encodeURIComponent(message)}`;
         }
 
+        function selectedTeacherIds() {
+            return onboardingTeacherCheckboxes
+                .filter((checkbox) => checkbox.checked)
+                .map((checkbox) => checkbox.value);
+        }
+
+        function buildOnboardingMessage(row) {
+            if (!row) {
+                return 'Pratonton mesej akan dipaparkan di sini selepas sekurang-kurangnya seorang guru yang layak ditemui.';
+            }
+
+            const teacherName = row.getAttribute('data-teacher-name') || '';
+            const teacherEmail = row.getAttribute('data-teacher-email') || '';
+            const className = row.getAttribute('data-class-name') || 'Belum ditetapkan';
+            const temporaryPassword = onboardingPasswordInput?.value || '';
+            const dashboardUrl = onboardingUrlInput?.value || '';
+            const usesExistingAccount = !resetSelectedTeachers?.checked && row.getAttribute('data-uses-existing-account') === '1';
+            const lines = [
+                `Assalamualaikum / Salam Sejahtera *${teacherName}*,`,
+                'Akaun *Guru Kelas* untuk *Portal Yuran PIBG SK Sri Petaling* telah disediakan.',
+                `🏫 *Kelas:* ${className}`,
+                `🔗 *Pautan Login:*\n${dashboardUrl}`,
+                `📧 *Emel Login:*\n${teacherEmail}`,
+            ];
+
+            if (usesExistingAccount) {
+                lines.push('🔐 *Akses Akaun:*\nGunakan login sedia ada cikgu untuk masuk ke sistem.');
+            } else {
+                lines.push(`🔐 *Kata Laluan Sementara:*\n${temporaryPassword}`);
+            }
+
+            lines.push('Selepas login, cikgu boleh menggunakan fungsi berikut:');
+            lines.push('📊 *Class Progress*\nMelihat ringkasan bayaran kelas, jumlah telah bayar, belum bayar, bayaran sebahagian, sumbangan tambahan dan baki tertunggak.');
+            lines.push('✅ *Senarai Telah Bayar*\nMelihat senarai murid/keluarga yang telah membuat bayaran serta jumlah bayaran.');
+            lines.push('⏳ *Senarai Belum Bayar*\nMelihat senarai murid/keluarga yang belum membuat bayaran.');
+            lines.push('🔵 *Pill Tahun Lepas*\nJika terdapat tanda kecil seperti *25*, ini bermaksud keluarga tersebut pernah membuat bayaran pada tahun 2025 tetapi belum membayar untuk sesi semasa.');
+            lines.push('📂 *Kelas Lain*\nCikgu juga boleh membuka kelas lain untuk semakan ringkas status bayaran.');
+            lines.push('Mohon cikgu login dan tukar kata laluan selepas login pertama jika diminta oleh sistem.');
+            lines.push('Terima kasih atas bantuan cikgu.');
+
+            return lines.join('\n\n');
+        }
+
+        function syncOnboardingMessages() {
+            onboardingRows.forEach((row) => {
+                const messageField = row.querySelector('[data-onboarding-message]');
+                const message = buildOnboardingMessage(row);
+
+                if (messageField) {
+                    messageField.value = message;
+                    messageField.dataset.message = message;
+                }
+            });
+
+            const selectedIds = selectedTeacherIds();
+            const previewRow = onboardingRows.find((row) => selectedIds.includes(row.getAttribute('data-onboarding-row')))
+                || onboardingRows[0]
+                || null;
+
+            if (onboardingPreview) {
+                onboardingPreview.value = buildOnboardingMessage(previewRow);
+            }
+        }
+
         function syncMarkSentFormState() {
             document.querySelectorAll('[data-mark-sent-form]').forEach((form) => {
                 const passwordInput = form.querySelector('input[name=\"temporary_password\"]');
                 const urlInput = form.querySelector('input[name=\"dashboard_url\"]');
                 const resetInput = form.querySelector('input[name=\"reset_passwords\"]');
+                const selectedTeacherInputs = form.querySelector('[data-selected-teacher-inputs]');
 
                 if (passwordInput) {
                     passwordInput.value = onboardingPasswordInput?.value || '';
@@ -639,6 +787,17 @@
 
                 if (resetInput) {
                     resetInput.value = resetSelectedTeachers?.checked ? '1' : '0';
+                }
+
+                if (selectedTeacherInputs) {
+                    selectedTeacherInputs.innerHTML = '';
+                    selectedTeacherIds().forEach((teacherId) => {
+                        const hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.name = 'teacher_ids[]';
+                        hiddenInput.value = teacherId;
+                        selectedTeacherInputs.appendChild(hiddenInput);
+                    });
                 }
             });
         }
@@ -718,9 +877,7 @@
                     if (row && invite.wa_phone) {
                         row.setAttribute('data-wa-phone', invite.wa_phone);
                     }
-                    if (onboardingPreview) {
-                        onboardingPreview.value = invite.message || onboardingPreview.value;
-                    }
+                    syncOnboardingMessages();
                     syncMarkSentFormState();
 
                     const waLink = buildWhatsAppWebUrl(invite.wa_phone || row?.getAttribute('data-wa-phone') || '', invite.message || messageField?.value || '');
@@ -736,17 +893,24 @@
         });
 
         [onboardingPasswordInput, onboardingUrlInput, resetSelectedTeachers].forEach((field) => {
-            field?.addEventListener('input', syncMarkSentFormState);
-            field?.addEventListener('change', syncMarkSentFormState);
+            field?.addEventListener('input', () => {
+                syncOnboardingMessages();
+                syncMarkSentFormState();
+            });
+            field?.addEventListener('change', () => {
+                syncOnboardingMessages();
+                syncMarkSentFormState();
+            });
         });
 
-        onboardingRows.forEach((row) => {
-            const messageField = row.querySelector('[data-onboarding-message]');
-            if (messageField && !messageField.dataset.message) {
-                messageField.dataset.message = messageField.value || '';
-            }
+        onboardingTeacherCheckboxes.forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                syncOnboardingMessages();
+                syncMarkSentFormState();
+            });
         });
 
+        syncOnboardingMessages();
         syncMarkSentFormState();
     </script>
 </x-layouts::app>

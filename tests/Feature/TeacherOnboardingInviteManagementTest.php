@@ -87,6 +87,39 @@ it('generated onboarding message stays visible after full page reload', function
     $page->assertSee('change-this-password', false);
 });
 
+it('onboarding page shows selectable teachers for invite generation', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email_verified_at' => now(),
+    ]);
+
+    User::factory()->create([
+        'role' => 'teacher',
+        'name' => 'Cikgu Nadia',
+        'email' => 'nadia@example.test',
+        'phone' => '+60139906160',
+        'class_name' => '4 ANGSANA',
+        'is_active' => true,
+    ]);
+
+    User::factory()->create([
+        'role' => 'teacher',
+        'name' => 'Cikgu Faiz',
+        'email' => 'faiz@example.test',
+        'phone' => '+60112223344',
+        'class_name' => '5 BESTARI',
+        'is_active' => true,
+    ]);
+
+    $page = $this->actingAs($admin)->get(route('super-teacher.teachers.index'));
+
+    $page->assertOk();
+    $page->assertSee('Select Teachers');
+    $page->assertSee('teacher_ids[]', false);
+    $page->assertSee('Cikgu Nadia', false);
+    $page->assertSee('Cikgu Faiz', false);
+});
+
 it('latest generated temporary password persists after visiting another page and returning', function () {
     config()->set('teacher.default_password', 'change-this-password');
 
