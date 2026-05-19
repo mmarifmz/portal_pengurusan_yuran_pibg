@@ -75,10 +75,33 @@ class TeacherOnboardingInviteService
 
         $teacher->forceFill($updates)->save();
 
-        $usesExistingAccount = $this->usesExistingAccount($teacher, $resetPassword);
-        $message = $this->buildMessage($teacher, $dashboardUrl, $temporaryPassword, $usesExistingAccount);
+        return $this->buildInvitePayload($teacher->fresh(), $temporaryPassword, $dashboardUrl, $resetPassword, [
+            'status' => 'generated',
+            'status_label' => 'Generated',
+            'generated_at' => optional($teacher->fresh()->onboarding_invite_generated_at)?->toIso8601String(),
+            'generated_at_display' => optional($teacher->fresh()->onboarding_invite_generated_at)?->format('d M Y H:i'),
+        ]);
+    }
 
-        return [
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    public function buildInvitePayload(User $teacher, string $temporaryPassword, string $dashboardUrl, bool $resetPassword = false, array $overrides = []): array
+    {
+        if (! $teacher->hasRole('teacher')) {
+            throw new InvalidArgumentException('Only teacher accounts can receive onboarding invites.');
+        }
+
+        $normalizedPhone = MalaysianPhone::normalize($teacher->phone);
+        if ($normalizedPhone === null) {
+            throw new InvalidArgumentException('A valid WhatsApp number is required before generating an onboarding invite.');
+        }
+
+        $message = $this->buildMessage($teacher, $temporaryPassword, $dashboardUrl, $resetPassword);
+        $usesExistingAccount = $this->usesExistingAccount($teacher, $resetPassword);
+
+        return array_merge([
             'teacher_id' => $teacher->id,
             'name' => (string) $teacher->name,
             'email' => (string) $teacher->email,
@@ -87,13 +110,18 @@ class TeacherOnboardingInviteService
             'wa_phone' => ltrim($normalizedPhone, '+'),
             'message' => $message,
             'wa_link' => $this->buildWhatsappUrl($normalizedPhone, $message),
-            'status' => 'generated',
-            'status_label' => 'Generated',
-            'generated_at' => optional($teacher->fresh()->onboarding_invite_generated_at)?->toIso8601String(),
-            'generated_at_display' => optional($teacher->fresh()->onboarding_invite_generated_at)?->format('d M Y H:i'),
+            'status' => (string) ($teacher->onboarding_invite_status ?: 'not_generated'),
+            'status_label' => $teacher->onboarding_invite_status === 'sent_manual'
+                ? 'Sent Manually'
+                : ($teacher->onboarding_invite_status === 'generated' ? 'Generated' : 'Not Generated'),
+            'generated_at' => optional($teacher->onboarding_invite_generated_at)?->toIso8601String(),
+            'generated_at_display' => optional($teacher->onboarding_invite_generated_at)?->format('d M Y H:i'),
+            'sent_at' => optional($teacher->onboarding_invite_sent_manually_at)?->toIso8601String(),
+            'sent_at_display' => optional($teacher->onboarding_invite_sent_manually_at)?->format('d M Y H:i'),
             'uses_existing_account' => $usesExistingAccount,
             'dashboard_url' => $dashboardUrl,
-        ];
+            'temporary_password' => $temporaryPassword,
+        ], $overrides);
     }
 
     public function buildPreview(?User $teacher, ?string $temporaryPassword = null, ?string $dashboardUrl = null): string
@@ -104,9 +132,9 @@ class TeacherOnboardingInviteService
 
         return $this->buildMessage(
             $teacher,
-            $this->resolveDashboardUrl($dashboardUrl),
             $this->resolveTemporaryPassword($temporaryPassword),
-            $this->usesExistingAccount($teacher, false),
+            $this->resolveDashboardUrl($dashboardUrl),
+            false,
         );
     }
 
@@ -151,7 +179,7 @@ class TeacherOnboardingInviteService
         return $dashboardUrl;
     }
 
-    private function buildWhatsappUrl(string $normalizedPhone, string $message): string
+    public function buildWhatsappUrl(string $normalizedPhone, string $message): string
     {
         return 'https://wa.me/'.ltrim($normalizedPhone, '+').'?text='.rawurlencode($message);
     }
@@ -165,8 +193,9 @@ class TeacherOnboardingInviteService
         return $teacher->hasMultipleRoles() || $teacher->role !== 'teacher';
     }
 
-    private function buildMessage(User $teacher, string $dashboardUrl, string $temporaryPassword, bool $usesExistingAccount): string
+    public function buildMessage(User $teacher, string $temporaryPassword, string $dashboardUrl, bool $resetPassword = false): string
     {
+        $usesExistingAccount = $this->usesExistingAccount($teacher, $resetPassword);
         $className = filled($teacher->class_name) ? (string) $teacher->class_name : 'Belum ditetapkan';
 
         $lines = [

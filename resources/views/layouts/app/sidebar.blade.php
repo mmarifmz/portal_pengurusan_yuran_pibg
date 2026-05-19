@@ -48,6 +48,10 @@
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
         @php
             $sidebarHomeRoute = auth()->user()?->isParentOnly() ? route('parent.dashboard') : route('dashboard');
+            $isReadOnlyTeacher = auth()->user()?->isTeacher()
+                && ! auth()->user()?->isSuperTeacher()
+                && ! auth()->user()?->isSystemAdmin()
+                && ! auth()->user()?->isPta();
         @endphp
         <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
@@ -69,22 +73,24 @@
                         </flux:sidebar.item>
                     @endif
 
-                    @if (! auth()->user()->isParentOnly())
+                    @if (! auth()->user()->isParentOnly() && ! $isReadOnlyTeacher)
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
                             {{ __('School Calendar') }}
                         </flux:sidebar.item>
                     @endif
 
                     @if (auth()->user()->canAccessTeacherRecords())
-                        <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
-                            {{ __('Student Directory') }}
-                        </flux:sidebar.item>
                         <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
                             {{ __('Class Progress') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
-                            {{ __('Leaderboard Sumbangan') }}
-                        </flux:sidebar.item>
+                        @if (! $isReadOnlyTeacher)
+                            <flux:sidebar.item icon="chart-bar" :href="route('teacher.records')" :current="request()->routeIs('teacher.records*')" wire:navigate>
+                                {{ __('Student Directory') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
+                                {{ __('Leaderboard Sumbangan') }}
+                            </flux:sidebar.item>
+                        @endif
                     @endif
 
                     @if (auth()->user()->isSystemAdmin())

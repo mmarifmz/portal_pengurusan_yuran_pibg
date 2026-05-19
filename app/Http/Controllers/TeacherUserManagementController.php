@@ -48,11 +48,25 @@ class TeacherUserManagementController extends Controller
             ->filter(fn (User $user): bool => $user->is_active && filled($user->phone))
             ->values();
         $canManageOnboardingInvites = (bool) $request->user()?->isSystemAdmin();
-        $onboardingBatch = $request->session()->get('teacher_onboarding_batch', []);
         $onboardingSettings = $request->session()->get('teacher_onboarding_settings', []);
         $defaultDashboardUrl = $this->teacherOnboardingInviteService->defaultDashboardUrl();
         $defaultTemporaryPassword = (string) config('teacher.default_password', '');
+        $resolvedTemporaryPassword = (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword);
+        $resolvedDashboardUrl = (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl);
+        $resolvedResetPasswords = (bool) ($onboardingSettings['reset_passwords'] ?? false);
         $previewTeacher = $inviteEligibleTeachers->first();
+        $onboardingInvitePreviews = $canManageOnboardingInvites
+            ? $inviteEligibleTeachers->mapWithKeys(function (User $teacher) use ($resolvedTemporaryPassword, $resolvedDashboardUrl, $resolvedResetPasswords): array {
+                return [
+                    $teacher->id => $this->teacherOnboardingInviteService->buildInvitePayload(
+                        $teacher,
+                        $resolvedTemporaryPassword,
+                        $resolvedDashboardUrl,
+                        $resolvedResetPasswords,
+                    ),
+                ];
+            })
+            : collect();
 
         $existingUserMatches = $existingUserSearch !== ''
             ? $this->searchAssignableUsers($existingUserSearch)
@@ -65,14 +79,14 @@ class TeacherUserManagementController extends Controller
             'existingUserMatches' => $existingUserMatches,
             'inviteEligibleTeachers' => $inviteEligibleTeachers,
             'canManageOnboardingInvites' => $canManageOnboardingInvites,
-            'onboardingBatch' => is_array($onboardingBatch) ? $onboardingBatch : [],
-            'onboardingDefaultPassword' => (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword),
-            'onboardingDashboardUrl' => (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl),
-            'onboardingResetSelected' => (bool) ($onboardingSettings['reset_passwords'] ?? false),
+            'onboardingInvitePreviews' => $onboardingInvitePreviews,
+            'onboardingDefaultPassword' => $resolvedTemporaryPassword,
+            'onboardingDashboardUrl' => $resolvedDashboardUrl,
+            'onboardingResetSelected' => $resolvedResetPasswords,
             'onboardingPreviewMessage' => $this->teacherOnboardingInviteService->buildPreview(
                 $previewTeacher instanceof User ? $previewTeacher : null,
-                (string) ($onboardingSettings['temporary_password'] ?? $defaultTemporaryPassword),
-                (string) ($onboardingSettings['dashboard_url'] ?? $defaultDashboardUrl),
+                $resolvedTemporaryPassword,
+                $resolvedDashboardUrl,
             ),
         ]);
     }
@@ -446,15 +460,15 @@ class TeacherUserManagementController extends Controller
             request()->user(),
         );
 
+        $this->rememberOnboardingSettings(request(), [
+            'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+            'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+            'reset_passwords' => false,
+        ]);
+
         return redirect()
             ->route('super-teacher.teachers.index')
-            ->with('status', "Manual WhatsApp onboarding invite generated for {$user->name}.")
-            ->with('teacher_onboarding_settings', [
-                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
-                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
-                'reset_passwords' => false,
-            ])
-            ->with('teacher_onboarding_batch', [$result]);
+            ->with('status', "Manual WhatsApp onboarding invite generated for {$user->name}.");
     }
 
     public function sendInviteToAllActiveTeachers(): RedirectResponse
@@ -478,15 +492,15 @@ class TeacherUserManagementController extends Controller
             request()->user(),
         );
 
+        $this->rememberOnboardingSettings(request(), [
+            'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+            'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+            'reset_passwords' => false,
+        ]);
+
         return redirect()
             ->route('super-teacher.teachers.index')
-            ->with('status', 'Manual WhatsApp onboarding invite links generated for all active teachers with WhatsApp numbers.')
-            ->with('teacher_onboarding_settings', [
-                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
-                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
-                'reset_passwords' => false,
-            ])
-            ->with('teacher_onboarding_batch', $results);
+            ->with('status', 'Manual WhatsApp onboarding invite links generated for all active teachers with WhatsApp numbers.');
     }
 
     public function assignExisting(Request $request): RedirectResponse
@@ -537,19 +551,19 @@ class TeacherUserManagementController extends Controller
             );
         }
 
+        $this->rememberOnboardingSettings($request, [
+            'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
+            'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
+            'reset_passwords' => false,
+        ]);
+
         return redirect()
             ->route('super-teacher.teachers.index', ['existing_user_search' => (string) $request->input('existing_user_search', '')])
             ->with('status', sprintf(
                 'Existing user %s is now assigned as class teacher for %s.',
                 $result['user']->name,
                 $className
-            ))
-            ->with('teacher_onboarding_settings', [
-                'temporary_password' => $this->teacherOnboardingInviteService->defaultTemporaryPassword(),
-                'dashboard_url' => $this->teacherOnboardingInviteService->defaultDashboardUrl(),
-                'reset_passwords' => false,
-            ])
-            ->with('teacher_onboarding_batch', $manualInvites);
+            ));
     }
 
     public function generateOnboardingInvites(Request $request): RedirectResponse|JsonResponse
@@ -581,6 +595,11 @@ class TeacherUserManagementController extends Controller
             ],
             $request->user(),
         );
+        $rememberedSettings = $this->rememberOnboardingSettings($request, [
+            'temporary_password' => (string) $validated['temporary_password'],
+            'dashboard_url' => (string) $validated['dashboard_url'],
+            'reset_passwords' => (bool) ($validated['reset_passwords'] ?? false),
+        ]);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -591,13 +610,7 @@ class TeacherUserManagementController extends Controller
 
         return redirect()
             ->route('super-teacher.teachers.index')
-            ->with('status', "Generated {$teachers->count()} manual WhatsApp onboarding invite link(s).")
-            ->with('teacher_onboarding_settings', [
-                'temporary_password' => (string) $validated['temporary_password'],
-                'dashboard_url' => (string) $validated['dashboard_url'],
-                'reset_passwords' => (bool) ($validated['reset_passwords'] ?? false),
-            ])
-            ->with('teacher_onboarding_batch', $results);
+            ->with('status', "Generated {$teachers->count()} manual WhatsApp onboarding invite link(s).");
     }
 
     public function markInviteSent(Request $request, User $user): RedirectResponse
@@ -607,15 +620,41 @@ class TeacherUserManagementController extends Controller
 
         $validated = $request->validate([
             'confirm_mark_sent' => ['required', 'accepted'],
+            'temporary_password' => ['nullable', 'string', 'max:120'],
+            'dashboard_url' => ['nullable', 'url', 'max:255'],
+            'reset_passwords' => ['nullable', 'boolean'],
+            'scroll_to' => ['nullable', 'string', 'max:120'],
         ]);
-
-        unset($validated);
+        $rememberedSettings = $this->rememberOnboardingSettings($request, [
+            'temporary_password' => (string) ($validated['temporary_password'] ?? $request->session()->get('teacher_onboarding_settings.temporary_password', $this->teacherOnboardingInviteService->defaultTemporaryPassword())),
+            'dashboard_url' => (string) ($validated['dashboard_url'] ?? $request->session()->get('teacher_onboarding_settings.dashboard_url', $this->teacherOnboardingInviteService->defaultDashboardUrl())),
+            'reset_passwords' => (bool) ($validated['reset_passwords'] ?? $request->session()->get('teacher_onboarding_settings.reset_passwords', false)),
+        ]);
 
         $this->teacherOnboardingInviteService->markSent($user, $request->user());
 
+        $fragment = filled($validated['scroll_to'] ?? null) ? '#'.ltrim((string) $validated['scroll_to'], '#') : '';
+
         return redirect()
-            ->route('super-teacher.teachers.index')
+            ->to(route('super-teacher.teachers.index').$fragment)
             ->with('status', "Manual WhatsApp onboarding invite marked as sent for {$user->name}.");
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function rememberOnboardingSettings(Request $request, array $settings): array
+    {
+        $normalized = [
+            'temporary_password' => (string) ($settings['temporary_password'] ?? $this->teacherOnboardingInviteService->defaultTemporaryPassword()),
+            'dashboard_url' => (string) ($settings['dashboard_url'] ?? $this->teacherOnboardingInviteService->defaultDashboardUrl()),
+            'reset_passwords' => (bool) ($settings['reset_passwords'] ?? false),
+        ];
+
+        $request->session()->put('teacher_onboarding_settings', $normalized);
+
+        return $normalized;
     }
 
     /**

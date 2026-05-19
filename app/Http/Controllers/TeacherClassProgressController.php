@@ -120,7 +120,7 @@ class TeacherClassProgressController extends Controller
             ], 422);
         }
 
-        if ($this->classTeacherWhatsAppReportService->hasRecentDuplicate($className, (int) $validated['billing_year'])
+        if ($this->classTeacherWhatsAppReportService->hasRecentDuplicate($className, (int) $validated['billing_year'], $preview['teacher_id'] ?? null)
             && ! (bool) ($validated['force_duplicate'] ?? false)) {
             return response()->json([
                 'message' => 'A report for this class was queued recently. Are you sure you want to queue again?',
@@ -217,11 +217,14 @@ class TeacherClassProgressController extends Controller
         ]);
     }
 
-    public function whatsappQueueIndex(): View
+    public function whatsappQueueIndex(Request $request): View
     {
+        $statusFilter = trim((string) $request->string('status', 'all'));
+
         return view('system.whatsapp-queue', [
             'queueDashboard' => $this->classTeacherWhatsAppReportService->queueDashboard(),
-            'messages' => $this->whatsAppMessageQueueService->recentMessages(),
+            'messages' => $this->whatsAppMessageQueueService->recentMessages(50, $statusFilter),
+            'statusFilter' => $statusFilter,
         ]);
     }
 

@@ -2,6 +2,7 @@
     @php
         $queueCountCards = [
             ['label' => 'Pending', 'value' => $queueDashboard['pending'] ?? 0],
+            ['label' => 'Scheduled', 'value' => $queueDashboard['scheduled'] ?? 0],
             ['label' => 'Sending', 'value' => $queueDashboard['sending'] ?? 0],
             ['label' => 'Sent Today', 'value' => $queueDashboard['sent_today'] ?? 0],
             ['label' => 'Failed Today', 'value' => $queueDashboard['failed_today'] ?? 0],
@@ -74,7 +75,7 @@
             </div>
 
             @if ($canManageWhatsapp)
-                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     @foreach ($queueCountCards as $card)
                         <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                             <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $card['label'] }}</p>
@@ -84,7 +85,7 @@
                 </div>
             @endif
 
-            @if ($canManageWhatsapp && (! empty($queueDashboard['pending_warning']) || ! empty($queueDashboard['processor_warning'])))
+            @if ($canManageWhatsapp && (! empty($queueDashboard['pending_warning']) || ! empty($queueDashboard['processor_warning']) || ! empty($queueDashboard['shared_session_note'])))
                 <div class="mt-4 space-y-2">
                     @if (! empty($queueDashboard['pending_warning']))
                         <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -94,6 +95,11 @@
                     @if (! empty($queueDashboard['processor_warning']))
                         <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                             {{ $queueDashboard['processor_warning'] }}
+                        </div>
+                    @endif
+                    @if (! empty($queueDashboard['shared_session_note']))
+                        <div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+                            {{ $queueDashboard['shared_session_note'] }}
                         </div>
                     @endif
                 </div>
@@ -256,7 +262,8 @@
 
                     <div id="previewEligibilityWarnings" class="space-y-2"></div>
 
-                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" id="previewQueueCounts"></div>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" id="previewScheduleCounts"></div>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" id="previewQueueCounts"></div>
 
                     <div class="rounded-2xl border border-zinc-200 bg-white p-4">
                         <div class="flex items-center justify-between gap-3">
@@ -303,7 +310,7 @@
                 <div id="batchWhatsappPreviewContent" class="hidden space-y-5">
                     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" id="batchSummaryGrid"></div>
                     <div id="batchQueueWarnings" class="space-y-2"></div>
-                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" id="batchQueueCounts"></div>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" id="batchQueueCounts"></div>
 
                     <div class="rounded-2xl border border-zinc-200 bg-white p-4">
                         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -404,6 +411,7 @@
             function queueCountCardsHtml(queueDashboard) {
                 const cards = [
                     ['Pending', queueDashboard.pending ?? 0],
+                    ['Scheduled', queueDashboard.scheduled ?? 0],
                     ['Sending', queueDashboard.sending ?? 0],
                     ['Sent Today', queueDashboard.sent_today ?? 0],
                     ['Failed Today', queueDashboard.failed_today ?? 0],
@@ -460,6 +468,27 @@
 
             function formatCurrency(value) {
                 return `RM ${Number(value || 0).toFixed(2)}`;
+            }
+
+            function formatDateTime(value) {
+                if (!value) {
+                    return '-';
+                }
+
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) {
+                    return String(value);
+                }
+
+                return date.toLocaleString('en-MY', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                });
             }
 
             function renderPaidEntries(entries) {
@@ -638,11 +667,17 @@
                 if (preview.queue_dashboard?.processor_warning) {
                     queueWarnings.push(preview.queue_dashboard.processor_warning);
                 }
+                if (preview.queue_dashboard?.shared_session_note) {
+                    queueWarnings.push(preview.queue_dashboard.shared_session_note);
+                }
                 if (Array.isArray(preview.queue_eligibility?.errors)) {
                     queueWarnings.push(...preview.queue_eligibility.errors);
                 }
                 if (preview.queue_eligibility?.duplicate_warning) {
                     queueWarnings.push(preview.queue_eligibility.duplicate_warning);
+                }
+                if (preview.queue_schedule?.warning) {
+                    queueWarnings.push(preview.queue_schedule.warning);
                 }
 
                 renderWarningBlocks(document.getElementById('previewEligibilityWarnings'), queueWarnings, preview.queue_eligibility?.ready ? 'amber' : 'rose');
@@ -660,6 +695,19 @@
                 ];
 
                 document.getElementById('previewStatsGrid').innerHTML = statsCards.map(([label, value]) => `
+                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">${label}</p>
+                        <p class="mt-1 text-sm font-semibold text-zinc-900">${value ?? '-'}</p>
+                    </div>
+                `).join('');
+
+                const queueSchedule = preview.queue_schedule || {};
+                document.getElementById('previewScheduleCounts').innerHTML = [
+                    ['Estimated Messages', queueSchedule.total_messages ?? 0],
+                    ['Queue Waiting', queueSchedule.pending_waiting_count ?? 0],
+                    ['First Send', formatDateTime(queueSchedule.first_send_at)],
+                    ['Last Send', formatDateTime(queueSchedule.last_send_at)],
+                ].map(([label, value]) => `
                     <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                         <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">${label}</p>
                         <p class="mt-1 text-sm font-semibold text-zinc-900">${value ?? '-'}</p>
@@ -689,7 +737,7 @@
                 const ready = Boolean(preview.queue_eligibility?.ready);
                 queueTeacherButton.disabled = !ready;
                 document.getElementById('teacherWhatsappPreviewFooter').textContent = ready
-                    ? 'Review the three message parts before queueing them into the WhatsApp processor.'
+                    ? `Review the three message parts before queueing them. Estimated first send: ${formatDateTime(queueSchedule.first_send_at)}.`
                     : 'Queueing is disabled until the class has a teacher with a valid WhatsApp number.';
             }
 
@@ -773,13 +821,16 @@
 
             function renderBatchPreview(preview) {
                 currentBatchPreview = preview;
+                const queueSchedule = preview.queue_schedule || {};
                 document.getElementById('batchSummaryGrid').innerHTML = [
                     ['Total Classes', preview.total_classes],
+                    ['Selected Classes', queueSchedule.selected_classes ?? 0],
                     ['Assigned Teachers', preview.classes_with_assigned_teachers],
                     ['Missing Teachers', preview.classes_missing_teachers],
-                    ['Teachers With WhatsApp', preview.teachers_with_whatsapp_number],
-                    ['Missing WhatsApp', preview.teachers_missing_whatsapp_number],
-                    ['Estimated Messages', preview.estimated_total_queued_messages],
+                    ['Estimated Messages', queueSchedule.estimated_total_messages ?? preview.estimated_total_queued_messages],
+                    ['Queue Waiting', queueSchedule.pending_waiting_count ?? 0],
+                    ['First Send', formatDateTime(queueSchedule.first_send_at)],
+                    ['Last Send', formatDateTime(queueSchedule.last_send_at)],
                 ].map(([label, value]) => `
                     <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                         <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">${label}</p>
@@ -793,6 +844,12 @@
                 }
                 if (preview.queue_dashboard?.processor_warning) {
                     warnings.push(preview.queue_dashboard.processor_warning);
+                }
+                if (preview.queue_dashboard?.shared_session_note) {
+                    warnings.push(preview.queue_dashboard.shared_session_note);
+                }
+                if (queueSchedule.warning) {
+                    warnings.push(queueSchedule.warning);
                 }
                 renderWarningBlocks(document.getElementById('batchQueueWarnings'), warnings, warnings.length ? 'amber' : 'rose');
 
@@ -833,6 +890,9 @@
                 }).join('');
 
                 updateBatchQueueButtonState();
+                document.getElementById('batchPreviewFooter').textContent = queueSchedule.first_send_at
+                    ? `Selected classes will be paced through the shared WhatsApp queue. Estimated window: ${formatDateTime(queueSchedule.first_send_at)} to ${formatDateTime(queueSchedule.last_send_at)}.`
+                    : 'Only eligible classes will be queued. Recently queued classes can be forced after confirmation.';
             }
 
             function selectedBatchClasses() {

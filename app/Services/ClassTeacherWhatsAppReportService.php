@@ -58,6 +58,7 @@ class ClassTeacherWhatsAppReportService
         $previews = $classNames
             ->map(fn (string $className) => $this->buildClassPreviewFromDataset($dataset, $className))
             ->values();
+        $schedulePlan = $this->whatsAppMessageQueueService->estimateScheduleForPreviews($previews->all());
 
         return [
             'billing_year' => $billingYear,
@@ -72,6 +73,14 @@ class ClassTeacherWhatsAppReportService
             'estimated_total_queued_messages' => $previews
                 ->filter(fn (array $preview): bool => (bool) $preview['queue_eligibility']['ready'])
                 ->sum(fn (array $preview): int => count($preview['generated_messages'])),
+            'queue_schedule' => [
+                'selected_classes' => $schedulePlan['eligible_classes'],
+                'estimated_total_messages' => $schedulePlan['total_messages'],
+                'pending_waiting_count' => $schedulePlan['pending_waiting_count'],
+                'first_send_at' => $schedulePlan['first_send_at'],
+                'last_send_at' => $schedulePlan['last_send_at'],
+                'warning' => $schedulePlan['warning'],
+            ],
             'class_previews' => $previews->map(function (array $preview): array {
                 return [
                     'class_name' => $preview['class_name'],
@@ -83,6 +92,7 @@ class ClassTeacherWhatsAppReportService
                     'status_label' => $preview['queue_eligibility']['status_label'],
                     'recently_queued' => $preview['queue_eligibility']['recently_queued'],
                     'estimated_messages' => count($preview['generated_messages']),
+                    'queue_schedule' => $preview['queue_schedule'] ?? null,
                 ];
             })->values()->all(),
         ];
@@ -97,6 +107,14 @@ class ClassTeacherWhatsAppReportService
         $queuedClasses = 0;
         $skippedClasses = 0;
         $batchId = (string) Str::uuid();
+        $eligiblePreviews = collect($previews)
+            ->filter(fn (array $preview): bool => (bool) ($preview['queue_eligibility']['ready'] ?? false))
+            ->values();
+        $schedulePlan = $this->whatsAppMessageQueueService->estimateScheduleForPreviews($eligiblePreviews->all());
+        $scheduledMessages = collect($schedulePlan['planned_messages'])->keyBy(function (array $message): string {
+            return $message['class_name'].'|'.$message['message_part'].'|'.$message['part_order'];
+        });
+        $partOrder = 1;
 
         foreach ($previews as $preview) {
             $eligible = (bool) ($preview['queue_eligibility']['ready'] ?? false);
@@ -110,6 +128,8 @@ class ClassTeacherWhatsAppReportService
             $queuedClasses++;
 
             foreach ($preview['generated_messages'] as $message) {
+                $scheduledMessage = $scheduledMessages->get((string) $preview['class_name'].'|'.(string) $message['message_part'].'|'.$partOrder);
+
                 $messages[] = [
                     'billing_year' => (int) $preview['billing_year'],
                     'class_name' => (string) $preview['class_name'],
@@ -121,8 +141,12 @@ class ClassTeacherWhatsAppReportService
                     'message_segment' => (int) $message['segment'],
                     'segment_count' => (int) $message['segment_count'],
                     'total_parts' => count($preview['generated_messages']),
+                    'part_order' => $partOrder,
                     'message_body' => (string) $message['body'],
+                    'scheduled_at' => $scheduledMessage['scheduled_at'] ?? null,
                 ];
+
+                $partOrder++;
             }
         }
 
@@ -143,12 +167,14 @@ class ClassTeacherWhatsAppReportService
             'classes_queued' => $queuedClasses,
             'classes_skipped' => $skippedClasses,
             'messages_queued' => $queued['messages_queued'],
+            'first_scheduled_at' => $queued['first_scheduled_at'],
+            'last_scheduled_at' => $queued['last_scheduled_at'],
         ];
     }
 
-    public function hasRecentDuplicate(string $className, int $billingYear, int $withinMinutes = 15): bool
+    public function hasRecentDuplicate(string $className, int $billingYear, ?int $teacherUserId = null, int $withinMinutes = 30): bool
     {
-        return $this->whatsAppMessageQueueService->hasRecentDuplicate($className, $billingYear, $withinMinutes);
+        return $this->whatsAppMessageQueueService->hasRecentDuplicate($className, $billingYear, $teacherUserId, $withinMinutes);
     }
 
     /**
@@ -195,6 +221,7 @@ class ClassTeacherWhatsAppReportService
             ->filter();
 
         $studentsByClass = Student::query()
+            ->active()
             ->where('billing_year', $billingYear)
             ->whereIn('class_name', $classNames->all())
             ->orderBy('class_name')
@@ -261,7 +288,7 @@ class ClassTeacherWhatsAppReportService
 
         $teacherPhone = $teacher?->phone ? (string) $teacher->phone : '';
         $normalizedTeacherPhone = $teacherPhone !== '' ? MalaysianPhone::normalize($teacherPhone) : null;
-        $recentlyQueued = $this->hasRecentDuplicate($className, (int) $row['billing_year']);
+        $recentlyQueued = $this->hasRecentDuplicate($className, (int) $row['billing_year'], $teacher?->id);
 
         $errors = [];
         if (! $teacher) {
@@ -335,6 +362,13 @@ class ClassTeacherWhatsAppReportService
                 'status_label' => $statusLabel,
             ],
             'queue_dashboard' => $dataset['queue_dashboard'],
+            'queue_schedule' => $this->whatsAppMessageQueueService->estimateScheduleForPreviews([[
+                'class_name' => $className,
+                'generated_messages' => $messages,
+                'queue_eligibility' => [
+                    'ready' => $errors === [],
+                ],
+            ]]),
             'queue_page_url' => route('admin.whatsapp-queue.index'),
         ];
     }
@@ -349,7 +383,7 @@ class ClassTeacherWhatsAppReportService
         /** @var User|null $teacher */
         $teacher = $dataset['teachers_by_class']->get((string) $row['class_name']);
         $normalizedPhone = $teacher?->phone ? MalaysianPhone::normalize((string) $teacher->phone) : null;
-        $recentlyQueued = $this->hasRecentDuplicate((string) $row['class_name'], (int) $row['billing_year']);
+        $recentlyQueued = $this->hasRecentDuplicate((string) $row['class_name'], (int) $row['billing_year'], $teacher?->id);
 
         $badges = [];
 

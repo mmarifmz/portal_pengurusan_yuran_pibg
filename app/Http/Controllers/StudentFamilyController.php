@@ -5,14 +5,23 @@ namespace App\Http\Controllers;
 use App\Models\FamilyBilling;
 use App\Models\Student;
 use Illuminate\Support\Str;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class StudentFamilyController extends Controller
 {
-    public function index(): View
-    { $billingYear = now()->year;
+    public function index(Request $request): View
+    {
+        $billingYear = now()->year;
+        $includeTransferred = $request->boolean('include_transferred');
 
-        $students = Student::query()
+        $studentsQuery = Student::query();
+
+        if (! $includeTransferred) {
+            $studentsQuery->active();
+        }
+
+        $students = $studentsQuery
             ->orderBy('family_code')
             ->orderBy('class_name')
             ->orderBy('full_name')
@@ -33,7 +42,8 @@ class StudentFamilyController extends Controller
 
                 $comments = $group
                     ->pluck('status')
-                    ->filter(fn (string $status) => $status !== 'active')
+                    ->filter(fn (string $status) => $status !== Student::STATUS_ACTIVE)
+                    ->map(fn (string $status): string => $status === Student::STATUS_TRANSFERRED ? 'Telah Berpindah' : Str::headline($status))
                     ->unique()
                     ->values();
 
@@ -118,6 +128,7 @@ class StudentFamilyController extends Controller
             'totalOutstanding' => $totalOutstanding,
             'classFilters' => $classFilters,
             'statusFilters' => $statusFilters,
+            'includeTransferred' => $includeTransferred,
         ]);
     }
 }

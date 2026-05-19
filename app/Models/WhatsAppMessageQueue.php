@@ -22,12 +22,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'status',
     'queued_by',
     'queued_at',
+    'scheduled_at',
     'sending_at',
     'sent_at',
     'failed_at',
     'error_message',
     'provider_message_id',
     'provider_response',
+    'part_order',
 ])]
 class WhatsAppMessageQueue extends Model
 {
@@ -50,7 +52,9 @@ class WhatsAppMessageQueue extends Model
             'message_segment' => 'integer',
             'segment_count' => 'integer',
             'total_parts' => 'integer',
+            'part_order' => 'integer',
             'queued_at' => 'datetime',
+            'scheduled_at' => 'datetime',
             'sending_at' => 'datetime',
             'sent_at' => 'datetime',
             'failed_at' => 'datetime',

@@ -16,9 +16,16 @@ class PaymentReportingService
      */
     public function familyMetricsForYear(int $billingYear): Collection
     {
+        $activeFamilyCodes = Student::activeFamilyCodesForYear($billingYear);
+
+        if ($activeFamilyCodes->isEmpty()) {
+            return collect();
+        }
+
         $billings = FamilyBilling::query()
             ->with(['paymentPlan.installments', 'socialTags'])
             ->where('billing_year', $billingYear)
+            ->whereIn('family_code', $activeFamilyCodes->all())
             ->get();
 
         if ($billings->isEmpty()) {
@@ -155,6 +162,7 @@ class PaymentReportingService
         }
 
         $dominantClassByFamily = Student::query()
+            ->active()
             ->where('billing_year', $billingYear)
             ->whereIn('family_code', $familyMetrics->keys()->all())
             ->whereNotNull('class_name')

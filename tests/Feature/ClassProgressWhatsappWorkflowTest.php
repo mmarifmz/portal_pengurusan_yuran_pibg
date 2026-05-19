@@ -66,8 +66,54 @@ it('queue endpoint creates pending records', function () {
 
     $queueResponse->assertOk();
 
-    expect(WhatsAppMessageQueue::query()->where('class_name', '1 Angsana')->count())->toBe(3);
-    expect(WhatsAppMessageQueue::query()->where('class_name', '1 Angsana')->where('status', 'pending')->count())->toBe(3);
+    $messages = WhatsAppMessageQueue::query()
+        ->where('class_name', '1 Angsana')
+        ->orderBy('part_order')
+        ->get();
+
+    expect($messages)->toHaveCount(3);
+    expect($messages->where('status', 'pending'))->toHaveCount(3);
+    expect($messages->pluck('scheduled_at')->filter()->count())->toBe(3);
+    expect($messages[0]->scheduled_at?->lt($messages[1]->scheduled_at))->toBeTrue();
+    expect($messages[1]->scheduled_at?->lt($messages[2]->scheduled_at))->toBeTrue();
+});
+
+it('single class report respects existing pending queue schedule', function () {
+    [, , $admin] = seedClassProgressWhatsappDataset();
+
+    WhatsAppMessageQueue::query()->create([
+        'billing_year' => now()->year,
+        'class_name' => '0 Existing',
+        'recipient_name' => 'Existing Queue',
+        'recipient_phone' => '+60112223333',
+        'message_type' => WhatsAppMessageQueue::MESSAGE_TYPE_CLASS_PAYMENT_REPORT,
+        'message_part' => 'summary',
+        'message_body' => 'Existing pending message',
+        'status' => WhatsAppMessageQueue::STATUS_PENDING,
+        'queued_by' => $admin->id,
+        'queued_at' => now(),
+        'scheduled_at' => now()->addMinutes(2),
+        'total_parts' => 1,
+        'part_order' => 1,
+    ]);
+
+    $preview = $this->actingAs($admin)
+        ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
+        'billing_year' => now()->year,
+        'preview_token' => $preview['preview_token'],
+    ])->assertOk();
+
+    $firstScheduledAt = WhatsAppMessageQueue::query()
+        ->where('class_name', '1 Angsana')
+        ->orderBy('part_order')
+        ->value('scheduled_at');
+
+    expect($firstScheduledAt)->not->toBeNull();
+    expect($firstScheduledAt->gt(now()->addMinutes(2)))->toBeTrue();
 });
 
 it('duplicate recent queue warning works', function () {
@@ -107,6 +153,7 @@ it('batch preview identifies eligible and skipped classes', function () {
     expect($cards->get('1 Angsana')['status'])->toBe('ready');
     expect($cards->get('1 Alamanda')['status'])->toBe('missing_phone');
     expect($cards->get('1 Azalea')['status'])->toBe('missing_teacher');
+    expect($response->json('queue_schedule.estimated_total_messages'))->toBe(3);
 });
 
 it('batch queue creates queue records only for selected eligible classes', function () {
@@ -128,6 +175,31 @@ it('batch queue creates queue records only for selected eligible classes', funct
     expect(WhatsAppMessageQueue::query()->where('class_name', '1 Angsana')->count())->toBe(3);
     expect(WhatsAppMessageQueue::query()->where('class_name', '1 Alamanda')->count())->toBe(0);
     expect(WhatsAppMessageQueue::query()->where('class_name', '1 Azalea')->count())->toBe(0);
+});
+
+it('batch blast creates scheduled_at sequentially', function () {
+    [, , $admin] = seedClassProgressWhatsappDataset();
+
+    $preview = $this->actingAs($admin)
+        ->getJson(route('admin.classes.whatsapp-batch-preview').'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-batch-queue'), [
+        'billing_year' => now()->year,
+        'preview_token' => $preview['preview_token'],
+        'class_names' => ['1 Alamanda', '1 Angsana', '1 Azalea'],
+    ])->assertOk();
+
+    $messages = WhatsAppMessageQueue::query()
+        ->orderBy('part_order')
+        ->get();
+
+    expect($messages)->toHaveCount(9);
+    expect($messages->pluck('part_order')->all())->toBe([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect($messages[0]->scheduled_at?->lt($messages[1]->scheduled_at))->toBeTrue();
+    expect($messages[1]->scheduled_at?->lt($messages[2]->scheduled_at))->toBeTrue();
+    expect($messages[2]->scheduled_at?->lt($messages[3]->scheduled_at))->toBeTrue();
 });
 
 it('message stats match leaderboard service', function () {
@@ -225,6 +297,32 @@ it('teacher can view other class details without admin whatsapp access', functio
     $this->actingAs($teacher)
         ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
         ->assertForbidden();
+});
+
+it('queue dashboard shows scheduled messages', function () {
+    [, , $admin] = seedClassProgressWhatsappDataset();
+
+    WhatsAppMessageQueue::query()->create([
+        'billing_year' => now()->year,
+        'class_name' => '1 Angsana',
+        'recipient_name' => 'Teacher Angsana',
+        'recipient_phone' => '+60123456789',
+        'message_type' => WhatsAppMessageQueue::MESSAGE_TYPE_CLASS_PAYMENT_REPORT,
+        'message_part' => 'summary',
+        'message_body' => 'Scheduled message',
+        'status' => WhatsAppMessageQueue::STATUS_PENDING,
+        'queued_by' => $admin->id,
+        'queued_at' => now(),
+        'scheduled_at' => now()->addMinutes(5),
+        'total_parts' => 1,
+        'part_order' => 1,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.whatsapp-queue.index', ['status' => 'scheduled']))
+        ->assertOk()
+        ->assertSee('Scheduled At')
+        ->assertSee('Scheduled');
 });
 
 it('summary totals match expanded list totals for own class', function () {

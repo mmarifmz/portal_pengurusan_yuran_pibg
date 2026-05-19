@@ -13,13 +13,24 @@
                 <h2 class="text-xl font-semibold text-zinc-900">Kod keluarga & status</h2>
             </div>
             <div class="flex flex-wrap gap-2">
-                <form method="POST" action="{{ route('billing.setup.current-year') }}" class="inline-flex">
-                    @csrf
-                    <button type="submit" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Generate family billing</button>
-                </form>
-                <a href="{{ route('students.import.form') }}" class="rounded-2xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-900 hover:border-emerald-500">Tambah murid</a>
+                @can('manageBilling')
+                    <form method="POST" action="{{ route('billing.setup.current-year') }}" class="inline-flex">
+                        @csrf
+                        <button type="submit" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Generate family billing</button>
+                    </form>
+                @endcan
+                @can('manageImports')
+                    <a href="{{ route('students.import.form') }}" class="rounded-2xl border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-900 hover:border-emerald-500">Tambah murid</a>
+                @endcan
             </div>
         </div>
+
+        <form method="GET" action="{{ route('students.family.list') }}" class="mt-4">
+            <label class="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-700">
+                <input type="checkbox" name="include_transferred" value="1" @checked($includeTransferred) onchange="this.form.submit()">
+                Include transferred students
+            </label>
+        </form>
 
         <div class="mt-6 flex flex-wrap gap-3 text-xs text-zinc-600">
             <label class="inline-flex flex-col font-semibold">
@@ -178,7 +189,8 @@
                     children.forEach((child) => {
                         const item = document.createElement('div');
                         item.className = 'rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-700';
-                        item.innerHTML = `<p class="font-semibold text-zinc-900">${child.full_name}</p><p class="text-xs text-zinc-500">${child.class_name} · ${child.status}</p>`;
+                        const statusText = child.status === 'transferred' ? 'Telah Berpindah' : child.status;
+                        item.innerHTML = `<p class="font-semibold text-zinc-900">${child.full_name}</p><p class="text-xs text-zinc-500">${child.class_name} · ${statusText}</p>`;
                         modalList.append(item);
                     });
                 }

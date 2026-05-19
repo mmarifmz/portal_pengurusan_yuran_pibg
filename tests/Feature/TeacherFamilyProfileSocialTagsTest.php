@@ -55,9 +55,9 @@ it('shows latest family social tags on family profile page', function () {
     $response->assertSee('Special Approval');
 });
 
-it('updates latest family social tags from family profile page', function () {
-    $teacher = User::factory()->create([
-        'role' => 'teacher',
+it('allows system admin to update latest family social tags from family profile page', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
@@ -96,7 +96,7 @@ it('updates latest family social tags from family profile page', function () {
         'is_b40' => false,
     ]);
 
-    $response = $this->actingAs($teacher)->patch(route('teacher.records.family.social-tags.update', [
+    $response = $this->actingAs($admin)->patch(route('teacher.records.family.social-tags.update', [
         'familyCode' => 'SSP-FAMTAG2',
     ]), [
         'social_tag_ids' => [$b40->id, $asnaf->id],
@@ -107,4 +107,46 @@ it('updates latest family social tags from family profile page', function () {
     expect($billing->fresh()->social_tag)->toBe('B40');
     expect($billing->fresh()->socialTags()->pluck('name')->all())->toBe(['B40', 'Asnaf']);
     expect(Student::query()->where('family_code', 'SSP-FAMTAG2')->value('is_b40'))->toBeTrue();
+});
+
+it('forbids teacher from updating family social tags', function () {
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email_verified_at' => now(),
+    ]);
+
+    $billingYear = (int) now()->year;
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-FAMTAG3',
+        'billing_year' => $billingYear,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    $tag = SocialTag::query()->firstOrCreate([
+        'slug' => 'b40-lockdown',
+    ], [
+        'name' => 'B40 Lockdown',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'FAMTAG-003',
+        'family_code' => 'SSP-FAMTAG3',
+        'full_name' => 'Teacher View Only',
+        'class_name' => '2 Aman',
+        'billing_year' => $billingYear,
+        'is_b40' => false,
+    ]);
+
+    $response = $this->actingAs($teacher)->patch(route('teacher.records.family.social-tags.update', [
+        'familyCode' => 'SSP-FAMTAG3',
+    ]), [
+        'social_tag_ids' => [$tag->id],
+    ]);
+
+    $response->assertForbidden();
 });

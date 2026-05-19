@@ -161,10 +161,11 @@ Artisan::command('whatsapp:process-queue {--limit=20 : Maximum number of pending
     $messages = WhatsAppMessageQueue::query()
         ->where('status', WhatsAppMessageQueue::STATUS_PENDING)
         ->where(function ($query): void {
-            $query->whereNull('queued_at')
-                ->orWhere('queued_at', '<=', now());
+            $query->whereNull('scheduled_at')
+                ->orWhere('scheduled_at', '<=', now());
         })
-        ->orderBy('queued_at')
+        ->orderByRaw('COALESCE(scheduled_at, queued_at) asc')
+        ->orderBy('id')
         ->limit($limit)
         ->get(['id', 'class_name', 'recipient_name', 'message_part']);
 
@@ -206,13 +207,13 @@ Artisan::command('whatsapp:queue-status {--show=10 : Number of recent rows to sh
 
     $readyPending = (clone $pendingQuery)
         ->where(function ($query): void {
-            $query->whereNull('queued_at')
-                ->orWhere('queued_at', '<=', now());
+            $query->whereNull('scheduled_at')
+                ->orWhere('scheduled_at', '<=', now());
         })
         ->count();
 
     $deferredPending = (clone $pendingQuery)
-        ->where('queued_at', '>', now())
+        ->where('scheduled_at', '>', now())
         ->count();
 
     $sending = WhatsAppMessageQueue::query()
@@ -280,10 +281,10 @@ Artisan::command('whatsapp:queue-status {--show=10 : Number of recent rows to sh
 
     $recentDeferred = WhatsAppMessageQueue::query()
         ->where('status', WhatsAppMessageQueue::STATUS_PENDING)
-        ->where('queued_at', '>', now())
-        ->orderBy('queued_at')
+        ->where('scheduled_at', '>', now())
+        ->orderBy('scheduled_at')
         ->limit($show)
-        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'queued_at', 'error_message']);
+        ->get(['id', 'queue_batch_id', 'class_name', 'recipient_phone', 'message_part', 'scheduled_at', 'error_message']);
 
     if ($recentDeferred->isNotEmpty()) {
         $this->newLine();
@@ -296,7 +297,7 @@ Artisan::command('whatsapp:queue-status {--show=10 : Number of recent rows to sh
                 $message->class_name,
                 $message->recipient_phone,
                 $message->message_part,
-                optional($message->queued_at)->format('Y-m-d H:i:s') ?: '-',
+                optional($message->scheduled_at)->format('Y-m-d H:i:s') ?: '-',
                 mb_strimwidth((string) ($message->error_message ?? '-'), 0, 100, '...'),
             ])->all()
         );
@@ -307,7 +308,7 @@ Artisan::command('whatsapp:queue-status {--show=10 : Number of recent rows to sh
 
 Artisan::command('whatsapp:retry-failed {--limit=20 : Maximum failed rows to reset} {--batch-id= : Only retry one queue batch} {--rate-limited-only : Retry only Wasender rate-limited failures} {--dry-run : Show failed rows without resetting them}', function () {
     $limit = max(1, (int) $this->option('limit'));
-    $retrySpacingSeconds = max(1, (int) ceil((float) config('services.wasender.min_interval_seconds', 5.5)));
+    $retrySpacingSeconds = max(1, (int) config('whatsapp.send_interval_seconds', 20));
 
     $query = WhatsAppMessageQueue::query()
         ->where('status', WhatsAppMessageQueue::STATUS_FAILED);
@@ -360,7 +361,7 @@ Artisan::command('whatsapp:retry-failed {--limit=20 : Maximum failed rows to res
     foreach ($messages as $index => $message) {
         $message->forceFill([
             'status' => WhatsAppMessageQueue::STATUS_PENDING,
-            'queued_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
+            'scheduled_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
             'sending_at' => null,
             'failed_at' => null,
             'error_message' => null,
@@ -375,7 +376,7 @@ Artisan::command('whatsapp:retry-failed {--limit=20 : Maximum failed rows to res
 Artisan::command('whatsapp:retry-stuck {--minutes=15 : Treat sending rows older than this as stuck} {--limit=20 : Maximum stuck rows to reset} {--dry-run : Show stuck rows without resetting them}', function () {
     $minutes = max(1, (int) $this->option('minutes'));
     $limit = max(1, (int) $this->option('limit'));
-    $retrySpacingSeconds = max(1, (int) ceil((float) config('services.wasender.min_interval_seconds', 5.5)));
+    $retrySpacingSeconds = max(1, (int) config('whatsapp.send_interval_seconds', 20));
     $cutoff = now()->subMinutes($minutes);
 
     $messages = WhatsAppMessageQueue::query()
@@ -421,7 +422,7 @@ Artisan::command('whatsapp:retry-stuck {--minutes=15 : Treat sending rows older 
     foreach ($messages as $index => $message) {
         $message->forceFill([
             'status' => WhatsAppMessageQueue::STATUS_PENDING,
-            'queued_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
+            'scheduled_at' => $baseQueuedAt->copy()->addSeconds($index * $retrySpacingSeconds),
             'sending_at' => null,
             'failed_at' => null,
             'error_message' => 'Recovered from stuck sending state via artisan retry command.',
@@ -433,8 +434,8 @@ Artisan::command('whatsapp:retry-stuck {--minutes=15 : Treat sending rows older 
     return self::SUCCESS;
 })->purpose('Reset stale sending WhatsApp queue rows back to pending.');
 
-Schedule::command('whatsapp:process-queue --limit=10')
-    ->everyMinute()
+Schedule::command('whatsapp:process-queue --limit=1')
+    ->everyTenSeconds()
     ->withoutOverlapping(2);
 
 Artisan::command('system:admin:provision

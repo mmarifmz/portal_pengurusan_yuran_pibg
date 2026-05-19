@@ -15,6 +15,7 @@ class TeacherContributionLeaderboardController extends Controller
         $billingYear = (int) now()->year;
 
         $students = Student::query()
+            ->active()
             ->where('billing_year', $billingYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')

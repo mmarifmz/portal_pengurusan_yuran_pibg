@@ -6,22 +6,21 @@ use App\Models\FamilyBilling;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class BillingSetupController extends Controller
 {
     public function setupCurrentYear(Request $request): RedirectResponse
     {
+        Gate::authorize('manageBilling');
+
         $validated = $request->validate([
             'billing_year' => ['nullable', 'integer', 'min:2020', 'max:2100'],
         ]);
 
         $billingYear = (int) ($validated['billing_year'] ?? now()->year);
 
-        $familyCodes = Student::query()
-            ->whereNotNull('family_code')
-            ->where('family_code', '!=', '')
-            ->distinct()
-            ->pluck('family_code');
+        $familyCodes = Student::activeFamilyCodesForYear($billingYear);
 
         $created = 0;
 

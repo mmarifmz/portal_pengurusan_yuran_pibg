@@ -322,6 +322,7 @@ class ParentDashboardController extends Controller
         $billingYear = (int) now()->year;
 
         $students = Student::query()
+            ->active()
             ->where('billing_year', $billingYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
@@ -413,6 +414,7 @@ class ParentDashboardController extends Controller
             ->values();
 
         $dominantClassByFamily = Student::query()
+            ->active()
             ->whereIn('family_code', $familyCodes)
             ->select(['family_code', 'class_name'])
             ->get()

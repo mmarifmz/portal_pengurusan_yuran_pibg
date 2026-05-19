@@ -222,7 +222,7 @@ class ClassProgressService
         $billings = FamilyBilling::query()
             ->with([
                 'paymentTransactions' => fn ($query) => $query->where('status', 'success')->orderByDesc('paid_at'),
-                'students' => fn ($query) => $query->where('billing_year', $billingYear)->orderBy('full_name'),
+                'students' => fn ($query) => $query->active()->where('billing_year', $billingYear)->orderBy('full_name'),
             ])
             ->where('billing_year', $billingYear)
             ->get()

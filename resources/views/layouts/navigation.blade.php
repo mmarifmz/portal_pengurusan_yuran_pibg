@@ -12,10 +12,21 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    @php
+                        $isReadOnlyTeacher = Auth::user()->isTeacher()
+                            && ! Auth::user()->isSuperTeacher()
+                            && ! Auth::user()->isSystemAdmin()
+                            && ! Auth::user()->isPta();
+                    @endphp
                     @if (Auth::user()->canAccessTeacherRecords())
-                        <x-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
-                            {{ __('Teacher') }}
+                        <x-nav-link :href="route('teacher.class-progress')" :active="request()->routeIs('teacher.class-progress*')">
+                            {{ __('Class Progress') }}
                         </x-nav-link>
+                        @if (! $isReadOnlyTeacher)
+                            <x-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
+                                {{ __('Teacher') }}
+                            </x-nav-link>
+                        @endif
                     @endif
                     @if (Auth::user()->isSystemAdmin())
                         <x-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">
@@ -107,10 +118,21 @@
         <!-- Responsive Navigation Menu -->
         <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
+            @php
+                $isReadOnlyTeacher = Auth::user()->isTeacher()
+                    && ! Auth::user()->isSuperTeacher()
+                    && ! Auth::user()->isSystemAdmin()
+                    && ! Auth::user()->isPta();
+            @endphp
             @if (Auth::user()->canAccessTeacherRecords())
-                <x-responsive-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
-                    {{ __('Teacher') }}
+                <x-responsive-nav-link :href="route('teacher.class-progress')" :active="request()->routeIs('teacher.class-progress*')">
+                    {{ __('Class Progress') }}
                 </x-responsive-nav-link>
+                @if (! $isReadOnlyTeacher)
+                    <x-responsive-nav-link :href="route('teacher.records')" :active="request()->routeIs('teacher.records*')">
+                        {{ __('Teacher') }}
+                    </x-responsive-nav-link>
+                @endif
             @endif
             @if (Auth::user()->isSystemAdmin())
                 <x-responsive-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">

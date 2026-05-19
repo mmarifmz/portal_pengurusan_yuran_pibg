@@ -2,11 +2,16 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\WaSenderRateLimitException;
+use App\Models\WhatsAppApiThrottleLog;
 use App\Models\WhatsAppMessageQueue;
 use App\Services\WaSenderService;
-use Illuminate\Support\Facades\Cache;
+use App\Services\WhatsAppMessageQueueService;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class SendQueuedWhatsAppMessage implements ShouldQueue
 {
@@ -24,7 +29,7 @@ class SendQueuedWhatsAppMessage implements ShouldQueue
         $this->onQueue('whatsapp');
     }
 
-    public function handle(WaSenderService $waSenderService): void
+    public function handle(WaSenderService $waSenderService, WhatsAppMessageQueueService $queueService): void
     {
         $message = WhatsAppMessageQueue::query()->find($this->queueMessageId);
 
@@ -36,126 +41,108 @@ class SendQueuedWhatsAppMessage implements ShouldQueue
             return;
         }
 
-        $message->forceFill([
-            'status' => WhatsAppMessageQueue::STATUS_SENDING,
-            'sending_at' => now(),
-            'error_message' => null,
-        ])->save();
+        if ($message->scheduled_at !== null && $message->scheduled_at->isFuture()) {
+            return;
+        }
+
+        $lock = Cache::lock('whatsapp-api-send-lock', max(1, (int) config('whatsapp.api_send_lock_seconds', 60)));
+
+        if (! $lock->get()) {
+            $this->reschedulePending($message, now()->addSeconds($queueService->minimumSendGapSeconds()), 'Another WhatsApp worker is currently using the shared send lock.');
+
+            return;
+        }
 
         try {
-            $delivery = $this->sendWithThrottle(
-                fn () => $waSenderService->sendText((string) $message->recipient_phone, (string) $message->message_body)
-            );
-
-            $message->forceFill([
-                'status' => WhatsAppMessageQueue::STATUS_SENT,
-                'sent_at' => now(),
-                'failed_at' => null,
-                'error_message' => null,
-                'provider_message_id' => $delivery['message_id'] ?? null,
-                'provider_response' => $delivery['response'] ?? null,
-            ])->save();
-        } catch (\Throwable $exception) {
-            $retryAfterSeconds = $this->extractRetryAfterSeconds($exception);
-
-            if ($retryAfterSeconds !== null) {
-                $this->setNextAvailableAt($retryAfterSeconds);
-
-                $message->forceFill([
-                    'status' => WhatsAppMessageQueue::STATUS_PENDING,
-                    'queued_at' => now()->addSeconds($retryAfterSeconds),
-                    'sending_at' => null,
-                    'failed_at' => null,
-                    'error_message' => sprintf(
-                        'Rate limited by Wasender. Will retry after %d seconds. %s',
-                        $retryAfterSeconds,
-                        $exception->getMessage()
-                    ),
-                    'provider_response' => [
-                        'rate_limited' => true,
-                        'retry_after' => $retryAfterSeconds,
-                        'error' => $exception->getMessage(),
-                    ],
-                ])->save();
+            $throttleUntil = $this->sharedThrottleUntil($queueService);
+            if ($throttleUntil !== null && $throttleUntil->isFuture()) {
+                $this->reschedulePending($message, $throttleUntil, 'Waiting for shared WaSender session cooldown before the next API call.');
 
                 return;
             }
 
             $message->forceFill([
-                'status' => WhatsAppMessageQueue::STATUS_FAILED,
-                'failed_at' => now(),
-                'error_message' => $exception->getMessage(),
+                'status' => WhatsAppMessageQueue::STATUS_SENDING,
+                'sending_at' => now(),
+                'error_message' => null,
             ])->save();
 
-            throw $exception;
+            try {
+                $delivery = $waSenderService->sendText((string) $message->recipient_phone, (string) $message->message_body);
+
+                $message->forceFill([
+                    'status' => WhatsAppMessageQueue::STATUS_SENT,
+                    'sent_at' => now(),
+                    'failed_at' => null,
+                    'error_message' => null,
+                    'provider_message_id' => $delivery['message_id'] ?? null,
+                    'provider_response' => [
+                        'payload' => $delivery['response'] ?? null,
+                        'headers' => $delivery['headers'] ?? [],
+                    ],
+                ])->save();
+
+                WhatsAppApiThrottleLog::query()->create([
+                    'app_name' => (string) config('whatsapp.app_name', config('app.name', 'Portal Yuran PIBG')),
+                    'message_id' => $message->id,
+                    'recipient_phone' => (string) $message->recipient_phone,
+                    'sent_at' => now(),
+                    'api_response_status' => (string) ($delivery['status'] ?? 'queued'),
+                ]);
+            } catch (WaSenderRateLimitException $exception) {
+                $retryAt = now()->addSeconds(max(1, $exception->retryAfterSeconds));
+
+                $message->forceFill([
+                    'status' => WhatsAppMessageQueue::STATUS_PENDING,
+                    'scheduled_at' => $retryAt,
+                    'sending_at' => null,
+                    'failed_at' => null,
+                    'error_message' => sprintf(
+                        'Rate limited by Wasender. Will retry after %d seconds.',
+                        max(1, $exception->retryAfterSeconds)
+                    ),
+                    'provider_response' => [
+                        'rate_limited' => true,
+                        'retry_after' => $exception->retryAfterSeconds,
+                        'payload' => $exception->providerResponse,
+                        'headers' => $exception->responseHeaders,
+                    ],
+                ])->save();
+
+                return;
+            } catch (\Throwable $exception) {
+                $message->forceFill([
+                    'status' => WhatsAppMessageQueue::STATUS_FAILED,
+                    'failed_at' => now(),
+                    'error_message' => $exception->getMessage(),
+                ])->save();
+
+                throw $exception;
+            }
+        } finally {
+            optional($lock)->release();
         }
     }
 
-    /**
-     * @param  callable(): array<string, mixed>  $callback
-     * @return array<string, mixed>
-     */
-    private function sendWithThrottle(callable $callback): array
+    private function sharedThrottleUntil(WhatsAppMessageQueueService $queueService): ?CarbonInterface
     {
-        $cooldownSeconds = max(0, (float) config('services.wasender.min_interval_seconds', 5.5));
+        $lastSentAt = $queueService->lastSharedSessionSentAt();
 
-        if ($cooldownSeconds <= 0) {
-            return $callback();
-        }
-
-        return Cache::lock('wasender-send-lock', (int) ceil($cooldownSeconds) + 10)
-            ->block(10, function () use ($callback, $cooldownSeconds): array {
-                $nextAvailableAt = (float) Cache::get('wasender-next-available-at', 0);
-                $remainingSeconds = $nextAvailableAt - microtime(true);
-
-                if ($remainingSeconds > 0) {
-                    usleep((int) ceil($remainingSeconds * 1_000_000));
-                }
-
-                $delivery = $callback();
-
-                Cache::put(
-                    'wasender-next-available-at',
-                    microtime(true) + $cooldownSeconds,
-                    now()->addMinutes(10)
-                );
-
-                return $delivery;
-            });
-    }
-
-    private function setNextAvailableAt(int $retryAfterSeconds): void
-    {
-        Cache::put(
-            'wasender-next-available-at',
-            microtime(true) + max(1, $retryAfterSeconds),
-            now()->addMinutes(10)
-        );
-    }
-
-    private function extractRetryAfterSeconds(\Throwable $exception): ?int
-    {
-        $message = (string) $exception->getMessage();
-        $normalized = mb_strtolower($message);
-
-        if (! str_contains($normalized, 'account protection') && ! str_contains($normalized, 'retry_after')) {
+        if ($lastSentAt === null) {
             return null;
         }
 
-        if (preg_match('/"retry_after"\s*:\s*(\d+)/i', $message, $matches) === 1) {
-            return max(1, (int) ($matches[1] ?? 0));
-        }
+        return $lastSentAt->copy()->addSeconds($queueService->minimumSendGapSeconds());
+    }
 
-        $jsonStart = strpos($message, '{');
-        if ($jsonStart !== false) {
-            $payload = json_decode(substr($message, $jsonStart), true);
-            $retryAfter = is_array($payload) ? ($payload['retry_after'] ?? null) : null;
-
-            if (is_numeric($retryAfter)) {
-                return max(1, (int) ceil((float) $retryAfter));
-            }
-        }
-
-        return 5;
+    private function reschedulePending(WhatsAppMessageQueue $message, CarbonInterface $scheduledAt, string $reason): void
+    {
+        $message->forceFill([
+            'status' => WhatsAppMessageQueue::STATUS_PENDING,
+            'scheduled_at' => $scheduledAt,
+            'sending_at' => null,
+            'failed_at' => null,
+            'error_message' => $reason,
+        ])->save();
     }
 }

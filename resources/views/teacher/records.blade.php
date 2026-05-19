@@ -6,10 +6,14 @@
             'class_name' => $selectedClass ?: null,
             'family_code' => $familyCodeQuery ?: null,
             'student_name' => $studentNameQuery ?: null,
+            'student_status' => $studentStatusFilter !== \App\Models\Student::STATUS_ACTIVE ? $studentStatusFilter : null,
+            'include_transferred' => $includeTransferred ? 1 : null,
             'sort_by' => $sortBy,
             'sort_dir' => $sortDir,
         ];
         $allRecordsUrl = route('teacher.records', array_filter([
+            'student_status' => $studentStatusFilter !== \App\Models\Student::STATUS_ACTIVE ? $studentStatusFilter : null,
+            'include_transferred' => $includeTransferred ? 1 : null,
             'sort_by' => $sortBy,
             'sort_dir' => $sortDir,
         ]));
@@ -87,22 +91,24 @@
         <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <p class="text-sm text-zinc-600">Billing year: <span class="font-semibold">{{ $billingYear }}</span> | Paid families: <span class="font-semibold">{{ $familiesPaid }}</span> | Duplicate candidates: <span class="font-semibold">{{ number_format($duplicateCount) }}</span></p>
             <div class="flex flex-wrap items-center gap-2">
-                @if (auth()->user()?->role === 'system_admin')
+                @can('manageStudentRecords')
                     <form method="POST" action="{{ route('teacher.records.parent-profile-sync') }}">
                         @csrf
                         <button type="submit" class="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">
                             Sync Parent Profile From Payments
                         </button>
                     </form>
-                @endif
+                @endcan
 
-                <form method="POST" action="{{ route('billing.setup.current-year') }}">
-                    @csrf
-                    <input type="hidden" name="billing_year" value="{{ $billingYear }}">
-                    <button type="submit" class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
-                        Setup/Sync RM100 Family Billing
-                    </button>
-                </form>
+                @can('manageBilling')
+                    <form method="POST" action="{{ route('billing.setup.current-year') }}">
+                        @csrf
+                        <input type="hidden" name="billing_year" value="{{ $billingYear }}">
+                        <button type="submit" class="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700">
+                            Setup/Sync RM100 Family Billing
+                        </button>
+                    </form>
+                @endcan
             </div>
         </div>
 
@@ -174,6 +180,29 @@
                             @endforeach
                         </datalist>
                         <span class="mt-1 block text-[11px] font-medium text-zinc-500">Taip beberapa huruf untuk tapis pilihan kelas dalam dropdown.</span>
+                    </label>
+
+                    <label class="text-xs font-semibold text-zinc-600">
+                        Status murid
+                        <select
+                            name="student_status"
+                            class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        >
+                            <option value="active" @selected($studentStatusFilter === \App\Models\Student::STATUS_ACTIVE)>Aktif</option>
+                            <option value="transferred" @selected($studentStatusFilter === \App\Models\Student::STATUS_TRANSFERRED)>Telah Berpindah</option>
+                            <option value="all" @selected($studentStatusFilter === 'all')>Semua</option>
+                        </select>
+                        <span class="mt-1 block text-[11px] font-medium text-zinc-500">Murid berpindah dikecualikan daripada statistik kutipan aktif.</span>
+                    </label>
+
+                    <label class="md:col-span-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-700">
+                        <input
+                            type="checkbox"
+                            name="include_transferred"
+                            value="1"
+                            @checked($includeTransferred)
+                        >
+                        Include transferred students
                     </label>
 
                     <div class="md:col-span-3 flex items-center gap-2">
@@ -344,7 +373,16 @@
                                             -
                                         @endif
                                     </td>
-                                    <td class="px-5 py-4 font-semibold text-zinc-900">{{ $student->full_name }}</td>
+                                    <td class="px-5 py-4 font-semibold text-zinc-900">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span>{{ $student->full_name }}</span>
+                                            @if ($student->isTransferred())
+                                                <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                                                    Telah Berpindah
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </td>
                                     <td class="px-5 py-4 text-sm text-zinc-700">{{ $student->class_name ?: '-' }}</td>
                                     <td class="px-5 py-4 text-sm text-zinc-600">
                                         @php
@@ -397,6 +435,7 @@
                                                 'paid' => 'border-emerald-300 bg-emerald-50 text-emerald-800',
                                                 'partial' => 'border-amber-300 bg-amber-50 text-amber-800',
                                                 'pending' => 'border-sky-300 bg-sky-50 text-sky-800',
+                                                'transferred' => 'border-zinc-300 bg-zinc-100 text-zinc-600',
                                                 default => 'border-zinc-300 bg-zinc-50 text-zinc-700',
                                             };
                                         @endphp
@@ -407,6 +446,11 @@
                                             @if ($student->is_duplicate)
                                                 <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
                                                     Duplicate
+                                                </span>
+                                            @endif
+                                            @if ($student->isTransferred())
+                                                <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
+                                                    Telah Berpindah
                                                 </span>
                                             @endif
                                         </div>
@@ -423,13 +467,27 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 text-right">
-                                        @if (filled($student->family_code))
-                                            <a
-                                                href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}#update-parent-profile"
-                                                class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-                                            >
-                                                Update Profile
-                                            </a>
+                                        @if (auth()->user()->can('manageStudentRecords'))
+                                            @if (filled($student->family_code))
+                                                <a
+                                                    href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}#student-status-{{ $student->id }}"
+                                                    class="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
+                                                    title="Edit profile"
+                                                    aria-label="Edit profile"
+                                                >
+                                                    <i class="ph ph-note-pencil text-base"></i>
+                                                    <span>Edit</span>
+                                                </a>
+                                            @elseif ($student->is_duplicate)
+                                                <a
+                                                    href="{{ route('teacher.records.duplicates.review', $student) }}"
+                                                    class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                                                >
+                                                    Review duplicate
+                                                </a>
+                                            @else
+                                                <span class="text-xs text-zinc-400">-</span>
+                                            @endif
                                         @elseif ($student->is_duplicate)
                                             <a
                                                 href="{{ route('teacher.records.duplicates.review', $student) }}"
@@ -438,7 +496,7 @@
                                                 Review duplicate
                                             </a>
                                         @else
-                                            <span class="text-xs text-zinc-400">-</span>
+                                            <span class="text-xs text-zinc-400">Read only</span>
                                         @endif
                                     </td>
                                 </tr>

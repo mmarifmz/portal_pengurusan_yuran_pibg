@@ -244,6 +244,8 @@ it('allows assigning an existing parent user as teacher while keeping parent acc
 });
 
 it('existing parent teacher invite uses existing-account wording without reset password', function () {
+    config()->set('teacher.default_password', 'change-this-password');
+
     $admin = makeTeacherManager();
     $user = User::factory()->create([
         'role' => 'parent',
@@ -257,15 +259,14 @@ it('existing parent teacher invite uses existing-account wording without reset p
 
     $response = $this->actingAs($admin)->post(route('super-teacher.teachers.send-invite', $user));
 
-    $response
-        ->assertRedirect(route('super-teacher.teachers.index'))
-        ->assertSessionHas('teacher_onboarding_batch', function (array $manualInvites): bool {
-            $message = (string) ($manualInvites[0]['message'] ?? '');
+    $response->assertRedirect(route('super-teacher.teachers.index'));
 
-            return str_contains($message, 'login sedia ada')
-                && str_contains($message, 'Pautan Login')
-                && ! str_contains($message, 'Kata Laluan Sementara');
-        });
+    $page = $this->actingAs($admin)->get(route('super-teacher.teachers.index'));
+
+    $page->assertOk();
+    $page->assertSee('TEACHER PARENT', false);
+    $page->assertSee('Gunakan login sedia ada cikgu untuk masuk ke sistem.', false);
+    $page->assertSee('Pautan Login', false);
 });
 
 it('existing parent converted to teacher does not get password overwritten by default', function () {

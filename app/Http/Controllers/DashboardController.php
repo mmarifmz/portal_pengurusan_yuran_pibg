@@ -60,15 +60,26 @@ class DashboardController extends Controller
         if (! $yearOptions->contains($selectedDashboardYear)) {
             $selectedDashboardYear = (int) $yearOptions->first();
         }
+        $activeFamilyCodes = Student::activeFamilyCodesForYear($selectedDashboardYear);
         $selectedClassYearFilter = trim((string) $request->query('class_tahun', 'all'));
         $selectedWeekKey = trim((string) $request->query('week_key', ''));
 
-        $familyBillings = FamilyBilling::with('students')
-            ->where('billing_year', $selectedDashboardYear)
+        $familyBillingsQuery = FamilyBilling::with('students')
+            ->where('billing_year', $selectedDashboardYear);
+
+        if ($activeFamilyCodes->isEmpty()) {
+            $familyBillingsQuery->whereRaw('1 = 0');
+        } else {
+            $familyBillingsQuery->whereIn('family_code', $activeFamilyCodes->all());
+        }
+
+        $familyBillings = $familyBillingsQuery
             ->orderBy('family_code')
             ->get();
 
-        $students = Student::where('billing_year', $selectedDashboardYear)
+        $students = Student::query()
+            ->active()
+            ->where('billing_year', $selectedDashboardYear)
             ->orderBy('family_code')
             ->orderBy('class_name')
             ->orderBy('full_name')
@@ -739,6 +750,7 @@ Portal Yuran:
             ->values();
 
         $dominantClassByFamily = Student::query()
+            ->active()
             ->whereIn('family_code', $familyCodes)
             ->select(['family_code', 'class_name'])
             ->get()

@@ -4,13 +4,15 @@ namespace App\Providers;
 
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
-use Illuminate\Support\Facades\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->registerAuthorizationGates();
         $this->registerGlobalToasterData();
     }
 
@@ -51,6 +54,20 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    protected function registerAuthorizationGates(): void
+    {
+        Gate::define('viewClassProgress', fn (User $user): bool => $user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']));
+        Gate::define('viewClassDetails', fn (User $user): bool => $user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']));
+        Gate::define('manageBilling', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageStudentRecords', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageTeachers', fn (User $user): bool => $user->canManageTeacherUsers());
+        Gate::define('manageWhatsappQueue', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageBackups', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageImports', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('managePortalSettings', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageSchoolCalendar', fn (User $user): bool => $user->isSystemAdmin());
     }
 
     protected function registerGlobalToasterData(): void

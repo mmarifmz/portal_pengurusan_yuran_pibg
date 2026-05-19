@@ -125,23 +125,32 @@
             </div>
         </section>
 
-        <section class="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
-            <h2 class="text-lg font-bold text-rose-800">Delete this duplicate family group</h2>
-            <p class="mt-2 text-sm text-rose-700">
-                This action permanently deletes the selected family group and its child record(s) in one go. Review the list above carefully before proceeding.
-            </p>
+        @can('manageStudentRecords')
+            <section class="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
+                <h2 class="text-lg font-bold text-rose-800">Delete this duplicate family group</h2>
+                <p class="mt-2 text-sm text-rose-700">
+                    This action permanently deletes the selected family group and its child record(s) in one go. Review the list above carefully before proceeding.
+                </p>
 
-            <form method="POST" action="{{ route('teacher.records.duplicates.destroy', $student) }}" class="mt-4">
-                @csrf
-                @method('DELETE')
-                <button
-                    type="submit"
-                    class="inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none"
-                    style="background:#dc2626;color:#ffffff;border:1px solid #b91c1c;box-shadow:0 12px 24px rgba(220,38,38,.22);"
-                >
-                    Delete this duplicate family group
-                </button>
-            </form>
-        </section>
+                <form method="POST" action="{{ route('teacher.records.duplicates.destroy', $student) }}" class="mt-4">
+                    @csrf
+                    @method('DELETE')
+                    <button
+                        type="submit"
+                        class="inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none"
+                        style="background:#dc2626;color:#ffffff;border:1px solid #b91c1c;box-shadow:0 12px 24px rgba(220,38,38,.22);"
+                    >
+                        Delete this duplicate family group
+                    </button>
+                </form>
+            </section>
+        @else
+            <section class="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 shadow-sm">
+                <h2 class="text-lg font-bold text-zinc-800">Duplicate review is read-only for teachers</h2>
+                <p class="mt-2 text-sm text-zinc-600">
+                    Only Super Admin can delete duplicate family groups after review.
+                </p>
+            </section>
+        @endcan
     </div>
 </x-layouts::app>

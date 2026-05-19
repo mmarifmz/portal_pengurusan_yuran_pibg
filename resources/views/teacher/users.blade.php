@@ -2,7 +2,6 @@
     @php
         $formatWhatsapp = static fn (?string $phone): string => filled($phone) ? (str_starts_with((string) $phone, '+') ? (string) $phone : '+'.ltrim((string) $phone, '+')) : '—';
         $importSummary = session('teacher_import_summary');
-        $onboardingBatch = is_array($onboardingBatch ?? null) ? $onboardingBatch : [];
         $inviteBadge = static function (?string $status): array {
             return match ($status ?: 'not_generated') {
                 'sent_manual' => ['Sent Manually', 'border-emerald-200 bg-emerald-50 text-emerald-700'],
@@ -19,9 +18,7 @@
                 default => [str_replace('_', ' ', ucfirst($role)), 'border-zinc-200 bg-zinc-50 text-zinc-700'],
             };
         };
-        $batchByTeacherId = collect($onboardingBatch)
-            ->filter(fn ($invite) => is_array($invite) && isset($invite['teacher_id']))
-            ->keyBy('teacher_id');
+        $invitePreviewByTeacherId = collect($onboardingInvitePreviews ?? [])->keyBy(fn ($invite, $teacherId) => (int) $teacherId);
     @endphp
 
     <div class="space-y-6">
@@ -336,10 +333,10 @@
                     <div class="mt-4 space-y-3">
                         @forelse ($inviteEligibleTeachers as $eligibleTeacher)
                             @php
-                                $generatedInvite = $batchByTeacherId->get($eligibleTeacher->id);
+                                $generatedInvite = $invitePreviewByTeacherId->get($eligibleTeacher->id);
                                 [$onboardingStatusLabel, $onboardingStatusClasses] = $inviteBadge($eligibleTeacher->onboarding_invite_status);
                             @endphp
-                            <div class="rounded-xl border border-white bg-white p-4 shadow-sm" data-onboarding-row="{{ $eligibleTeacher->id }}">
+                            <div id="onboarding-teacher-{{ $eligibleTeacher->id }}" class="rounded-xl border border-white bg-white p-4 shadow-sm" data-onboarding-row="{{ $eligibleTeacher->id }}" data-wa-phone="{{ $generatedInvite['wa_phone'] ?? '' }}">
                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                     <div>
                                         <p class="text-sm font-semibold text-zinc-900">{{ $eligibleTeacher->name }}</p>
@@ -359,7 +356,7 @@
                                     </div>
 
                                     <div class="w-full max-w-3xl space-y-3">
-                                        <textarea readonly rows="7" class="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-800" data-onboarding-message>{{ $generatedInvite['message'] ?? '' }}</textarea>
+                                        <textarea readonly rows="7" class="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-800" data-onboarding-message data-message="{{ $generatedInvite['message'] ?? '' }}">{{ $generatedInvite['message'] ?? '' }}</textarea>
                                         <div class="flex flex-wrap items-center gap-2">
                                             <button
                                                 type="button"
@@ -376,8 +373,12 @@
                                             >
                                                 Copy Message
                                             </button>
-                                            <form method="POST" action="{{ route('super-teacher.teachers.mark-invite-sent', $eligibleTeacher) }}" class="inline-flex items-center gap-2">
+                                            <form method="POST" action="{{ route('super-teacher.teachers.mark-invite-sent', $eligibleTeacher) }}" class="inline-flex items-center gap-2" data-mark-sent-form>
                                                 @csrf
+                                                <input type="hidden" name="temporary_password" value="{{ $onboardingDefaultPassword }}">
+                                                <input type="hidden" name="dashboard_url" value="{{ $onboardingDashboardUrl }}">
+                                                <input type="hidden" name="reset_passwords" value="{{ $onboardingResetSelected ? 1 : 0 }}">
+                                                <input type="hidden" name="scroll_to" value="onboarding-teacher-{{ $eligibleTeacher->id }}">
                                                 <label class="inline-flex items-center gap-2 text-xs font-medium text-zinc-700">
                                                     <input type="checkbox" name="confirm_mark_sent" value="1" class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500" />
                                                     Mark as sent manually
@@ -612,6 +613,35 @@
         const onboardingUrlInput = document.getElementById('onboardingDashboardUrl');
         const onboardingPreview = document.getElementById('onboardingPreviewMessage');
         const resetSelectedTeachers = document.getElementById('resetSelectedTeachers');
+        const onboardingRows = Array.from(document.querySelectorAll('[data-onboarding-row]'));
+
+        function buildWhatsAppWebUrl(waPhone, message) {
+            if (!waPhone || !message) {
+                return '';
+            }
+
+            return `https://wa.me/${String(waPhone).replace(/^\+/, '')}?text=${encodeURIComponent(message)}`;
+        }
+
+        function syncMarkSentFormState() {
+            document.querySelectorAll('[data-mark-sent-form]').forEach((form) => {
+                const passwordInput = form.querySelector('input[name=\"temporary_password\"]');
+                const urlInput = form.querySelector('input[name=\"dashboard_url\"]');
+                const resetInput = form.querySelector('input[name=\"reset_passwords\"]');
+
+                if (passwordInput) {
+                    passwordInput.value = onboardingPasswordInput?.value || '';
+                }
+
+                if (urlInput) {
+                    urlInput.value = onboardingUrlInput?.value || '';
+                }
+
+                if (resetInput) {
+                    resetInput.value = resetSelectedTeachers?.checked ? '1' : '0';
+                }
+            });
+        }
 
         document.querySelectorAll('[data-copy-message]').forEach((button) => {
             button.addEventListener('click', async () => {
@@ -679,16 +709,24 @@
                     const statusBadge = row?.querySelector('[data-onboarding-status-badge]');
                     if (messageField) {
                         messageField.value = invite.message || '';
+                        messageField.dataset.message = invite.message || '';
                     }
                     if (statusBadge) {
                         statusBadge.textContent = invite.status_label || 'Generated';
                         statusBadge.className = 'inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700';
                     }
+                    if (row && invite.wa_phone) {
+                        row.setAttribute('data-wa-phone', invite.wa_phone);
+                    }
                     if (onboardingPreview) {
                         onboardingPreview.value = invite.message || onboardingPreview.value;
                     }
+                    syncMarkSentFormState();
 
-                    window.open(invite.wa_link, '_blank', 'noopener');
+                    const waLink = buildWhatsAppWebUrl(invite.wa_phone || row?.getAttribute('data-wa-phone') || '', invite.message || messageField?.value || '');
+                    if (waLink) {
+                        window.open(waLink, '_blank', 'noopener');
+                    }
                 } catch (error) {
                     window.alert(error.message || 'Unable to generate onboarding invite.');
                 } finally {
@@ -696,5 +734,19 @@
                 }
             });
         });
+
+        [onboardingPasswordInput, onboardingUrlInput, resetSelectedTeachers].forEach((field) => {
+            field?.addEventListener('input', syncMarkSentFormState);
+            field?.addEventListener('change', syncMarkSentFormState);
+        });
+
+        onboardingRows.forEach((row) => {
+            const messageField = row.querySelector('[data-onboarding-message]');
+            if (messageField && !messageField.dataset.message) {
+                messageField.dataset.message = messageField.value || '';
+            }
+        });
+
+        syncMarkSentFormState();
     </script>
 </x-layouts::app>

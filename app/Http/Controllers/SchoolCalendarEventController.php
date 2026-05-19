@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\SchoolCalendarEvent;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class SchoolCalendarEventController extends Controller
 {
     public function store(Request $request): RedirectResponse
     {
+        Gate::authorize('manageSchoolCalendar');
+
         $data = $this->validateEvent($request);
 
         SchoolCalendarEvent::create($data + [
@@ -21,6 +24,8 @@ class SchoolCalendarEventController extends Controller
 
     public function update(Request $request, SchoolCalendarEvent $schoolCalendarEvent): RedirectResponse
     {
+        Gate::authorize('manageSchoolCalendar');
+
         $schoolCalendarEvent->update($this->validateEvent($request));
 
         return back()->with('status', 'Aktiviti kalendar berjaya dikemas kini.');
@@ -28,6 +33,8 @@ class SchoolCalendarEventController extends Controller
 
     public function destroy(SchoolCalendarEvent $schoolCalendarEvent): RedirectResponse
     {
+        Gate::authorize('manageSchoolCalendar');
+
         $schoolCalendarEvent->delete();
 
         return back()->with('status', 'Aktiviti kalendar berjaya dipadam.');

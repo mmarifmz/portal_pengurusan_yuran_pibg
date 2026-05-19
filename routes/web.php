@@ -199,13 +199,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('dashboard.parent.message');
 
     Route::post('/calendar-events', [SchoolCalendarEventController::class, 'store'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('calendar-events.store');
     Route::patch('/calendar-events/{schoolCalendarEvent}', [SchoolCalendarEventController::class, 'update'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('calendar-events.update');
     Route::delete('/calendar-events/{schoolCalendarEvent}', [SchoolCalendarEventController::class, 'destroy'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('calendar-events.destroy');
 
     Route::get('/teacher/records', [TeacherRecordsController::class, 'index'])
@@ -215,14 +215,17 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.family');
     Route::patch('/teacher/records/family/{familyCode}/parent-profile', [TeacherRecordsController::class, 'updateFamilyParentProfile'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.records.family.parent-profile.update');
     Route::patch('/teacher/records/family/{familyCode}/social-tags', [TeacherRecordsController::class, 'updateFamilySocialTags'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.records.family.social-tags.update');
     Route::patch('/teacher/records/students/{student}/tags', [TeacherRecordsController::class, 'updateStudentTags'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.records.students.tags.update');
+    Route::patch('/teacher/records/students/{student}/status', [TeacherRecordsController::class, 'updateStudentStatus'])
+        ->middleware('role:system_admin')
+        ->name('teacher.records.students.status.update');
     Route::post('/teacher/records/parent-profile-sync', [TeacherRecordsController::class, 'syncParentProfilesFromPayments'])
         ->middleware('role:system_admin')
         ->name('teacher.records.parent-profile-sync');
@@ -285,7 +288,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.records.duplicates.review');
     Route::delete('/teacher/records/duplicates/{student}', [TeacherRecordsController::class, 'destroyDuplicate'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('teacher.records.duplicates.destroy');
 
     Route::get('/pta/dashboard', [PtaDashboardController::class, 'index'])
