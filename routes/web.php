@@ -241,20 +241,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/class-progress', [TeacherClassProgressController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress');
-    Route::get('/admin/classes/{class}/whatsapp-preview', [TeacherClassProgressController::class, 'whatsappPreview'])
+    Route::get('/teacher/class-progress/{class}/details', [TeacherClassProgressController::class, 'classDetails'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->name('teacher.class-progress.details');
+    Route::get('/admin/classes/{class}/whatsapp-preview', [TeacherClassProgressController::class, 'whatsappPreview'])
+        ->middleware('role:system_admin')
         ->name('admin.classes.whatsapp-preview');
     Route::post('/admin/classes/{class}/whatsapp-queue', [TeacherClassProgressController::class, 'queueWhatsapp'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('admin.classes.whatsapp-queue');
     Route::get('/admin/classes/whatsapp-batch-preview', [TeacherClassProgressController::class, 'batchWhatsappPreview'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('admin.classes.whatsapp-batch-preview');
     Route::post('/admin/classes/whatsapp-batch-queue', [TeacherClassProgressController::class, 'batchQueueWhatsapp'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('admin.classes.whatsapp-batch-queue');
     Route::get('/admin/whatsapp-queue', [TeacherClassProgressController::class, 'whatsappQueueIndex'])
-        ->middleware('role:teacher,super_teacher,system_admin,pta')
+        ->middleware('role:system_admin')
         ->name('admin.whatsapp-queue.index');
     
     Route::get('/teacher/contribution-leaderboard', [TeacherContributionLeaderboardController::class, 'index'])

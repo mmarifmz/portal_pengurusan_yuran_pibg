@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\WhatsAppMessageQueue;
+use App\Services\WhatsApp\MessageFormatterService;
 use App\Support\MalaysianPhone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -12,11 +13,10 @@ use InvalidArgumentException;
 
 class ClassTeacherWhatsAppReportService
 {
-    private const SAFE_MESSAGE_LENGTH = 1500;
-
     public function __construct(
         private readonly PaymentReportingService $paymentReportingService,
-        private readonly WhatsAppMessageQueueService $whatsAppMessageQueueService
+        private readonly WhatsAppMessageQueueService $whatsAppMessageQueueService,
+        private readonly MessageFormatterService $messageFormatterService
     ) {
     }
 
@@ -272,20 +272,23 @@ class ClassTeacherWhatsAppReportService
             $errors[] = 'Guru kelas belum mempunyai nombor WhatsApp yang sah.';
         }
 
-        $messages = $this->buildMessages(
-            className: $className,
-            teacherName: $teacher?->name ? (string) $teacher->name : 'Guru Kelas',
-            totalStudents: $students->count(),
-            paidCount: $paidStudents->count(),
-            unpaidCount: $unpaidStudents->count(),
-            paymentPercentage: (float) $row['completion_percent'],
-            pibgAmount: (float) $row['yuran_collected'],
-            additionalDonation: (float) $row['sumbangan_tambahan_collected'],
-            totalCollected: (float) $row['jumlah_kutipan'],
-            expectedAmount: (float) ((float) $row['yuran_collected'] + (float) $row['baki_tertunggak']),
-            rank: (int) $row['rank'],
-            paidStudents: $paidStudents,
-            unpaidStudents: $unpaidStudents,
+        $messages = array_merge(
+            $this->messageFormatterService->buildSummaryMessage(
+                className: $className,
+                teacherName: $teacher?->name ? (string) $teacher->name : 'Guru Kelas',
+                totalStudents: $students->count(),
+                paidCount: $paidStudents->count(),
+                unpaidCount: $unpaidStudents->count(),
+                paymentPercentage: (float) $row['completion_percent'],
+                pibgAmount: (float) $row['yuran_collected'],
+                additionalDonation: (float) $row['sumbangan_tambahan_collected'],
+                totalCollected: (float) $row['jumlah_kutipan'],
+                expectedAmount: (float) ((float) $row['yuran_collected'] + (float) $row['baki_tertunggak']),
+                rank: (int) $row['rank'],
+                paidStudents: $paidStudents,
+            ),
+            $this->messageFormatterService->buildPaidListMessage($className, $paidStudents),
+            $this->messageFormatterService->buildUnpaidListMessage($className, $unpaidStudents),
         );
 
         $status = 'ready';
@@ -383,117 +386,5 @@ class ClassTeacherWhatsAppReportService
         $year = (int) ($matches[1] ?? 0);
 
         return ($year >= 1 && $year <= 6) ? $year : null;
-    }
-
-    /**
-     * @param  Collection<int, array<string, mixed>>  $paidStudents
-     * @param  Collection<int, array<string, mixed>>  $unpaidStudents
-     * @return array<int, array<string, mixed>>
-     */
-    private function buildMessages(
-        string $className,
-        string $teacherName,
-        int $totalStudents,
-        int $paidCount,
-        int $unpaidCount,
-        float $paymentPercentage,
-        float $pibgAmount,
-        float $additionalDonation,
-        float $totalCollected,
-        float $expectedAmount,
-        int $rank,
-        Collection $paidStudents,
-        Collection $unpaidStudents
-    ): array {
-        $summaryLines = [
-            "Assalamualaikum / Salam Sejahtera {$teacherName},",
-            '',
-            "Ringkasan kutipan Yuran PIBG bagi kelas {$className}:",
-            '',
-            "Jumlah murid: {$totalStudents}",
-            "Telah bayar: {$paidCount}",
-            "Belum bayar: {$unpaidCount}",
-            'Peratus bayaran: '.number_format($paymentPercentage, 2).'%',
-            '',
-            'Yuran PIBG terkumpul: RM '.number_format($pibgAmount, 2),
-            'Sumbangan tambahan: RM '.number_format($additionalDonation, 2),
-            'Jumlah kutipan: RM '.number_format($totalCollected, 2),
-            'Sasaran kutipan: RM '.number_format($expectedAmount, 2),
-            "Ranking semasa: #{$rank}",
-            '',
-            'Terima kasih atas bantuan cikgu untuk mengingatkan ibu bapa yang masih belum membuat bayaran.',
-        ];
-
-        $paidLines = $paidStudents->isEmpty()
-            ? ['Tiada rekod bayaran setakat ini.']
-            : $paidStudents
-                ->values()
-                ->map(fn (array $student, int $index): string => sprintf(
-                    '%d. %s - RM %s',
-                    $index + 1,
-                    $student['student_name'],
-                    number_format((float) $student['amount_paid'], 2)
-                ))
-                ->all();
-
-        $unpaidLines = $unpaidStudents->isEmpty()
-            ? ['Semua murid telah membuat bayaran. Terima kasih cikgu.']
-            : $unpaidStudents
-                ->values()
-                ->map(fn (array $student, int $index): string => sprintf(
-                    '%d. %s',
-                    $index + 1,
-                    $student['student_name']
-                ))
-                ->all();
-
-        return array_merge(
-            $this->chunkMessage('summary', 'Ringkasan Kutipan', $summaryLines),
-            $this->chunkMessage('paid_list', '✅ Senarai Telah Bayar', $paidLines),
-            $this->chunkMessage('unpaid_list', '⏳ Senarai Belum Bayar', $unpaidLines),
-        );
-    }
-
-    /**
-     * @param  array<int, string>  $lines
-     * @return array<int, array<string, mixed>>
-     */
-    private function chunkMessage(string $messagePart, string $heading, array $lines): array
-    {
-        $segments = [];
-        $current = [$heading, ''];
-
-        foreach ($lines as $line) {
-            $candidate = implode("\n", [...$current, $line]);
-
-            if (mb_strlen($candidate) > self::SAFE_MESSAGE_LENGTH && count($current) > 2) {
-                $segments[] = implode("\n", $current);
-                $current = [$heading, '', $line];
-
-                continue;
-            }
-
-            $current[] = $line;
-        }
-
-        $segments[] = implode("\n", $current);
-        $segmentCount = count($segments);
-
-        return collect($segments)
-            ->map(function (string $body, int $index) use ($messagePart, $segmentCount, $heading): array {
-                if ($segmentCount > 1) {
-                    $body = str_replace($heading, sprintf('%s (%d/%d)', $heading, $index + 1, $segmentCount), $body);
-                }
-
-                return [
-                    'message_part' => $messagePart,
-                    'part_label' => $heading,
-                    'segment' => $index + 1,
-                    'segment_count' => $segmentCount,
-                    'body' => $body,
-                ];
-            })
-            ->values()
-            ->all();
     }
 }

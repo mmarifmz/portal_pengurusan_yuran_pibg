@@ -6,16 +6,43 @@
             ['label' => 'Sent Today', 'value' => $queueDashboard['sent_today'] ?? 0],
             ['label' => 'Failed Today', 'value' => $queueDashboard['failed_today'] ?? 0],
         ];
+        $classSections = $canManageWhatsapp
+            ? collect([
+                [
+                    'key' => 'all-classes',
+                    'title' => 'Semua Kelas',
+                    'description' => 'Semua kelas dipaparkan dengan butiran penuh untuk semakan dan tindakan susulan.',
+                    'rows' => $leaderboardRows,
+                ],
+            ])
+            : collect([
+                [
+                    'key' => 'my-class',
+                    'title' => 'Kelas Saya',
+                    'description' => 'Kelas tugasan cikgu dipaparkan di bahagian atas dan dibuka terus untuk semakan pantas.',
+                    'rows' => $myClassRows,
+                ],
+                [
+                    'key' => 'other-classes',
+                    'title' => 'Senarai Kelas Lain',
+                    'description' => 'Kelas lain juga boleh dibuka untuk melihat senarai telah bayar dan belum bayar.',
+                    'rows' => $otherClassRows,
+                ],
+            ])->filter(fn (array $section) => $section['rows']->isNotEmpty())->values();
     @endphp
 
     <div class="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
-                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Leaderboard Bayaran Mengikut Kelas</h1>
-                    <p class="mt-1 text-sm text-zinc-600">Progress Bayaran Yuran Mengikut Kelas bagi sesi {{ $billingYear }}</p>
-                    <p class="mt-2 text-xs text-zinc-500">Every WhatsApp report is previewed first, then queued for processing through the app workflow.</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">{{ $canManageWhatsapp ? 'SUPER ADMIN VIEW' : 'TEACHER DASHBOARD' }}</p>
+                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Pemantauan Kutipan Yuran &amp; Sumbangan PIBG Mengikut Kelas</h1>
+                    <p class="mt-1 max-w-3xl text-sm text-zinc-600">Pantau status bayaran PIBG, sumbangan tambahan, baki tertunggak dan prestasi kutipan setiap kelas bagi sesi {{ $billingYear }}.</p>
+                    <div class="mt-3 space-y-2 text-sm text-zinc-600">
+                        <p>📌 Kelas sendiri akan dipaparkan di bahagian atas sebagai <span class="font-semibold italic text-zinc-800">Kelas Saya</span> untuk semakan pantas.</p>
+                        <p>📂 Kelas lain juga boleh dibuka untuk melihat senarai telah bayar dan belum bayar.</p>
+                        <p>📊 Data dikemaskini secara masa nyata berdasarkan rekod pembayaran semasa.</p>
+                    </div>
                 </div>
 
                 <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
@@ -29,31 +56,35 @@
                         </select>
                     </label>
 
-                    <div class="flex flex-wrap gap-2">
-                        <a href="{{ $queueDashboardUrl }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                            View WhatsApp Queue
-                        </a>
-                        <button
-                            type="button"
-                            id="batchWhatsappPreviewButton"
-                            class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
-                        >
-                            Blast WhatsApp Report to All Class Teachers
-                        </button>
-                    </div>
+                    @if ($canManageWhatsapp)
+                        <div class="flex flex-wrap gap-2">
+                            <a href="{{ $queueDashboardUrl }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                                View WhatsApp Queue
+                            </a>
+                            <button
+                                type="button"
+                                id="batchWhatsappPreviewButton"
+                                class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
+                            >
+                                Blast WhatsApp Report to All Class Teachers
+                            </button>
+                        </div>
+                    @endif
                 </div>
             </div>
 
-            <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                @foreach ($queueCountCards as $card)
-                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $card['label'] }}</p>
-                        <p class="mt-1 text-xl font-bold text-zinc-900">{{ $card['value'] }}</p>
-                    </div>
-                @endforeach
-            </div>
+            @if ($canManageWhatsapp)
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach ($queueCountCards as $card)
+                        <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $card['label'] }}</p>
+                            <p class="mt-1 text-xl font-bold text-zinc-900">{{ $card['value'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
 
-            @if (! empty($queueDashboard['pending_warning']) || ! empty($queueDashboard['processor_warning']))
+            @if ($canManageWhatsapp && (! empty($queueDashboard['pending_warning']) || ! empty($queueDashboard['processor_warning'])))
                 <div class="mt-4 space-y-2">
                     @if (! empty($queueDashboard['pending_warning']))
                         <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -69,70 +100,121 @@
             @endif
         </section>
 
-        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-zinc-200 text-sm text-zinc-700">
-                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                        <tr>
-                            <th class="px-5 py-3">Kelas</th>
-                            <th class="px-5 py-3 text-right">Jumlah Keluarga</th>
-                            <th class="px-5 py-3 text-right">Selesai Bayar</th>
-                            <th class="px-5 py-3 text-right">Bayaran Sebahagian</th>
-                            <th class="px-5 py-3 text-right">Belum Bayar</th>
-                            <th class="px-5 py-3 text-right">Kutipan Yuran</th>
-                            <th class="px-5 py-3 text-right">Sumbangan Tambahan</th>
-                            <th class="px-5 py-3 text-right">Jumlah Kutipan</th>
-                            <th class="px-5 py-3 text-right">Baki Tertunggak</th>
-                            <th class="px-5 py-3 text-right">Completion %</th>
-                            <th class="px-5 py-3 text-right">Tindakan</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-zinc-200 bg-white">
-                        @forelse ($leaderboardRows as $row)
-                            <tr
+        <div id="classProgressSections" class="space-y-6">
+            @forelse ($classSections as $section)
+                <section
+                    data-class-section="1"
+                    data-section-key="{{ $section['key'] }}"
+                    class="space-y-4"
+                >
+                    <div class="flex flex-col gap-1">
+                        <h2 class="text-lg font-bold tracking-tight text-zinc-900">{{ $section['title'] }}</h2>
+                        <p class="text-sm text-zinc-500">{{ $section['description'] }}</p>
+                    </div>
+
+                    <div class="grid gap-4">
+                        @foreach ($section['rows'] as $row)
+                            <article
                                 data-class-card="1"
                                 data-year-level="{{ $row['year_level'] ?? 'other' }}"
                                 data-class-name="{{ $row['class_name'] }}"
+                                class="overflow-hidden rounded-2xl border bg-white shadow-sm {{ $row['is_my_class'] ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-zinc-200' }}"
                             >
-                                <td class="px-5 py-4">
-                                    <p class="font-semibold text-zinc-900">{{ $row['class_name'] }}</p>
-                                    <p class="mt-1 text-xs text-zinc-500">{{ $row['teacher_name'] }}</p>
-                                    <div class="mt-2 flex flex-wrap gap-1">
-                                        @foreach ($row['status_badges'] as $badge)
-                                            <span class="inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold {{ $badge['classes'] }}">
-                                                {{ $badge['label'] }}
-                                            </span>
-                                        @endforeach
+                                <div class="p-5">
+                                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="space-y-3">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 class="text-xl font-bold tracking-tight text-zinc-900">{{ $row['class_name'] }}</h3>
+                                                @foreach ($row['status_badges'] as $badge)
+                                                    <span class="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $badge['classes'] }}">
+                                                        {{ $badge['label'] }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                            <p class="text-sm text-zinc-500">Guru Kelas: <span class="font-semibold text-zinc-700">{{ $row['teacher_name'] }}</span></p>
+                                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Jumlah Keluarga</p>
+                                                    <p class="mt-1 text-lg font-bold text-zinc-900">{{ $row['total_families'] }}</p>
+                                                </div>
+                                                <div class="rounded-2xl border border-zinc-200 bg-emerald-50 px-4 py-3">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Selesai</p>
+                                                    <p class="mt-1 text-lg font-bold text-emerald-700">{{ $row['fully_paid_families'] }}</p>
+                                                </div>
+                                                <div class="rounded-2xl border border-zinc-200 bg-amber-50 px-4 py-3">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Sebahagian</p>
+                                                    <p class="mt-1 text-lg font-bold text-amber-700">{{ $row['partial_paid_families'] }}</p>
+                                                </div>
+                                                <div class="rounded-2xl border border-zinc-200 bg-rose-50 px-4 py-3">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Belum Bayar</p>
+                                                    <p class="mt-1 text-lg font-bold text-rose-700">{{ $row['unpaid_families'] }}</p>
+                                                </div>
+                                                <div class="rounded-2xl border border-zinc-200 bg-sky-50 px-4 py-3">
+                                                    <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Completion</p>
+                                                    <p class="mt-1 text-lg font-bold text-sky-700">{{ number_format((float) $row['completion_percent'], 2) }}%</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="w-full max-w-sm space-y-3 lg:ml-6">
+                                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+                                                <div class="flex items-center justify-between gap-3">
+                                                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Jumlah Kutipan</span>
+                                                    <span class="text-lg font-bold text-zinc-900">RM {{ number_format((float) $row['jumlah_kutipan'], 2) }}</span>
+                                                </div>
+                                                <div class="mt-2 flex items-center justify-between gap-3 text-sm">
+                                                    <span class="text-zinc-500">Yuran PIBG</span>
+                                                    <span class="font-semibold text-emerald-700">RM {{ number_format((float) $row['yuran_collected'], 2) }}</span>
+                                                </div>
+                                                <div class="mt-1 flex items-center justify-between gap-3 text-sm">
+                                                    <span class="text-zinc-500">Sumbangan Tambahan</span>
+                                                    <span class="font-semibold {{ (float) $row['sumbangan_tambahan_collected'] > 0 ? 'text-cyan-700' : 'text-zinc-400' }}">RM {{ number_format((float) $row['sumbangan_tambahan_collected'], 2) }}</span>
+                                                </div>
+                                                <div class="mt-1 flex items-center justify-between gap-3 text-sm">
+                                                    <span class="text-zinc-500">Baki Tertunggak</span>
+                                                    <span class="font-semibold {{ (float) $row['baki_tertunggak'] > 0 ? 'text-amber-700' : 'text-emerald-700' }}">RM {{ number_format((float) $row['baki_tertunggak'], 2) }}</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    data-toggle-details="{{ $row['class_name'] }}"
+                                                    @if (! $canManageWhatsapp && $row['is_my_class']) data-expand-default="1" @endif
+                                                    class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
+                                                >
+                                                    View Details
+                                                </button>
+
+                                                @if ($canManageWhatsapp)
+                                                    <button
+                                                        type="button"
+                                                        data-preview-class="{{ $row['class_name'] }}"
+                                                        class="inline-flex shrink-0 items-center rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                                                    >
+                                                        WhatsApp Guru
+                                                    </button>
+                                                @endif
+                                            </div>
+                                        </div>
                                     </div>
-                                </td>
-                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">{{ $row['total_families'] }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-emerald-700">{{ $row['fully_paid_families'] }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-amber-600">{{ $row['partial_paid_families'] }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-rose-600">{{ $row['unpaid_families'] }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-emerald-700">RM {{ number_format((float) $row['yuran_collected'], 2) }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row['sumbangan_tambahan_collected'] > 0 ? 'font-semibold text-cyan-700' : 'text-zinc-400' }}">RM {{ number_format((float) $row['sumbangan_tambahan_collected'], 2) }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">RM {{ number_format((float) $row['jumlah_kutipan'], 2) }}</td>
-                                <td class="px-5 py-4 text-right {{ (float) $row['baki_tertunggak'] > 0 ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700' }}">RM {{ number_format((float) $row['baki_tertunggak'], 2) }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-zinc-900">{{ number_format((float) $row['completion_percent'], 2) }}%</td>
-                                <td class="px-5 py-4 text-right">
-                                    <button
-                                        type="button"
-                                        data-preview-class="{{ $row['class_name'] }}"
-                                        class="inline-flex shrink-0 items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                                    >
-                                        WhatsApp Guru
-                                    </button>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="11" class="px-5 py-8 text-center text-sm text-zinc-500">Tiada data kelas untuk sesi ini.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
+                                </div>
+
+                                <div id="class-detail-{{ \Illuminate\Support\Str::slug($row['class_name']) }}" data-detail-panel="{{ $row['class_name'] }}" class="hidden border-t border-zinc-200 bg-zinc-50/60 px-5 py-5">
+                                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-500">
+                                        Memuatkan butiran kelas...
+                                    </div>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @empty
+                <div class="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500 shadow-sm">
+                    Tiada data kelas untuk sesi ini.
+                </div>
+            @endforelse
+        </div>
 
         <div id="classProgressEmpty" class="hidden rounded-2xl border border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500 shadow-sm">
             Tiada kelas untuk tapisan ini.
@@ -141,6 +223,7 @@
 
     <div id="whatsappToast" class="pointer-events-none fixed right-4 top-4 z-[10001] hidden max-w-sm rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm text-zinc-800 shadow-2xl"></div>
 
+    @if ($canManageWhatsapp)
     <div id="teacherWhatsappPreviewModal" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-black/50 px-4 py-6">
         <div class="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-2xl">
             <div class="flex items-start justify-between border-b border-zinc-200 px-5 py-4">
@@ -247,10 +330,12 @@
             </div>
         </div>
     </div>
+    @endif
 
     <script>
         (function () {
             const billingYear = @json($billingYear);
+            const canManageWhatsapp = @json($canManageWhatsapp);
             const rowButtons = Array.from(document.querySelectorAll('[data-preview-class]'));
             const batchButton = document.getElementById('batchWhatsappPreviewButton');
             const previewModal = document.getElementById('teacherWhatsappPreviewModal');
@@ -264,15 +349,18 @@
             const toast = document.getElementById('whatsappToast');
             const filter = document.getElementById('yearLevelFilter');
             const rows = Array.from(document.querySelectorAll('[data-class-card="1"]'));
+            const sections = Array.from(document.querySelectorAll('[data-class-section="1"]'));
             const emptyState = document.getElementById('classProgressEmpty');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-            const previewUrlTemplate = @json(route('admin.classes.whatsapp-preview', ['class' => '__CLASS__']));
-            const queueUrlTemplate = @json(route('admin.classes.whatsapp-queue', ['class' => '__CLASS__']));
-            const batchPreviewUrl = @json(route('admin.classes.whatsapp-batch-preview'));
-            const batchQueueUrl = @json(route('admin.classes.whatsapp-batch-queue'));
+            const detailUrlTemplate = @json(route('teacher.class-progress.details', ['class' => '__CLASS__']));
+            const previewUrlTemplate = canManageWhatsapp ? @json(route('admin.classes.whatsapp-preview', ['class' => '__CLASS__'])) : null;
+            const queueUrlTemplate = canManageWhatsapp ? @json(route('admin.classes.whatsapp-queue', ['class' => '__CLASS__'])) : null;
+            const batchPreviewUrl = canManageWhatsapp ? @json(route('admin.classes.whatsapp-batch-preview')) : null;
+            const batchQueueUrl = canManageWhatsapp ? @json(route('admin.classes.whatsapp-batch-queue')) : null;
 
             let currentPreview = null;
             let currentBatchPreview = null;
+            let defaultClassExpanded = false;
 
             function buildClassRoute(template, className) {
                 return template.replace('__CLASS__', encodeURIComponent(className));
@@ -350,6 +438,192 @@
                 `).join('');
             }
 
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function renderWhatsappText(value) {
+                let formatted = escapeHtml(value);
+
+                formatted = formatted.replace(/```([\s\S]*?)```/g, '<code class="rounded bg-black/10 px-1 py-0.5 text-[11px]">$1</code>');
+                formatted = formatted.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+                formatted = formatted.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+                formatted = formatted.replace(/\n/g, '<br>');
+
+                return formatted;
+            }
+
+            function formatCurrency(value) {
+                return `RM ${Number(value || 0).toFixed(2)}`;
+            }
+
+            function renderPaidEntries(entries) {
+                if (!entries.length) {
+                    return `
+                        <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+                            Tiada rekod bayaran semasa untuk kelas ini.
+                        </div>
+                    `;
+                }
+
+                return entries.map((entry, index) => `
+                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 ${entry.is_partial ? 'border-amber-200 bg-amber-50/70' : ''}">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="font-semibold text-zinc-900">${index + 1}. ${escapeHtml(entry.student_name_display)}</p>
+                                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                                    <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+                                        ${formatCurrency(entry.paid_amount)}
+                                    </span>
+                                    ${entry.donation_total > 0 ? `
+                                        <span class="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-700">
+                                            Sumbangan ${formatCurrency(entry.donation_total)}
+                                        </span>
+                                    ` : ''}
+                                    ${entry.is_partial ? `
+                                        <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">
+                                            Sebahagian
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            ${entry.latest_payment_at ? `<span class="text-xs font-medium text-zinc-500">${escapeHtml(entry.latest_payment_at)}</span>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            function renderUnpaidEntries(entries) {
+                if (!entries.length) {
+                    return `
+                        <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+                            Tiada keluarga tertunggak untuk kelas ini.
+                        </div>
+                    `;
+                }
+
+                return entries.map((entry, index) => `
+                    <div class="rounded-2xl border px-4 py-4 ${entry.previous_year_paid ? 'border-emerald-200 bg-emerald-50/70' : 'border-zinc-200 bg-zinc-50'}">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="font-semibold ${entry.previous_year_paid ? 'text-emerald-700' : 'text-zinc-900'}">${index + 1}. ${escapeHtml(entry.student_name_display)}</p>
+                                    ${entry.previous_year_badge ? `
+                                        <span
+                                            title="${escapeHtml(entry.previous_year_tooltip || '')}"
+                                            class="inline-flex shrink-0 items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium leading-none text-blue-700"
+                                        >
+                                            ${escapeHtml(entry.previous_year_badge)}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                <div class="mt-2 space-y-1 text-xs text-zinc-600">
+                                    ${entry.parent_name ? `<p>Penjaga: <span class="font-medium text-zinc-700">${escapeHtml(entry.parent_name)}</span></p>` : ''}
+                                    ${entry.parent_phone ? `<p>Telefon: <span class="font-medium text-zinc-700">${escapeHtml(entry.parent_phone)}</span></p>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            function renderClassDetails(details) {
+                const summary = details.summary || {};
+                const detailWarnings = details.summary_only
+                    ? `
+                        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            ${escapeHtml(details.summary_only_message || 'Maklumat terperinci tidak tersedia.')}
+                        </div>
+                    `
+                    : '';
+
+                return `
+                    <div class="space-y-4">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-zinc-900">Class: ${escapeHtml(summary.class_name || '-')}</p>
+                                <p class="mt-1 text-sm text-zinc-500">Teacher: <span class="font-medium text-zinc-700">${escapeHtml(summary.teacher_name || '-')}</span></p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                                <span class="inline-flex rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-zinc-700">Completion ${Number(summary.completion_percent || 0).toFixed(2)}%</span>
+                                <span class="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">Selesai ${summary.fully_paid_families ?? 0}</span>
+                                <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700">Sebahagian ${summary.partial_paid_families ?? 0}</span>
+                                <span class="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-rose-700">Belum ${summary.unpaid_families ?? 0}</span>
+                            </div>
+                        </div>
+                        ${detailWarnings}
+                        ${details.summary_only ? '' : `
+                            <div class="grid gap-4 xl:grid-cols-2">
+                                <section class="rounded-2xl border border-zinc-200 bg-white p-4">
+                                    <div class="mb-3 flex items-center justify-between gap-2">
+                                        <h3 class="text-sm font-semibold text-zinc-900">✅ Telah Bayar</h3>
+                                        <span class="text-xs font-semibold text-zinc-500">${(details.paid_entries || []).length} keluarga</span>
+                                    </div>
+                                    <div class="space-y-3">
+                                        ${renderPaidEntries(details.paid_entries || [])}
+                                    </div>
+                                </section>
+                                <section class="rounded-2xl border border-zinc-200 bg-white p-4">
+                                    <div class="mb-3 flex items-center justify-between gap-2">
+                                        <h3 class="text-sm font-semibold text-zinc-900">⏳ Belum Bayar</h3>
+                                        <span class="text-xs font-semibold text-zinc-500">${(details.unpaid_entries || []).length} keluarga</span>
+                                    </div>
+                                    <div class="space-y-3">
+                                        ${renderUnpaidEntries(details.unpaid_entries || [])}
+                                    </div>
+                                </section>
+                            </div>
+                        `}
+                    </div>
+                `;
+            }
+
+            async function toggleClassDetails(button) {
+                const className = button.getAttribute('data-toggle-details');
+                const panel = className ? document.querySelector(`[data-detail-panel="${CSS.escape(className)}"]`) : null;
+
+                if (!className || !panel) {
+                    return;
+                }
+
+                const isHidden = panel.classList.contains('hidden');
+                if (!isHidden) {
+                    panel.classList.add('hidden');
+                    button.textContent = 'View Details';
+                    return;
+                }
+
+                panel.classList.remove('hidden');
+                button.textContent = 'Hide Details';
+
+                if (panel.dataset.loaded === 'true') {
+                    return;
+                }
+
+                panel.innerHTML = `
+                    <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-500">
+                        Memuatkan butiran kelas...
+                    </div>
+                `;
+
+                try {
+                    const details = await fetchJson(`${buildClassRoute(detailUrlTemplate, className)}?billing_year=${billingYear}`);
+                    panel.innerHTML = renderClassDetails(details);
+                    panel.dataset.loaded = 'true';
+                } catch (error) {
+                    panel.innerHTML = `
+                        <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                            ${escapeHtml(error.data?.message || error.message || 'Unable to load class details.')}
+                        </div>
+                    `;
+                }
+            }
+
             function renderPreview(preview) {
                 currentPreview = preview;
                 document.getElementById('previewClassName').textContent = preview.class_name || '-';
@@ -402,7 +676,13 @@
                                 ${message.segment}/${message.segment_count}
                             </span>
                         </div>
-                        <textarea readonly rows="16" class="mt-3 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-800">${message.body}</textarea>
+                        <div class="mt-3 rounded-[28px] border border-emerald-200 bg-[#dcf8c6] p-4 text-[13px] leading-6 text-zinc-900 shadow-sm">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">WhatsApp Preview</span>
+                                <span class="text-[11px] text-emerald-700">Message ${message.segment}/${message.segment_count}</span>
+                            </div>
+                            <div class="whitespace-pre-wrap break-words" style="word-break: break-word;">${renderWhatsappText(message.body)}</div>
+                        </div>
                     </div>
                 `).join('');
 
@@ -636,21 +916,43 @@
                     }
                 });
 
+                sections.forEach((section) => {
+                    const sectionRows = Array.from(section.querySelectorAll('[data-class-card="1"]'));
+                    const visibleRows = sectionRows.filter((row) => !row.classList.contains('hidden'));
+                    section.classList.toggle('hidden', visibleRows.length === 0);
+                });
+
                 emptyState?.classList.toggle('hidden', visibleCount > 0);
+
+                if (!defaultClassExpanded) {
+                    const defaultButton = document.querySelector('[data-expand-default="1"]');
+                    const defaultRow = defaultButton?.closest('[data-class-card="1"]');
+
+                    if (defaultButton && defaultRow && !defaultRow.classList.contains('hidden')) {
+                        defaultClassExpanded = true;
+                        toggleClassDetails(defaultButton);
+                    }
+                }
             }
 
-            rowButtons.forEach((button) => {
-                button.addEventListener('click', () => {
-                    const className = button.getAttribute('data-preview-class');
-                    if (className) {
-                        openClassPreview(className);
-                    }
-                });
+            document.querySelectorAll('[data-toggle-details]').forEach((button) => {
+                button.addEventListener('click', () => toggleClassDetails(button));
             });
 
-            batchButton?.addEventListener('click', openBatchPreview);
-            queueTeacherButton?.addEventListener('click', () => queueCurrentPreview(false));
-            queueBatchButton?.addEventListener('click', () => queueBatchPreview(false));
+            if (canManageWhatsapp) {
+                rowButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const className = button.getAttribute('data-preview-class');
+                        if (className) {
+                            openClassPreview(className);
+                        }
+                    });
+                });
+
+                batchButton?.addEventListener('click', openBatchPreview);
+                queueTeacherButton?.addEventListener('click', () => queueCurrentPreview(false));
+                queueBatchButton?.addEventListener('click', () => queueBatchPreview(false));
+            }
             filter?.addEventListener('change', applyFilter);
 
             document.querySelectorAll('[data-close-preview-modal]').forEach((button) => {

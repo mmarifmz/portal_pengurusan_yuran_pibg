@@ -12,9 +12,9 @@ beforeEach(function () {
 });
 
 it('class whatsapp preview returns 3 message parts', function () {
-    [$teacher] = seedClassProgressWhatsappDataset();
+    [, , $admin] = seedClassProgressWhatsappDataset();
 
-    $response = $this->actingAs($teacher)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year);
+    $response = $this->actingAs($admin)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year);
 
     $response
         ->assertOk()
@@ -23,12 +23,15 @@ it('class whatsapp preview returns 3 message parts', function () {
 
     $parts = collect($response->json('generated_messages'))->pluck('message_part')->unique()->values()->all();
     expect($parts)->toBe(['summary', 'paid_list', 'unpaid_list']);
+    expect($response->json('generated_messages.0.body'))->toContain('📊 *Ringkasan Yuran & Sumbangan PIBG*');
+    expect($response->json('generated_messages.1.body'))->toContain('✅ *1 Angsana - Senarai Telah Bayar*');
+    expect($response->json('generated_messages.2.body'))->toContain('⏳ *1 Angsana - Senarai Belum Bayar*');
 });
 
 it('missing teacher disables queue', function () {
-    [$teacher] = seedClassProgressWhatsappDataset(includeTeacherForAlamanda: false);
+    [, , $admin] = seedClassProgressWhatsappDataset(includeTeacherForAlamanda: false);
 
-    $response = $this->actingAs($teacher)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Alamanda']).'?billing_year='.now()->year);
+    $response = $this->actingAs($admin)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Alamanda']).'?billing_year='.now()->year);
 
     $response
         ->assertOk()
@@ -37,9 +40,9 @@ it('missing teacher disables queue', function () {
 });
 
 it('missing phone disables queue', function () {
-    [$teacher] = seedClassProgressWhatsappDataset(includePhoneForAlamandaTeacher: false);
+    [, , $admin] = seedClassProgressWhatsappDataset(includePhoneForAlamandaTeacher: false);
 
-    $response = $this->actingAs($teacher)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Alamanda']).'?billing_year='.now()->year);
+    $response = $this->actingAs($admin)->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Alamanda']).'?billing_year='.now()->year);
 
     $response
         ->assertOk()
@@ -48,14 +51,14 @@ it('missing phone disables queue', function () {
 });
 
 it('queue endpoint creates pending records', function () {
-    [$teacher] = seedClassProgressWhatsappDataset();
+    [, , $admin] = seedClassProgressWhatsappDataset();
 
-    $preview = $this->actingAs($teacher)
+    $preview = $this->actingAs($admin)
         ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
         ->assertOk()
         ->json();
 
-    $queueResponse = $this->actingAs($teacher)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
+    $queueResponse = $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
         'billing_year' => now()->year,
         'preview_token' => $preview['preview_token'],
     ]);
@@ -67,22 +70,22 @@ it('queue endpoint creates pending records', function () {
 });
 
 it('duplicate recent queue warning works', function () {
-    [$teacher] = seedClassProgressWhatsappDataset();
+    [, , $admin] = seedClassProgressWhatsappDataset();
 
-    $firstPreview = $this->actingAs($teacher)
+    $firstPreview = $this->actingAs($admin)
         ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
         ->json();
 
-    $this->actingAs($teacher)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
+    $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
         'billing_year' => now()->year,
         'preview_token' => $firstPreview['preview_token'],
     ])->assertOk();
 
-    $secondPreview = $this->actingAs($teacher)
+    $secondPreview = $this->actingAs($admin)
         ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
         ->json();
 
-    $duplicateResponse = $this->actingAs($teacher)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
+    $duplicateResponse = $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-queue', ['class' => '1 Angsana']), [
         'billing_year' => now()->year,
         'preview_token' => $secondPreview['preview_token'],
     ]);
@@ -93,9 +96,9 @@ it('duplicate recent queue warning works', function () {
 });
 
 it('batch preview identifies eligible and skipped classes', function () {
-    [$teacher] = seedClassProgressWhatsappDataset(includeTeacherForAzalea: false, includePhoneForAlamandaTeacher: false);
+    [, , $admin] = seedClassProgressWhatsappDataset(includeTeacherForAzalea: false, includePhoneForAlamandaTeacher: false);
 
-    $response = $this->actingAs($teacher)->getJson(route('admin.classes.whatsapp-batch-preview').'?billing_year='.now()->year);
+    $response = $this->actingAs($admin)->getJson(route('admin.classes.whatsapp-batch-preview').'?billing_year='.now()->year);
 
     $response->assertOk();
     $cards = collect($response->json('class_previews'))->keyBy('class_name');
@@ -106,14 +109,14 @@ it('batch preview identifies eligible and skipped classes', function () {
 });
 
 it('batch queue creates queue records only for selected eligible classes', function () {
-    [$teacher] = seedClassProgressWhatsappDataset(includeTeacherForAzalea: false, includePhoneForAlamandaTeacher: false);
+    [, , $admin] = seedClassProgressWhatsappDataset(includeTeacherForAzalea: false, includePhoneForAlamandaTeacher: false);
 
-    $preview = $this->actingAs($teacher)
+    $preview = $this->actingAs($admin)
         ->getJson(route('admin.classes.whatsapp-batch-preview').'?billing_year='.now()->year)
         ->assertOk()
         ->json();
 
-    $queueResponse = $this->actingAs($teacher)->postJson(route('admin.classes.whatsapp-batch-queue'), [
+    $queueResponse = $this->actingAs($admin)->postJson(route('admin.classes.whatsapp-batch-queue'), [
         'billing_year' => now()->year,
         'preview_token' => $preview['preview_token'],
         'class_names' => ['1 Angsana'],
@@ -127,9 +130,9 @@ it('batch queue creates queue records only for selected eligible classes', funct
 });
 
 it('message stats match leaderboard service', function () {
-    [$teacher] = seedClassProgressWhatsappDataset();
+    [, , $admin] = seedClassProgressWhatsappDataset();
 
-    $preview = $this->actingAs($teacher)
+    $preview = $this->actingAs($admin)
         ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
         ->assertOk()
         ->json();
@@ -143,6 +146,96 @@ it('message stats match leaderboard service', function () {
     expect((float) $preview['class_stats']['pibg_amount'])->toBe((float) $leaderboardRow['yuran_collected']);
 });
 
+it('teacher can load own class details with previous year payer marker', function () {
+    [$teacher] = seedClassProgressWhatsappDataset();
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-CW2',
+        'billing_year' => now()->year - 1,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-CW2',
+        'billing_year' => now()->year - 2,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    $response = $this->actingAs($teacher)->getJson(route('teacher.class-progress.details', ['class' => '1 Angsana']).'?billing_year='.now()->year);
+
+    $response->assertOk()
+        ->assertJsonPath('summary.class_name', '1 Angsana')
+        ->assertJsonPath('summary.is_my_class', true)
+        ->assertJsonPath('can_view_full_details', true)
+        ->assertJsonPath('summary_only', false);
+
+    $paidEntries = collect($response->json('paid_entries'));
+    $unpaidEntries = collect($response->json('unpaid_entries'));
+
+    expect($paidEntries->count())->toBe(1);
+    expect($unpaidEntries->count())->toBe(1);
+    expect((bool) $unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_paid'])->toBeTrue();
+    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_paid_year'])->toBe(now()->year - 1);
+    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_badge'])->toBe(substr((string) (now()->year - 1), -2));
+    expect($unpaidEntries->firstWhere('family_code', 'SSP-CW2')['previous_year_tooltip'])->toBe('Paid previous year ('.(now()->year - 1).')');
+});
+
+it('teacher can view other class details without admin whatsapp access', function () {
+    [$teacher] = seedClassProgressWhatsappDataset();
+
+    $detailsResponse = $this->actingAs($teacher)->getJson(route('teacher.class-progress.details', ['class' => '1 Alamanda']).'?billing_year='.now()->year);
+
+    $detailsResponse->assertOk()
+        ->assertJsonPath('summary.class_name', '1 Alamanda')
+        ->assertJsonPath('summary.is_my_class', false)
+        ->assertJsonPath('summary_only', false)
+        ->assertJsonPath('can_view_full_details', true);
+
+    $paidEntries = collect($detailsResponse->json('paid_entries'));
+    $unpaidEntries = collect($detailsResponse->json('unpaid_entries'));
+
+    expect($paidEntries->count())->toBe(1);
+    expect($unpaidEntries->count())->toBe(0);
+    expect($paidEntries->first()['student_name_display'])->toBe('CITRA HUSNA');
+
+    $otherUnpaidResponse = $this->actingAs($teacher)->getJson(route('teacher.class-progress.details', ['class' => '1 Azalea']).'?billing_year='.now()->year);
+
+    $otherUnpaidResponse->assertOk()
+        ->assertJsonPath('summary.class_name', '1 Azalea')
+        ->assertJsonPath('summary_only', false)
+        ->assertJsonPath('can_view_full_details', true);
+
+    $otherUnpaidEntries = collect($otherUnpaidResponse->json('unpaid_entries'));
+    expect($otherUnpaidEntries->count())->toBe(1);
+    expect($otherUnpaidEntries->first()['student_name_display'])->toBe('DANIA IMANI');
+    expect($otherUnpaidEntries->first()['parent_name'])->toBe('PARENT DANIA IMANI');
+    expect($otherUnpaidEntries->first()['parent_phone'])->toBeNull();
+
+    $this->actingAs($teacher)
+        ->get(route('admin.whatsapp-queue.index'))
+        ->assertForbidden();
+
+    $this->actingAs($teacher)
+        ->getJson(route('admin.classes.whatsapp-preview', ['class' => '1 Angsana']).'?billing_year='.now()->year)
+        ->assertForbidden();
+});
+
+it('summary totals match expanded list totals for own class', function () {
+    [$teacher] = seedClassProgressWhatsappDataset();
+
+    $details = $this->actingAs($teacher)
+        ->getJson(route('teacher.class-progress.details', ['class' => '1 Angsana']).'?billing_year='.now()->year)
+        ->assertOk()
+        ->json();
+
+    expect(count($details['paid_entries']))->toBe($details['summary']['fully_paid_families'] + $details['summary']['partial_paid_families']);
+    expect(count($details['unpaid_entries']))->toBe($details['summary']['unpaid_families']);
+});
+
 function seedClassProgressWhatsappDataset(
     bool $includeTeacherForAlamanda = true,
     bool $includePhoneForAlamandaTeacher = true,
@@ -152,8 +245,16 @@ function seedClassProgressWhatsappDataset(
 
     $actor = User::factory()->create([
         'role' => 'teacher',
+        'name' => 'ZZZ ACTOR TEACHER',
         'email' => 'actor.teacher@example.test',
-        'class_name' => null,
+        'class_name' => '1 Angsana',
+        'phone' => '+60125550001',
+        'email_verified_at' => now(),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email' => 'admin.classprogress@example.test',
         'email_verified_at' => now(),
     ]);
 
@@ -193,7 +294,7 @@ function seedClassProgressWhatsappDataset(
     seedFamilyBillingAndStudent('SSP-CW3', '1 Alamanda', 'Citra Husna', $year, 100, 100, 'paid');
     seedFamilyBillingAndStudent('SSP-CW4', '1 Azalea', 'Dania Imani', $year, 100, 0, 'pending');
 
-    return [$actor, $teacherAngsana];
+    return [$actor, $teacherAngsana, $admin];
 }
 
 function seedFamilyBillingAndStudent(

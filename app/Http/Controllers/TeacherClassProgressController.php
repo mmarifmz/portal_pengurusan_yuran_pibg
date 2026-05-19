@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ClassProgressService;
 use App\Services\ClassTeacherWhatsAppReportService;
 use App\Services\WhatsAppMessageQueueService;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,7 @@ class TeacherClassProgressController extends Controller
     private const BATCH_PREVIEW_SESSION_KEY = 'class_progress_whatsapp_batch_tokens';
 
     public function __construct(
+        private readonly ClassProgressService $classProgressService,
         private readonly ClassTeacherWhatsAppReportService $classTeacherWhatsAppReportService,
         private readonly WhatsAppMessageQueueService $whatsAppMessageQueueService
     ) {
@@ -25,7 +27,17 @@ class TeacherClassProgressController extends Controller
     public function index(Request $request): View
     {
         $billingYear = (int) now()->year;
-        $leaderboardRows = $this->classTeacherWhatsAppReportService->leaderboardRowsWithWhatsappMeta($billingYear);
+        $viewer = $request->user();
+        $canManageWhatsapp = (bool) $viewer?->isSystemAdmin();
+        $leaderboardRows = $viewer
+            ? $this->classProgressService->leaderboardRows($billingYear, $viewer, $canManageWhatsapp)
+            : collect();
+        $myClassRows = $leaderboardRows
+            ->filter(fn (array $row): bool => (bool) ($row['is_my_class'] ?? false))
+            ->values();
+        $otherClassRows = $leaderboardRows
+            ->reject(fn (array $row): bool => (bool) ($row['is_my_class'] ?? false))
+            ->values();
 
         $yearLevelOptions = $leaderboardRows
             ->pluck('year_level')
@@ -37,10 +49,29 @@ class TeacherClassProgressController extends Controller
         return view('teacher.class-progress', [
             'billingYear' => $billingYear,
             'leaderboardRows' => $leaderboardRows,
+            'myClassRows' => $myClassRows,
+            'otherClassRows' => $otherClassRows,
             'yearLevelOptions' => $yearLevelOptions,
-            'queueDashboard' => $this->classTeacherWhatsAppReportService->queueDashboard(),
-            'queueDashboardUrl' => route('admin.whatsapp-queue.index'),
+            'queueDashboard' => $canManageWhatsapp ? $this->classTeacherWhatsAppReportService->queueDashboard() : [],
+            'queueDashboardUrl' => $canManageWhatsapp ? route('admin.whatsapp-queue.index') : null,
+            'canManageWhatsapp' => $canManageWhatsapp,
         ]);
+    }
+
+    public function classDetails(Request $request, string $class): JsonResponse
+    {
+        $billingYear = (int) $request->integer('billing_year', (int) now()->year);
+        $className = trim(urldecode($class));
+
+        try {
+            $details = $this->classProgressService->getClassPaymentDetails($className, $billingYear, $request->user());
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 404);
+        }
+
+        return response()->json($details);
     }
 
     public function whatsappPreview(Request $request, string $class): JsonResponse
