@@ -25,15 +25,23 @@ class DashboardController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         $user = $request->user();
+        $activeSpace = (string) $request->session()->get('active_portal_space', '');
 
         if ($user?->isParentOnly()) {
+            $request->session()->put('active_portal_space', 'parent');
             return redirect()->route('parent.dashboard');
         }
 
         if ($user?->isParent() && $user->isStaff()) {
-            return view('dashboard-role-switcher', [
-                'roleCards' => $this->buildRoleCards($user),
-            ]);
+            if ($activeSpace === 'parent') {
+                return redirect()->route('parent.dashboard');
+            }
+
+            if (! in_array($activeSpace, ['teacher', 'staff'], true)) {
+                return view('dashboard-role-switcher', [
+                    'roleCards' => $this->buildRoleCards($user),
+                ]);
+            }
         }
 
         $role = $user?->isParent() ? 'parent' : 'staff';
@@ -813,14 +821,16 @@ Portal Yuran:
             $cards[] = [
                 'title' => 'Parent Portal',
                 'description' => 'Lihat anak, resit, dan status bayaran keluarga anda.',
+                'space' => 'parent',
                 'url' => route('parent.dashboard'),
             ];
         }
 
-        if ($user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta'])) {
+        if ($user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'admin', 'super_admin', 'pta'])) {
             $cards[] = [
-                'title' => $user->hasAnyRole(['teacher', 'super_teacher']) ? 'Teacher Dashboard' : 'Staff Dashboard',
+                'title' => $user->hasAnyRole(['teacher', 'super_teacher']) ? 'Teacher Space' : 'Staff Space',
                 'description' => 'Buka paparan guru/staf untuk semakan kutipan dan tindakan kelas.',
+                'space' => 'teacher',
                 'url' => route($user->hasAnyRole(['teacher', 'super_teacher']) ? 'teacher.dashboard' : 'dashboard'),
             ];
         }

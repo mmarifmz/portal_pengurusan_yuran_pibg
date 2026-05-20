@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
@@ -25,6 +26,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
     'class_name',
     'is_payment_tester',
     'is_active',
+    'access_block_reason',
+    'parent_access_reset_at',
     'receive_whatsapp_notifications',
     'teacher_invite_sent_at',
     'invite_status',
@@ -65,6 +68,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_payment_tester' => 'boolean',
             'is_active' => 'boolean',
+            'parent_access_reset_at' => 'datetime',
             'receive_whatsapp_notifications' => 'boolean',
             'teacher_invite_sent_at' => 'datetime',
             'onboarding_invite_generated_at' => 'datetime',
@@ -100,18 +104,42 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class, 'user_roles')->withTimestamps();
     }
 
+    public function parentStudentLinks(): HasMany
+    {
+        return $this->hasMany(ParentStudentLink::class);
+    }
+
+    public function linkedStudents(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'parent_student_links')
+            ->withPivot(['id', 'relationship_type', 'notes', 'linked_by_user_id', 'linked_at'])
+            ->withTimestamps();
+    }
+
+    public function changeAuditsAuthored(): HasMany
+    {
+        return $this->hasMany(UserChangeAudit::class, 'admin_user_id');
+    }
+
+    public function changeAuditsReceived(): HasMany
+    {
+        return $this->hasMany(UserChangeAudit::class, 'affected_user_id');
+    }
+
     public function scopeWithRole(Builder $query, string $role): Builder
     {
-        return $query->where(function (Builder $builder) use ($role): void {
+        $roles = self::roleAliases($role);
+
+        return $query->where(function (Builder $builder) use ($roles): void {
             $builder
-                ->where('users.role', $role)
-                ->orWhereExists(function ($subQuery) use ($role): void {
+                ->whereIn('users.role', $roles)
+                ->orWhereExists(function ($subQuery) use ($roles): void {
                     $subQuery
                         ->selectRaw('1')
                         ->from('user_roles')
                         ->join('roles', 'roles.id', '=', 'user_roles.role_id')
                         ->whereColumn('user_roles.user_id', 'users.id')
-                        ->where('roles.name', $role);
+                        ->whereIn('roles.name', $roles);
                 });
         });
     }
@@ -132,16 +160,22 @@ class User extends Authenticatable
             return $query;
         }
 
-        return $query->where(function (Builder $builder) use ($roles): void {
+        $expandedRoles = collect($roles)
+            ->flatMap(fn (string $role): array => self::roleAliases($role))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $query->where(function (Builder $builder) use ($expandedRoles): void {
             $builder
-                ->whereIn('users.role', $roles)
-                ->orWhereExists(function ($subQuery) use ($roles): void {
+                ->whereIn('users.role', $expandedRoles)
+                ->orWhereExists(function ($subQuery) use ($expandedRoles): void {
                     $subQuery
                         ->selectRaw('1')
                         ->from('user_roles')
                         ->join('roles', 'roles.id', '=', 'user_roles.role_id')
                         ->whereColumn('user_roles.user_id', 'users.id')
-                        ->whereIn('roles.name', $roles);
+                        ->whereIn('roles.name', $expandedRoles);
                 });
         });
     }
@@ -154,7 +188,9 @@ class User extends Authenticatable
             return false;
         }
 
-        if ($this->role === $role) {
+        $aliases = self::roleAliases($role);
+
+        if (in_array((string) $this->role, $aliases, true)) {
             return true;
         }
 
@@ -166,10 +202,10 @@ class User extends Authenticatable
             /** @var Collection<int, Role> $roles */
             $roles = $this->roles;
 
-            return $roles->contains(fn (Role $item): bool => $item->name === $role);
+            return $roles->contains(fn (Role $item): bool => in_array((string) $item->name, $aliases, true));
         }
 
-        return $this->roles()->where('name', $role)->exists();
+        return $this->roles()->whereIn('name', $aliases)->exists();
     }
 
     /**
@@ -249,7 +285,17 @@ class User extends Authenticatable
 
     public function isSystemAdmin(): bool
     {
-        return $this->hasRole('system_admin');
+        return $this->hasAnyRole(['system_admin', 'admin', 'super_admin']);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->isSystemAdmin();
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super_admin');
     }
 
     public function isSystemInstaller(): bool
@@ -269,17 +315,22 @@ class User extends Authenticatable
 
     public function isStaff(): bool
     {
-        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']);
+        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'admin', 'super_admin', 'pta']);
     }
 
     public function canAccessTeacherRecords(): bool
     {
-        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']);
+        return $this->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'admin', 'super_admin', 'pta']);
     }
 
     public function canManageTeacherUsers(): bool
     {
-        return $this->hasAnyRole(['super_teacher', 'system_admin']);
+        return $this->hasAnyRole(['super_teacher', 'system_admin', 'admin', 'super_admin']);
+    }
+
+    public function canManageParentAccounts(): bool
+    {
+        return $this->hasAnyRole(['system_admin', 'admin', 'super_admin']);
     }
 
     public function isParentTester(): bool
@@ -294,6 +345,16 @@ class User extends Authenticatable
             && Schema::hasColumn('users', 'onboarding_invite_sent_by')
             && Schema::hasColumn('users', 'onboarding_invite_method')
             && Schema::hasColumn('users', 'onboarding_invite_status');
+    }
+
+    public static function hasUserColumn(string $column): bool
+    {
+        return Schema::hasColumn('users', $column);
+    }
+
+    public static function parentStudentLinksTableAvailable(): bool
+    {
+        return Schema::hasTable('parent_student_links');
     }
 
     private function syncPrimaryRoleAssignment(): void
@@ -311,5 +372,16 @@ class User extends Authenticatable
     private function roleTablesAvailable(): bool
     {
         return Schema::hasTable('roles') && Schema::hasTable('user_roles');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function roleAliases(string $role): array
+    {
+        return match (trim($role)) {
+            'system_admin', 'admin' => ['system_admin', 'admin', 'super_admin'],
+            default => [trim($role)],
+        };
     }
 }

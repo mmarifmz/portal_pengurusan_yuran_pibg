@@ -109,12 +109,12 @@ test('user with both parent and teacher roles can access both dashboards', funct
         'status' => 'partial',
     ]);
 
-    $this->actingAs($user)->get(route('parent.dashboard'))->assertOk();
-    $this->actingAs($user)->get(route('teacher.dashboard'))->assertOk();
     $this->actingAs($user)->get(route('dashboard'))
         ->assertOk()
         ->assertSee('Parent Portal')
-        ->assertSee('Teacher Dashboard');
+        ->assertSee('Teacher Space');
+    $this->actingAs($user)->get(route('parent.dashboard'))->assertOk();
+    $this->actingAs($user)->get(route('teacher.dashboard'))->assertOk();
 });
 
 test('public search falls back to name/class when contact phone is new and unregistered', function () {

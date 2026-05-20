@@ -7,14 +7,21 @@ use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginInvite;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\ParentAccountService;
+use App\Services\ParentAccessLogService;
 use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class ParentInviteAuthController extends Controller
 {
+    public function __construct(
+        private readonly ParentAccountService $parentAccountService,
+        private readonly ParentAccessLogService $parentAccessLogService
+    ) {
+    }
+
     public function __invoke(Request $request, string $token): RedirectResponse
     {
         $invite = ParentLoginInvite::query()
@@ -25,6 +32,12 @@ class ParentInviteAuthController extends Controller
             ->first();
 
         if (! $invite) {
+            $this->parentAccessLogService->log($request, 'failed_access', [
+                'phone' => '',
+                'login_method' => 'invite',
+                'meta' => ['reason' => 'invalid_invite_token'],
+            ]);
+
             return redirect()->route('parent.login.form')
                 ->withErrors([
                     'phone' => 'Pautan jemputan tidak sah atau telah tamat tempoh. Sila minta jemputan baharu.',
@@ -67,6 +80,14 @@ class ParentInviteAuthController extends Controller
         }
 
         if ($parent->is_active !== null && (bool) $parent->is_active === false) {
+            $this->parentAccessLogService->log($request, 'blocked_access', [
+                'user' => $parent,
+                'phone' => $phone,
+                'family_billing' => $familyBilling,
+                'login_method' => 'invite',
+                'meta' => ['reason' => 'parent_blocked'],
+            ]);
+
             return redirect()->route('parent.login.form')
                 ->withErrors([
                     'phone' => 'Akses portal untuk nombor ini telah dinyahaktifkan. Sila hubungi pentadbir sekolah.',
@@ -80,16 +101,18 @@ class ParentInviteAuthController extends Controller
 
         Auth::login($parent, false);
         $request->session()->regenerate();
+        $request->session()->put('active_portal_space', 'parent');
+        $request->session()->put('parent_login_method', 'invite');
 
-        ParentLoginAudit::query()->create([
-            'user_id' => $parent->id,
+        $this->parentAccessLogService->log($request, 'login', [
+            'user' => $parent,
             'phone' => $phone,
-            'normalized_phone' => $normalizedPhone,
-            'logged_in_at' => now(),
+            'family_billing' => $familyBilling,
+            'login_method' => 'invite',
         ]);
 
-        $request->session()->put('parent_child_selection_completed', false);
-        $request->session()->forget('parent_selected_family_billing_id');
+        $request->session()->put('parent_child_selection_completed', true);
+        $request->session()->put('parent_selected_family_billing_id', $familyBilling->id);
 
         return redirect()->route('parent.payments.checkout', $familyBilling)
             ->with('status', 'Akses berjaya. Nombor telefon anda telah didaftarkan ke portal secara manual.');
@@ -97,40 +120,6 @@ class ParentInviteAuthController extends Controller
 
     private function registerParentForFamily(string $phone, FamilyBilling $familyBilling): User
     {
-        $familyStudents = Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->orderBy('full_name')
-            ->get();
-
-        $parentName = (string) ($familyStudents->firstWhere('parent_name')?->parent_name
-            ?? $familyStudents->first()?->parent_name
-            ?? "Parent {$familyBilling->family_code}");
-
-        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
-
-        $parent = User::query()->create([
-            'name' => $parentName,
-            'email' => sprintf(
-                'parent-%s-%s@placeholder.local',
-                Str::lower($familyBilling->family_code),
-                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
-            ),
-            'phone' => $sanitizedPhone,
-            'role' => 'parent',
-            'password' => Str::random(40),
-            'email_verified_at' => now(),
-        ]);
-        $parent->assignRole('parent');
-
-        Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->where(function ($query) {
-                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
-            })
-            ->update([
-                'parent_phone' => $sanitizedPhone,
-            ]);
-
-        return $parent;
+        return $this->parentAccountService->resolveOrCreateForFamily($phone, $familyBilling);
     }
 }

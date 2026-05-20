@@ -62,6 +62,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('viewClassDetails', fn (User $user): bool => $user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']));
         Gate::define('manageBilling', fn (User $user): bool => $user->isSystemAdmin());
         Gate::define('manageStudentRecords', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageParentAccounts', fn (User $user): bool => $user->canManageParentAccounts());
+        Gate::define('manageParentManagement', fn (User $user): bool => in_array('system_admin', $user->roleNames(), true));
         Gate::define('manageTeachers', fn (User $user): bool => $user->canManageTeacherUsers());
         Gate::define('manageWhatsappQueue', fn (User $user): bool => $user->isSystemAdmin());
         Gate::define('manageBackups', fn (User $user): bool => $user->isSystemAdmin());

@@ -8,6 +8,7 @@ use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\ParentAccountService;
 use App\Services\WhatsAppTacSender;
 use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
@@ -16,323 +17,68 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeacherFamilyLoginMonitorController extends Controller
 {
-    public function __construct(private readonly WhatsAppTacSender $whatsAppTacSender)
+    public function __construct(
+        private readonly WhatsAppTacSender $whatsAppTacSender,
+        private readonly ParentAccountService $parentAccountService
+    )
     {
     }
 
     public function index(Request $request): View
     {
-        $search = trim((string) $request->string('q')->toString());
-        $paidStatus = (string) $request->string('paid_status', 'all')->toString();
-        if (! in_array($paidStatus, ['all', 'paid', 'unpaid'], true)) {
-            $paidStatus = 'all';
-        }
+        $dataset = $this->buildDataset($request);
 
-        $tacStatus = (string) $request->string('tac_status', 'all')->toString();
-        if (! in_array($tacStatus, ['all', 'stuck', 'completed', 'pending', 'expired', 'no_request'], true)) {
-            $tacStatus = 'all';
-        }
+        return view('teacher.family-login-monitor', $dataset);
+    }
 
-        $selectedClass = trim((string) $request->string('class_name')->toString());
-        $dateFromInput = trim((string) $request->string('date_from')->toString());
-        $dateToInput = trim((string) $request->string('date_to')->toString());
+    public function export(Request $request): StreamedResponse
+    {
+        $dataset = $this->buildDataset($request);
+        $rows = $dataset['rows'];
 
-        $dateFrom = null;
-        if ($dateFromInput !== '') {
-            try {
-                $dateFrom = Carbon::parse($dateFromInput)->startOfDay();
-            } catch (\Throwable) {
-                $dateFrom = null;
-                $dateFromInput = '';
-            }
-        }
+        return response()->streamDownload(function () use ($rows): void {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
-        $dateTo = null;
-        if ($dateToInput !== '') {
-            try {
-                $dateTo = Carbon::parse($dateToInput)->endOfDay();
-            } catch (\Throwable) {
-                $dateTo = null;
-                $dateToInput = '';
-            }
-        }
+            fputcsv($handle, [
+                'Parent Name',
+                'Phone / Email',
+                'Linked Students',
+                'Class',
+                'Page Visited',
+                'Action Type',
+                'Access Status',
+                'IP Address',
+                'Device / Browser',
+                'Login Method',
+                'Roles',
+                'Created At',
+            ]);
 
-        $classOptions = Student::query()
-            ->whereNotNull('class_name')
-            ->where('class_name', '!=', '')
-            ->distinct()
-            ->orderBy('class_name')
-            ->pluck('class_name')
-            ->values();
-
-        $familyClasses = Student::query()
-            ->whereNotNull('family_code')
-            ->where('family_code', '!=', '')
-            ->whereNotNull('class_name')
-            ->where('class_name', '!=', '')
-            ->get(['family_code', 'class_name'])
-            ->groupBy('family_code')
-            ->map(fn ($rows) => $rows->pluck('class_name')->filter()->unique()->sort()->values());
-
-        $latestBillingIds = FamilyBilling::query()
-            ->selectRaw('MAX(id) as id')
-            ->groupBy('family_code')
-            ->pluck('id');
-
-        $families = FamilyBilling::query()
-            ->whereIn('id', $latestBillingIds)
-            ->whereHas('phones')
-            ->with(['phones' => fn ($query) => $query->orderBy('id')])
-            ->orderBy('family_code')
-            ->get();
-
-        $loginByPhone = ParentLoginAudit::query()
-            ->selectRaw('normalized_phone, COUNT(*) as login_count, MAX(logged_in_at) as latest_login_at')
-            ->groupBy('normalized_phone')
-            ->get()
-            ->keyBy('normalized_phone');
-
-        $otpByNormalizedPhone = ParentLoginOtp::query()
-            ->get(['phone', 'used_at', 'expires_at', 'created_at'])
-            ->reduce(function (Collection $carry, ParentLoginOtp $otp): Collection {
-                $normalizedPhone = ParentPhone::normalizeForMatch((string) $otp->phone);
-
-                if ($normalizedPhone === '') {
-                    return $carry;
-                }
-
-                $aggregate = $carry->get($normalizedPhone, [
-                    'tac_sent_count' => 0,
-                    'tac_verified_count' => 0,
-                    'tac_pending_count' => 0,
-                    'tac_expired_count' => 0,
-                    'latest_tac_sent_at' => null,
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row['parent_name'],
+                    trim($row['phone'].' / '.$row['email'], ' /'),
+                    $row['students_display'],
+                    $row['class_display'],
+                    $row['page_visited'],
+                    $row['action_type'],
+                    $row['access_status'],
+                    $row['ip_address'],
+                    $row['device_browser'],
+                    $row['login_method'],
+                    $row['roles_display'],
+                    $row['occurred_at']?->format('Y-m-d H:i:s'),
                 ]);
-
-                $aggregate['tac_sent_count']++;
-
-                if ($otp->used_at !== null) {
-                    $aggregate['tac_verified_count']++;
-                } elseif ($otp->expires_at !== null && $otp->expires_at->isPast()) {
-                    $aggregate['tac_expired_count']++;
-                } else {
-                    $aggregate['tac_pending_count']++;
-                }
-
-                $createdAt = $otp->created_at;
-                if ($createdAt !== null && (! $aggregate['latest_tac_sent_at'] || $createdAt->gt($aggregate['latest_tac_sent_at']))) {
-                    $aggregate['latest_tac_sent_at'] = $createdAt;
-                }
-
-                $carry->put($normalizedPhone, $aggregate);
-
-                return $carry;
-            }, collect());
-
-        $inviteByFamilyPhone = ParentLoginInvite::query()
-            ->whereNotNull('sent_at')
-            ->get(['family_billing_id', 'normalized_phone', 'sent_at'])
-            ->groupBy('family_billing_id')
-            ->map(function (Collection $rowsByFamily): Collection {
-                return $rowsByFamily
-                    ->groupBy('normalized_phone')
-                    ->map(function (Collection $rowsByPhone): array {
-                        $latestSentAt = $rowsByPhone
-                            ->pluck('sent_at')
-                            ->filter()
-                            ->sort()
-                            ->last();
-
-                        return [
-                            'invite_sent_count' => $rowsByPhone->count(),
-                            'latest_invite_sent_at' => $latestSentAt,
-                        ];
-                    });
-            });
-
-        $rows = $families->map(function (FamilyBilling $familyBilling) use ($loginByPhone, $otpByNormalizedPhone, $inviteByFamilyPhone, $familyClasses): array {
-            $phones = $familyBilling->phones
-                ->pluck('phone')
-                ->map(fn ($phone) => ParentPhone::sanitizeInput((string) $phone))
-                ->filter()
-                ->unique()
-                ->values();
-
-            $normalizedPhones = $phones
-                ->map(fn (string $phone) => ParentPhone::normalizeForMatch($phone))
-                ->filter()
-                ->unique()
-                ->values();
-
-            $loginCount = 0;
-            $latestLoginAt = null;
-            $tacSentCount = 0;
-            $tacVerifiedCount = 0;
-            $tacPendingCount = 0;
-            $tacExpiredCount = 0;
-            $latestTacSentAt = null;
-            $inviteSentCount = 0;
-            $latestInviteSentAt = null;
-            $suggestedInvitePhone = null;
-            $suggestedInviteScore = null;
-
-            foreach ($normalizedPhones as $normalizedPhone) {
-                $loginAggregate = $loginByPhone->get($normalizedPhone);
-
-                if ($loginAggregate) {
-                    $loginCount += (int) $loginAggregate->login_count;
-
-                    $loginTimestamp = $loginAggregate->latest_login_at;
-                    if ($loginTimestamp) {
-                        $candidate = Carbon::parse((string) $loginTimestamp);
-                        if (! $latestLoginAt || $candidate->gt($latestLoginAt)) {
-                            $latestLoginAt = $candidate;
-                        }
-                    }
-                }
-
-                $otpAggregate = $otpByNormalizedPhone->get($normalizedPhone);
-                if (! $otpAggregate) {
-                    continue;
-                }
-
-                $tacSentCount += (int) ($otpAggregate['tac_sent_count'] ?? 0);
-                $tacVerifiedCount += (int) ($otpAggregate['tac_verified_count'] ?? 0);
-                $tacPendingCount += (int) ($otpAggregate['tac_pending_count'] ?? 0);
-                $tacExpiredCount += (int) ($otpAggregate['tac_expired_count'] ?? 0);
-
-                $candidateTacTimestamp = $otpAggregate['latest_tac_sent_at'] ?? null;
-                if ($candidateTacTimestamp && (! $latestTacSentAt || $candidateTacTimestamp->gt($latestTacSentAt))) {
-                    $latestTacSentAt = $candidateTacTimestamp;
-                }
-
-                $inviteAggregate = $inviteByFamilyPhone
-                    ->get($familyBilling->id, collect())
-                    ->get($normalizedPhone);
-
-                if ($inviteAggregate) {
-                    $inviteSentCount += (int) ($inviteAggregate['invite_sent_count'] ?? 0);
-
-                    $candidateInviteTimestamp = $inviteAggregate['latest_invite_sent_at'] ?? null;
-                    if ($candidateInviteTimestamp && (! $latestInviteSentAt || Carbon::parse((string) $candidateInviteTimestamp)->gt($latestInviteSentAt))) {
-                        $latestInviteSentAt = Carbon::parse((string) $candidateInviteTimestamp);
-                    }
-                }
-
-                $shouldSuggestThisPhone = (($otpAggregate['tac_verified_count'] ?? 0) === 0)
-                    && (($otpAggregate['tac_sent_count'] ?? 0) > 0);
-
-                if ($shouldSuggestThisPhone) {
-                    $phoneScore = Carbon::parse((string) ($otpAggregate['latest_tac_sent_at'] ?? now()))->timestamp;
-                    $candidateDisplayPhone = $phones
-                        ->first(fn (string $phone) => ParentPhone::normalizeForMatch($phone) === $normalizedPhone);
-
-                    if ($candidateDisplayPhone && ($suggestedInviteScore === null || $phoneScore > $suggestedInviteScore)) {
-                        $suggestedInviteScore = $phoneScore;
-                        $suggestedInvitePhone = $candidateDisplayPhone;
-                    }
-                }
             }
 
-            $tacStatus = 'No TAC request';
-            if ($tacSentCount > 0) {
-                if ($loginCount > 0 || $tacVerifiedCount > 0) {
-                    $tacStatus = 'Completed';
-                } elseif ($tacPendingCount > 0) {
-                    $tacStatus = 'Pending TAC';
-                } elseif ($tacExpiredCount > 0) {
-                    $tacStatus = 'Expired TAC';
-                } else {
-                    $tacStatus = 'TAC requested';
-                }
-            }
-
-            $isTacStuck = $tacSentCount > 0 && $loginCount === 0 && $tacVerifiedCount === 0;
-
-            return [
-                'family_billing_id' => (int) $familyBilling->id,
-                'family_code' => (string) $familyBilling->family_code,
-                'phones_display' => $phones->implode(', '),
-                'classes' => $familyClasses->get((string) $familyBilling->family_code, collect()),
-                'class_display' => $familyClasses->get((string) $familyBilling->family_code, collect())->implode(', '),
-                'login_count' => $loginCount,
-                'latest_login_at' => $latestLoginAt,
-                'tac_sent_count' => $tacSentCount,
-                'tac_verified_count' => $tacVerifiedCount,
-                'tac_pending_count' => $tacPendingCount,
-                'tac_expired_count' => $tacExpiredCount,
-                'latest_tac_sent_at' => $latestTacSentAt,
-                'tac_status' => $tacStatus,
-                'is_tac_stuck' => $isTacStuck,
-                'invite_sent_count' => $inviteSentCount,
-                'latest_invite_sent_at' => $latestInviteSentAt,
-                'invite_phone' => $suggestedInvitePhone ?: $phones->first(),
-                'is_paid' => $familyBilling->outstanding_amount <= 0,
-            ];
-        });
-
-        $rows = $rows
-            ->when($search !== '', function ($collection) use ($search) {
-                $needle = mb_strtolower($search);
-
-                return $collection->filter(function (array $row) use ($needle): bool {
-                    return str_contains(mb_strtolower((string) ($row['family_code'] ?? '')), $needle)
-                        || str_contains(mb_strtolower((string) ($row['phones_display'] ?? '')), $needle)
-                        || str_contains(mb_strtolower((string) ($row['class_display'] ?? '')), $needle);
-                });
-            })
-            ->when($paidStatus === 'paid', fn ($collection) => $collection->where('is_paid', true))
-            ->when($paidStatus === 'unpaid', fn ($collection) => $collection->where('is_paid', false))
-            ->when($tacStatus === 'stuck', fn ($collection) => $collection->where('is_tac_stuck', true))
-            ->when($tacStatus === 'completed', fn ($collection) => $collection->where('tac_status', 'Completed'))
-            ->when($tacStatus === 'pending', fn ($collection) => $collection->where('tac_status', 'Pending TAC'))
-            ->when($tacStatus === 'expired', fn ($collection) => $collection->where('tac_status', 'Expired TAC'))
-            ->when($tacStatus === 'no_request', fn ($collection) => $collection->where('tac_status', 'No TAC request'))
-            ->when($selectedClass !== '', fn ($collection) => $collection->filter(
-                fn (array $row) => collect($row['classes'] ?? [])->contains($selectedClass)
-            ))
-            ->when($dateFrom !== null, fn ($collection) => $collection->filter(
-                fn (array $row) => $row['latest_login_at'] !== null && $row['latest_login_at']->greaterThanOrEqualTo($dateFrom)
-            ))
-            ->when($dateTo !== null, fn ($collection) => $collection->filter(
-                fn (array $row) => $row['latest_login_at'] !== null && $row['latest_login_at']->lessThanOrEqualTo($dateTo)
-            ))
-            ->sort(function (array $a, array $b): int {
-                $aTs = $a['latest_login_at']?->timestamp ?? 0;
-                $bTs = $b['latest_login_at']?->timestamp ?? 0;
-
-                if ($aTs !== $bTs) {
-                    return $bTs <=> $aTs;
-                }
-
-                $aCount = (int) ($a['login_count'] ?? 0);
-                $bCount = (int) ($b['login_count'] ?? 0);
-
-                if ($aCount !== $bCount) {
-                    return $bCount <=> $aCount;
-                }
-
-                return strcmp((string) ($a['family_code'] ?? ''), (string) ($b['family_code'] ?? ''));
-            })
-            ->values();
-
-        return view('teacher.family-login-monitor', [
-            'rows' => $rows,
-            'generatedAt' => now(),
-            'totalFamilies' => $rows->count(),
-            'totalLoginCount' => $rows->sum('login_count'),
-            'totalTacSentCount' => $rows->sum('tac_sent_count'),
-            'totalTacStuckFamilies' => $rows->where('is_tac_stuck', true)->count(),
-            'search' => $search,
-            'paidStatus' => $paidStatus,
-            'tacStatus' => $tacStatus,
-            'selectedClass' => $selectedClass,
-            'classOptions' => $classOptions,
-            'dateFromInput' => $dateFromInput,
-            'dateToInput' => $dateToInput,
+            fclose($handle);
+        }, 'parent-access-log.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -417,40 +163,188 @@ class TeacherFamilyLoginMonitorController extends Controller
 
     private function registerParentForFamily(string $phone, FamilyBilling $familyBilling): User
     {
-        $familyStudents = Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->orderBy('full_name')
-            ->get();
+        return $this->parentAccountService->resolveOrCreateForFamily($phone, $familyBilling);
+    }
 
-        $parentName = (string) ($familyStudents->firstWhere('parent_name')?->parent_name
-            ?? $familyStudents->first()?->parent_name
-            ?? "Parent {$familyBilling->family_code}");
+    /**
+     * @return array{
+     *   rows: \Illuminate\Support\Collection<int, array<string, mixed>>,
+     *   generatedAt: \Illuminate\Support\Carbon,
+     *   classOptions: \Illuminate\Support\Collection<int, string>,
+     *   search: string,
+     *   selectedClass: string,
+     *   selectedAction: string,
+     *   selectedAccess: string,
+     *   selectedRoleMode: string,
+     *   dateFromInput: string,
+     *   dateToInput: string,
+     *   summary: array<string, mixed>
+     * }
+     */
+    private function buildDataset(Request $request): array
+    {
+        $search = trim((string) $request->string('q')->toString());
+        $selectedClass = trim((string) $request->string('class_name')->toString());
+        $selectedAction = trim((string) $request->string('action_type', 'all')->toString());
+        $selectedAccess = trim((string) $request->string('access_filter', 'all')->toString());
+        $selectedRoleMode = trim((string) $request->string('role_mode', 'all')->toString());
+        $dateFromInput = trim((string) $request->string('date_from')->toString());
+        $dateToInput = trim((string) $request->string('date_to')->toString());
 
-        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
+        $dateFrom = $dateFromInput !== '' ? rescue(fn () => Carbon::parse($dateFromInput)->startOfDay(), null, false) : null;
+        $dateTo = $dateToInput !== '' ? rescue(fn () => Carbon::parse($dateToInput)->endOfDay(), null, false) : null;
+        $todayStart = now()->startOfDay();
+        $thirtyDaysAgo = now()->subDays(30);
 
-        $parent = User::query()->create([
-            'name' => $parentName,
-            'email' => sprintf(
-                'parent-%s-%s@placeholder.local',
-                Str::lower($familyBilling->family_code),
-                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
-            ),
-            'phone' => $sanitizedPhone,
-            'role' => 'parent',
-            'password' => Str::random(40),
-            'email_verified_at' => now(),
-        ]);
-        $parent->assignRole('parent');
+        $classOptions = Student::query()
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->distinct()
+            ->orderBy('class_name')
+            ->pluck('class_name')
+            ->values();
 
-        Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->where(function ($query) {
-                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
+        $rows = ParentLoginAudit::tableIsAvailable()
+            ? ParentLoginAudit::orderByMostRecent(
+                ParentLoginAudit::query()->with([
+                    'user.roles',
+                    'familyBilling.students',
+                    'student',
+                ])
+            )->get()->map(function (ParentLoginAudit $audit): array {
+                $user = $audit->user;
+                $students = $audit->familyBilling?->students
+                    ?? ($audit->student ? collect([$audit->student]) : ($user ? $this->parentAccountService->resolvedLinkedStudents($user) : collect()));
+
+                $roles = $user?->roleNames() ?? [];
+                $parentName = $user?->name
+                    ?: (string) ($students->pluck('parent_name')->filter()->first() ?: '-');
+                $email = (string) ($user?->email ?: $students->pluck('parent_email')->filter()->first() ?: '');
+                $classDisplay = $students
+                    ->pluck('class_name')
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->implode(', ');
+
+                return [
+                    'parent_name' => $parentName,
+                    'phone' => (string) ($audit->phone ?: $user?->phone ?: ''),
+                    'email' => $email,
+                    'students_display' => $students->pluck('full_name')->filter()->unique()->implode(', '),
+                    'class_display' => $classDisplay,
+                    'class_names' => $students->pluck('class_name')->filter()->unique()->values(),
+                    'page_visited' => (string) ($audit->page_visited ?: '-'),
+                    'action_type' => (string) ($audit->action_type ?: 'login'),
+                    'access_status' => (string) ($audit->access_status ?: 'successful'),
+                    'ip_address' => (string) ($audit->ip_address ?: '-'),
+                    'device_browser' => (string) ($audit->device_browser ?: '-'),
+                    'login_method' => (string) ($audit->login_method ?: '-'),
+                    'occurred_at' => $audit->occurred_at_for_display,
+                    'roles' => $roles,
+                    'roles_display' => collect($roles)
+                        ->map(fn (string $role): string => strtoupper(str_replace('_', ' ', $role === 'system_admin' ? 'admin' : $role)))
+                        ->implode(', '),
+                    'is_teacher_parent' => in_array('parent', $roles, true) && count($roles) > 1,
+                ];
             })
-            ->update([
-                'parent_phone' => $sanitizedPhone,
-            ]);
+            : collect();
 
-        return $parent;
+        $filteredRows = $rows
+            ->when($search !== '', function (Collection $collection) use ($search): Collection {
+                $needle = mb_strtolower($search);
+
+                return $collection->filter(function (array $row) use ($needle): bool {
+                    return str_contains(mb_strtolower($row['parent_name']), $needle)
+                        || str_contains(mb_strtolower($row['phone']), $needle)
+                        || str_contains(mb_strtolower($row['email']), $needle)
+                        || str_contains(mb_strtolower($row['students_display']), $needle);
+                });
+            })
+            ->when($selectedClass !== '', fn (Collection $collection) => $collection->filter(
+                fn (array $row): bool => $row['class_names']->contains($selectedClass)
+            ))
+            ->when($selectedAction !== '' && $selectedAction !== 'all', fn (Collection $collection) => $collection->where('action_type', $selectedAction))
+            ->when($selectedAccess !== '' && $selectedAccess !== 'all', fn (Collection $collection) => $collection->where('access_status', $selectedAccess))
+            ->when($selectedRoleMode === 'teacher_parent', fn (Collection $collection) => $collection->where('is_teacher_parent', true))
+            ->when($dateFrom !== null, fn (Collection $collection) => $collection->filter(
+                fn (array $row): bool => $row['occurred_at'] !== null && $row['occurred_at']->greaterThanOrEqualTo($dateFrom)
+            ))
+            ->when($dateTo !== null, fn (Collection $collection) => $collection->filter(
+                fn (array $row): bool => $row['occurred_at'] !== null && $row['occurred_at']->lessThanOrEqualTo($dateTo)
+            ))
+            ->values();
+
+        $todayRows = $rows->filter(
+            fn (array $row): bool => $row['occurred_at'] !== null && $row['occurred_at']->greaterThanOrEqualTo($todayStart)
+        );
+
+        $activeParentsLast30Days = collect();
+        if (ParentLoginAudit::tableIsAvailable()) {
+            $activeParentsQuery = ParentLoginAudit::query()
+                ->where(ParentLoginAudit::occurrenceColumn(), '>=', $thirtyDaysAgo)
+                ->whereNotNull('user_id');
+
+            if (ParentLoginAudit::hasAuditColumn('action_type')) {
+                $activeParentsQuery->where(function ($query): void {
+                    $query->whereNull('action_type')
+                        ->orWhere('action_type', '!=', 'blocked_access');
+                });
+            }
+
+            if (ParentLoginAudit::hasAuditColumn('access_status')) {
+                $activeParentsQuery->where('access_status', 'successful');
+            }
+
+            $activeParentsLast30Days = $activeParentsQuery
+                ->distinct()
+                ->pluck('user_id');
+        }
+
+        $summary = [
+            'total_parent_visits_today' => $todayRows->where('access_status', 'successful')->count(),
+            'unique_parents_active_today' => $todayRows->where('access_status', 'successful')->pluck('phone')->filter()->unique()->count(),
+            'blocked_access_attempts' => $todayRows->where('access_status', 'blocked')->count(),
+            'most_active_class' => (string) ($todayRows
+                ->flatMap(fn (array $row) => $row['class_names']->all())
+                ->filter()
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first() ?? '-'),
+            'parents_not_active_30_days' => User::query()
+                ->withRole('parent')
+                ->get()
+                ->reject(fn (User $user): bool => $activeParentsLast30Days->contains($user->id))
+                ->count(),
+        ];
+
+        return [
+            'rows' => $filteredRows,
+            'generatedAt' => now(),
+            'classOptions' => $classOptions,
+            'search' => $search,
+            'selectedClass' => $selectedClass,
+            'selectedAction' => $selectedAction,
+            'selectedAccess' => $selectedAccess,
+            'selectedRoleMode' => $selectedRoleMode,
+            'dateFromInput' => $dateFromInput,
+            'dateToInput' => $dateToInput,
+            'summary' => $summary,
+            'actionOptions' => collect([
+                'login',
+                'logout',
+                'viewed_dashboard',
+                'viewed_payment',
+                'clicked_pay_now',
+                'viewed_receipt',
+                'downloaded_receipt',
+                'changed_payment_option',
+                'failed_access',
+                'blocked_access',
+                'teacher_space_opened',
+                'parent_space_opened',
+            ]),
+        ];
     }
 }

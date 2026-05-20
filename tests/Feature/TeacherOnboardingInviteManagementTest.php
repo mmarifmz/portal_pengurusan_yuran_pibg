@@ -116,8 +116,8 @@ it('onboarding page shows selectable teachers for invite generation', function (
     $page->assertOk();
     $page->assertSee('Select Teachers');
     $page->assertSee('teacher_ids[]', false);
-    $page->assertSee('Cikgu Nadia', false);
-    $page->assertSee('Cikgu Faiz', false);
+    $page->assertSee('CIKGU NADIA', false);
+    $page->assertSee('CIKGU FAIZ', false);
 });
 
 it('latest generated temporary password persists after visiting another page and returning', function () {

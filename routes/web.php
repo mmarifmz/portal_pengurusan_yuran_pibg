@@ -22,10 +22,12 @@ use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\VisitorLogController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PortalSpaceController;
 use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\PaymentCampaignSettingController;
 use App\Http\Controllers\PaymentGatewaySettingController;
 use App\Http\Controllers\PaymentPlanController;
+use App\Http\Controllers\ParentManagementController;
 use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
 use App\Models\FamilyBilling;
@@ -187,6 +189,9 @@ Route::get('/payment-return', [ParentPaymentController::class, 'handleReturn']);
 Route::post('/payment-webhook', [ParentPaymentController::class, 'handleCallback']);
 
 Route::middleware(['auth'])->group(function () {
+    Route::post('/portal-space/switch', [PortalSpaceController::class, 'switch'])
+        ->name('portal-space.switch');
+
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('teacher/dashboard', [TeacherRecordsController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
@@ -235,9 +240,33 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/family-login-monitor', [TeacherFamilyLoginMonitorController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('teacher.family-login-monitor');
+    Route::get('/teacher/family-login-monitor/export', [TeacherFamilyLoginMonitorController::class, 'export'])
+        ->middleware('role:system_admin')
+        ->name('teacher.family-login-monitor.export');
     Route::post('/teacher/family-login-monitor/invite', [TeacherFamilyLoginMonitorController::class, 'sendInvite'])
         ->middleware('role:system_admin')
         ->name('teacher.family-login-monitor.invite.send');
+    Route::get('/teacher/parent-management', [ParentManagementController::class, 'index'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.index');
+    Route::get('/teacher/parent-management/{user}', [ParentManagementController::class, 'show'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.show');
+    Route::patch('/teacher/parent-management/{user}/contact', [ParentManagementController::class, 'updateContact'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.contact.update');
+    Route::patch('/teacher/parent-management/{user}/settings', [ParentManagementController::class, 'autosaveSettings'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.settings.autosave');
+    Route::patch('/teacher/parent-management/{user}/student-links', [ParentManagementController::class, 'syncStudentLinks'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.student-links.sync');
+    Route::patch('/teacher/parent-management/{user}/student-links/{student}', [ParentManagementController::class, 'updateStudentLink'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.student-links.update');
+    Route::post('/teacher/parent-management/{user}/reset-access', [ParentManagementController::class, 'resetAccess'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.reset-access');
     Route::get('/teacher/finance-accounting', [TeacherFinanceAccountingController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('teacher.finance-accounting');
@@ -321,7 +350,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:parent')
         ->name('parent.search.select');
 
-    Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.'], function () {
+    Route::group(['prefix' => 'parent/payments', 'as' => 'parent.payments.', 'middleware' => 'role:parent'], function () {
         Route::get('history', [ParentPaymentController::class, 'history'])->name('history');
         Route::get('{familyBilling}/checkout', [ParentPaymentController::class, 'checkout'])->name('checkout');
         Route::post('{familyBilling}/plan', [ParentPaymentController::class, 'selectPlan'])->name('plan.select');

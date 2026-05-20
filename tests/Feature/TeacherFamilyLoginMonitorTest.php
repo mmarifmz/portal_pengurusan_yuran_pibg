@@ -1,217 +1,162 @@
 <?php
 
 use App\Models\FamilyBilling;
-use App\Models\FamilyBillingPhone;
 use App\Models\ParentLoginAudit;
-use App\Models\ParentLoginInvite;
-use App\Models\ParentLoginOtp;
+use App\Models\Student;
 use App\Models\User;
 
-it('allows system admin to view family login monitor with aggregated data', function () {
+it('allows system admin to view the parent access log with activity rows and summary cards', function () {
     $admin = User::factory()->create([
         'role' => 'system_admin',
         'email_verified_at' => now(),
+    ]);
+
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Pn Noraini',
+        'phone' => '0136544001',
+        'email' => 'noraini@example.test',
+        'email_verified_at' => now(),
+    ]);
+
+    Student::query()->create([
+        'student_no' => '1A-0001',
+        'family_code' => 'SSP-M001',
+        'full_name' => 'Nur Aina',
+        'class_name' => '1 AMANAH',
+        'parent_name' => 'Pn Noraini',
+        'parent_phone' => '0136544001',
+        'parent_email' => 'noraini@example.test',
+        'status' => 'active',
+        'billing_year' => now()->year,
     ]);
 
     $family = FamilyBilling::query()->create([
         'family_code' => 'SSP-M001',
-        'billing_year' => 2026,
+        'billing_year' => now()->year,
         'fee_amount' => 100,
         'paid_amount' => 100,
         'status' => 'paid',
     ]);
 
-    FamilyBillingPhone::query()->create([
-        'family_billing_id' => $family->id,
-        'phone' => '0136544001',
-        'normalized_phone' => '60136544001',
-    ]);
-
     ParentLoginAudit::query()->create([
-        'user_id' => null,
+        'user_id' => $parent->id,
         'phone' => '0136544001',
         'normalized_phone' => '60136544001',
+        'action_type' => 'login',
+        'access_status' => 'successful',
+        'page_visited' => 'parent.login.verify.submit',
+        'device_browser' => 'Mobile / Chrome',
+        'family_billing_id' => $family->id,
         'logged_in_at' => now()->subHour(),
+        'occurred_at' => now()->subHour(),
     ]);
 
     ParentLoginAudit::query()->create([
-        'user_id' => null,
+        'user_id' => $parent->id,
         'phone' => '0136544001',
         'normalized_phone' => '60136544001',
-        'logged_in_at' => now(),
-    ]);
-
-    ParentLoginOtp::query()->create([
-        'user_id' => null,
-        'phone' => '0136544001',
-        'code_hash' => 'hash',
-        'channel' => 'whatsapp',
-        'expires_at' => now()->addMinutes(5),
-        'used_at' => now()->subMinute(),
-        'attempts' => 1,
-    ]);
-
-    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
-
-    $response->assertOk();
-    $response->assertSee('SSP-M001');
-    $response->assertSee('0136544001');
-    $response->assertSee('2');
-    $response->assertSee('Completed');
-    $response->assertSee('Yes');
-});
-
-it('shows expired tac status for system admin when families are stuck before login', function () {
-    $admin = User::factory()->create([
-        'role' => 'system_admin',
-        'email_verified_at' => now(),
-    ]);
-
-    $family = FamilyBilling::query()->create([
-        'family_code' => 'SSP-M002',
-        'billing_year' => 2026,
-        'fee_amount' => 100,
-        'paid_amount' => 0,
-        'status' => 'unpaid',
-    ]);
-
-    FamilyBillingPhone::query()->create([
+        'action_type' => 'viewed_dashboard',
+        'access_status' => 'successful',
+        'page_visited' => 'parent.dashboard',
+        'device_browser' => 'Mobile / Chrome',
         'family_billing_id' => $family->id,
-        'phone' => '0168899551',
-        'normalized_phone' => '60168899551',
-    ]);
-
-    ParentLoginOtp::query()->create([
-        'user_id' => null,
-        'phone' => '0168899551',
-        'code_hash' => 'hash',
-        'channel' => 'whatsapp',
-        'expires_at' => now()->subMinutes(10),
-        'used_at' => null,
-        'attempts' => 2,
+        'logged_in_at' => now(),
+        'occurred_at' => now(),
     ]);
 
     $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
 
     $response->assertOk();
-    $response->assertSee('SSP-M002');
-    $response->assertSee('Expired TAC (Stuck)');
+    $response->assertSee('Parent Access Log');
+    $response->assertSee('Visits Today');
+    $response->assertSee('PN NORAINI', false);
+    $response->assertSee('viewed dashboard', false);
+    $response->assertSee('1 AMANAH');
 });
 
-it('filters tac status to show stuck families only for system admin', function () {
+it('filters the parent access log to teacher plus parent users only', function () {
     $admin = User::factory()->create([
         'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
-    $stuckFamily = FamilyBilling::query()->create([
-        'family_code' => 'SSP-STUCK',
-        'billing_year' => 2026,
-        'fee_amount' => 100,
-        'paid_amount' => 0,
-        'status' => 'unpaid',
+    $dualRoleParent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Dual Role Parent',
+        'phone' => '0191111222',
+        'email_verified_at' => now(),
+    ]);
+    $dualRoleParent->assignRole('teacher');
+
+    $parentOnly = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Parent Only',
+        'phone' => '0193333444',
+        'email_verified_at' => now(),
     ]);
 
-    FamilyBillingPhone::query()->create([
-        'family_billing_id' => $stuckFamily->id,
+    ParentLoginAudit::query()->create([
+        'user_id' => $dualRoleParent->id,
         'phone' => '0191111222',
         'normalized_phone' => '60191111222',
-    ]);
-
-    ParentLoginOtp::query()->create([
-        'user_id' => null,
-        'phone' => '0191111222',
-        'code_hash' => 'hash',
-        'channel' => 'whatsapp',
-        'expires_at' => now()->subMinutes(3),
-        'used_at' => null,
-        'attempts' => 1,
-    ]);
-
-    $completedFamily = FamilyBilling::query()->create([
-        'family_code' => 'SSP-DONE',
-        'billing_year' => 2026,
-        'fee_amount' => 100,
-        'paid_amount' => 100,
-        'status' => 'paid',
-    ]);
-
-    FamilyBillingPhone::query()->create([
-        'family_billing_id' => $completedFamily->id,
-        'phone' => '0193333444',
-        'normalized_phone' => '60193333444',
-    ]);
-
-    ParentLoginOtp::query()->create([
-        'user_id' => null,
-        'phone' => '0193333444',
-        'code_hash' => 'hash',
-        'channel' => 'whatsapp',
-        'expires_at' => now()->addMinutes(5),
-        'used_at' => now()->subMinute(),
-        'attempts' => 1,
+        'action_type' => 'teacher_space_opened',
+        'access_status' => 'successful',
+        'page_visited' => 'portal-space.switch',
+        'logged_in_at' => now(),
+        'occurred_at' => now(),
     ]);
 
     ParentLoginAudit::query()->create([
-        'user_id' => null,
+        'user_id' => $parentOnly->id,
         'phone' => '0193333444',
         'normalized_phone' => '60193333444',
+        'action_type' => 'login',
+        'access_status' => 'successful',
+        'page_visited' => 'parent.login.verify.submit',
         'logged_in_at' => now(),
+        'occurred_at' => now(),
     ]);
 
-    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor', ['tac_status' => 'stuck']));
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor', [
+        'role_mode' => 'teacher_parent',
+    ]));
 
     $response->assertOk();
-    $response->assertSee('SSP-STUCK');
-    $response->assertDontSee('SSP-DONE');
+    $response->assertSee('DUAL ROLE PARENT');
+    $response->assertDontSee('PARENT ONLY');
 });
 
-it('shows re-send invite button for system admin when stuck family already has an invite history', function () {
+it('exports the parent access log as csv for system admin', function () {
     $admin = User::factory()->create([
         'role' => 'system_admin',
         'email_verified_at' => now(),
     ]);
 
-    $family = FamilyBilling::query()->create([
-        'family_code' => 'SSP-RSND',
-        'billing_year' => 2026,
-        'fee_amount' => 100,
-        'paid_amount' => 0,
-        'status' => 'unpaid',
+    $parent = User::factory()->create([
+        'role' => 'parent',
+        'name' => 'Csv Parent',
+        'phone' => '0187788990',
+        'email_verified_at' => now(),
     ]);
 
-    FamilyBillingPhone::query()->create([
-        'family_billing_id' => $family->id,
+    ParentLoginAudit::query()->create([
+        'user_id' => $parent->id,
         'phone' => '0187788990',
         'normalized_phone' => '60187788990',
+        'action_type' => 'blocked_access',
+        'access_status' => 'blocked',
+        'page_visited' => 'parent.login.request',
+        'logged_in_at' => now(),
+        'occurred_at' => now(),
     ]);
 
-    ParentLoginOtp::query()->create([
-        'user_id' => null,
-        'phone' => '0187788990',
-        'code_hash' => 'hash',
-        'channel' => 'whatsapp',
-        'expires_at' => now()->subMinutes(20),
-        'used_at' => null,
-        'attempts' => 1,
-    ]);
-
-    ParentLoginInvite::query()->create([
-        'family_billing_id' => $family->id,
-        'user_id' => null,
-        'phone' => '0187788990',
-        'normalized_phone' => '60187788990',
-        'token' => str_repeat('a', 80),
-        'expires_at' => now()->addHours(24),
-        'sent_at' => now()->subMinutes(5),
-        'used_at' => null,
-        'created_by_user_id' => $admin->id,
-    ]);
-
-    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor'));
+    $response = $this->actingAs($admin)->get(route('teacher.family-login-monitor.export'));
 
     $response->assertOk();
-    $response->assertSee('Re-Send Invite');
+    $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    expect($response->streamedContent())->toContain('Parent Name');
+    expect($response->streamedContent())->toContain('CSV PARENT');
 });
 
 it('blocks teacher role from viewing family login monitor', function () {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LogoutController;
 use Illuminate\Foundation\Auth\AuthenticatedSessionController;
 use Illuminate\Foundation\Auth\PasswordResetLinkController;
 use Illuminate\Foundation\Auth\RegisteredUserController;
@@ -31,6 +32,6 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
+    Route::post('logout', LogoutController::class)
         ->name('logout');
 });

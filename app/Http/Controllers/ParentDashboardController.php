@@ -7,6 +7,8 @@ use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\SiteSetting;
 use App\Models\Student;
+use App\Services\ParentAccessLogService;
+use App\Services\ParentAccountService;
 use App\Support\ParentPhone;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -18,14 +20,20 @@ use Illuminate\View\View;
 
 class ParentDashboardController extends Controller
 {
+    public function __construct(
+        private readonly ParentAccountService $parentAccountService,
+        private readonly ParentAccessLogService $parentAccessLogService
+    ) {
+    }
+
     public function index(Request $request): View|RedirectResponse
     {
         $parentUser = $request->user();
-        $parentPhone = $parentUser?->phone;
+        $request->session()->put('active_portal_space', 'parent');
         $billingYear = now()->year;
         $isTesterMode = (bool) $parentUser?->isParentTester();
 
-        $accessibleFamilyCodes = $this->resolveAccessibleFamilyCodes($parentPhone);
+        $accessibleFamilyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($parentUser);
 
         $children = Student::query()
             ->whereIn('family_code', $accessibleFamilyCodes)
@@ -182,6 +190,11 @@ class ParentDashboardController extends Controller
             'Tahap 2' => $classCompetition->where('tahap', 'Tahap 2')->take(3)->values(),
         ]);
 
+        $this->parentAccessLogService->log($request, 'viewed_dashboard', [
+            'user' => $parentUser,
+            'space_key' => 'parent',
+        ]);
+
         return view('parent.dashboard', [
             'children' => $children,
             'familyBillings' => $familyBillings,
@@ -206,8 +219,8 @@ class ParentDashboardController extends Controller
 
     public function legacyReceiptPdf(Request $request): Response
     {
-        $parentPhone = $request->user()?->phone;
-        $accessibleFamilyCodes = $this->resolveAccessibleFamilyCodes($parentPhone);
+        $request->session()->put('active_portal_space', 'parent');
+        $accessibleFamilyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($request->user());
 
         $children = Student::query()
             ->whereIn('family_code', $accessibleFamilyCodes)
@@ -290,6 +303,12 @@ class ParentDashboardController extends Controller
         ])->setPaper('a4');
 
         $rujukanSuffix = $this->legacyReceiptRujukanSuffix($legacyPaymentsByYear);
+        $this->parentAccessLogService->log($request, 'downloaded_receipt', [
+            'user' => $request->user(),
+            'space_key' => 'parent',
+            'meta' => ['receipt_type' => 'legacy_year', 'year' => $selectedYear],
+        ]);
+
         return $pdf->download("resit-sejarah-bayaran-{$selectedYear}{$rujukanSuffix}.pdf");
     }
     private function schoolLogoPdfSource(string $schoolLogoUrl): string
@@ -469,25 +488,10 @@ class ParentDashboardController extends Controller
      */
     private function resolveAccessibleFamilyCodes(?string $phone): Collection
     {
-        $normalizedPhone = ParentPhone::normalizeForMatch((string) $phone);
+        $user = auth()->user();
 
-        if ($normalizedPhone === '') {
-            return collect();
-        }
-
-        $studentFamilyCodes = Student::query()
-            ->whereIn('parent_phone', ParentPhone::variants((string) $phone))
-            ->whereNotNull('family_code')
-            ->pluck('family_code');
-
-        $registeredFamilyCodes = FamilyBilling::query()
-            ->whereHas('phones', fn ($query) => $query->where('normalized_phone', $normalizedPhone))
-            ->pluck('family_code');
-
-        return $studentFamilyCodes
-            ->merge($registeredFamilyCodes)
-            ->filter()
-            ->unique()
-            ->values();
+        return $user instanceof \App\Models\User
+            ? $this->parentAccountService->accessibleFamilyCodesForUser($user)
+            : collect();
     }
 }

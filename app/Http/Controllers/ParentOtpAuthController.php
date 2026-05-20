@@ -7,6 +7,8 @@ use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\ParentAccountService;
+use App\Services\ParentAccessLogService;
 use App\Services\WhatsAppTacSender;
 use App\Support\ParentPhone;
 use Illuminate\Http\RedirectResponse;
@@ -15,13 +17,15 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ParentOtpAuthController extends Controller
 {
-    public function __construct(private readonly WhatsAppTacSender $whatsAppTacSender)
-    {
+    public function __construct(
+        private readonly WhatsAppTacSender $whatsAppTacSender,
+        private readonly ParentAccountService $parentAccountService,
+        private readonly ParentAccessLogService $parentAccessLogService
+    ) {
     }
 
     public function showRequestForm(Request $request): View
@@ -98,12 +102,27 @@ class ParentOtpAuthController extends Controller
         }
 
         if (! $parent) {
+            $this->parentAccessLogService->log($request, 'failed_access', [
+                'phone' => $phone,
+                'family_billing' => $selectedBilling,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'no_parent_account'],
+            ]);
+
             return redirect()
                 ->route('parent.search', ['contact' => $phone])
                 ->with('status', 'Nombor telefon ini belum dipautkan ke akaun parent. Sila cari nama anak dahulu untuk teruskan ke TAC dan bayaran.');
         }
 
         if ($this->isParentAccessDisabled($parent)) {
+            $this->parentAccessLogService->log($request, 'blocked_access', [
+                'user' => $parent,
+                'phone' => $phone,
+                'family_billing' => $selectedBilling,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'parent_blocked'],
+            ]);
+
             return back()->withErrors([
                 'phone' => 'Akses portal untuk nombor ini telah dinyahaktifkan. Sila hubungi pentadbir sekolah.',
             ])->withInput();
@@ -119,7 +138,7 @@ class ParentOtpAuthController extends Controller
 
         // One-time TAC activation: once this number has logged in successfully before,
         // skip TAC and let parent enter straight to dashboard/checkout.
-        if ($this->hasCompletedTacActivation($phone)) {
+        if ($this->hasCompletedTacActivation($parent, $phone)) {
             return $this->finalizeParentLogin(
                 $request,
                 $parent,
@@ -261,6 +280,12 @@ class ParentOtpAuthController extends Controller
             ->first();
 
         if (! $otp) {
+            $this->parentAccessLogService->log($request, 'failed_access', [
+                'phone' => $phone,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'otp_expired'],
+            ]);
+
             return back()->withErrors([
                 'pin' => 'TAC expired. Please request a new TAC.',
             ]);
@@ -269,6 +294,13 @@ class ParentOtpAuthController extends Controller
         $otp->increment('attempts');
 
         if (! Hash::check($validated['pin'], $otp->code_hash)) {
+            $this->parentAccessLogService->log($request, 'failed_access', [
+                'user' => $otp->user_id ? User::query()->find($otp->user_id) : null,
+                'phone' => $phone,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'invalid_otp'],
+            ]);
+
             if ($otp->attempts >= 5) {
                 $otp->update(['used_at' => now()]);
             }
@@ -284,12 +316,25 @@ class ParentOtpAuthController extends Controller
             ->find($otp->user_id);
 
         if (! $user || ! $user->hasRole('parent')) {
+            $this->parentAccessLogService->log($request, 'failed_access', [
+                'phone' => $phone,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'user_not_parent'],
+            ]);
+
             return back()->withErrors([
                 'pin' => 'Unable to authenticate this parent account.',
             ]);
         }
 
         if ($this->isParentAccessDisabled($user)) {
+            $this->parentAccessLogService->log($request, 'blocked_access', [
+                'user' => $user,
+                'phone' => $phone,
+                'login_method' => 'otp',
+                'meta' => ['reason' => 'parent_blocked'],
+            ]);
+
             return back()->withErrors([
                 'pin' => 'Akses portal untuk nombor ini telah dinyahaktifkan. Sila hubungi pentadbir sekolah.',
             ]);
@@ -381,43 +426,7 @@ class ParentOtpAuthController extends Controller
 
     private function registerParentForFamily(string $phone, FamilyBilling $familyBilling): User
     {
-        $familyStudents = Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->orderBy('full_name')
-            ->get();
-
-        $parentName = (string) ($familyStudents->firstWhere('parent_name')?->parent_name
-            ?? $familyStudents->first()?->parent_name
-            ?? "Parent {$familyBilling->family_code}");
-
-        $sanitizedPhone = ParentPhone::sanitizeInput($phone);
-
-        $parent = User::query()->create([
-            'name' => $parentName,
-            'email' => sprintf(
-                'parent-%s-%s@placeholder.local',
-                Str::lower($familyBilling->family_code),
-                preg_replace('/\D+/', '', $sanitizedPhone) ?: Str::lower((string) Str::ulid())
-            ),
-            'phone' => $sanitizedPhone,
-            'role' => 'parent',
-            'password' => Str::random(40),
-            'email_verified_at' => now(),
-        ]);
-        $parent->assignRole('parent');
-
-        $this->registerFamilyPhoneIfPossible($sanitizedPhone, $familyBilling);
-
-        Student::query()
-            ->where('family_code', $familyBilling->family_code)
-            ->where(function ($query) {
-                $query->whereNull('parent_phone')->orWhere('parent_phone', '');
-            })
-            ->update([
-                'parent_phone' => $sanitizedPhone,
-            ]);
-
-        return $parent;
+        return $this->parentAccountService->resolveOrCreateForFamily($phone, $familyBilling);
     }
 
     private function registerFamilyPhoneIfPossible(string $phone, FamilyBilling $familyBilling): void
@@ -564,17 +573,29 @@ class ParentOtpAuthController extends Controller
             && (bool) $user->is_active === false;
     }
 
-    private function hasCompletedTacActivation(string $phone): bool
+    private function hasCompletedTacActivation(User $user, string $phone): bool
     {
         $normalizedPhone = ParentPhone::normalizeForMatch($phone);
 
-        if ($normalizedPhone === '') {
+        if ($normalizedPhone === '' || ! ParentLoginAudit::tableIsAvailable()) {
             return false;
         }
 
-        return ParentLoginAudit::query()
-            ->where('normalized_phone', $normalizedPhone)
-            ->exists();
+        $query = ParentLoginAudit::query()
+            ->where('normalized_phone', $normalizedPhone);
+
+        if (ParentLoginAudit::hasAuditColumn('action_type')) {
+            $query->where(function ($builder): void {
+                $builder->whereNull('action_type')
+                    ->orWhere('action_type', 'login');
+            });
+        }
+
+        if ($user->parent_access_reset_at !== null) {
+            $query->where(ParentLoginAudit::occurrenceColumn(), '>', $user->parent_access_reset_at);
+        }
+
+        return $query->exists();
     }
 
     private function finalizeParentLogin(
@@ -585,15 +606,16 @@ class ParentOtpAuthController extends Controller
     ): RedirectResponse {
         Auth::login($user, false);
         $request->session()->regenerate();
+        $request->session()->put('active_portal_space', 'parent');
+        $request->session()->put('parent_login_method', 'otp');
 
         $intendedCheckoutId = (int) $request->session()->get('parent_login_intended_checkout', 0);
         $returnUrl = (string) $request->session()->get('parent_otp_return_url', route('parent.search'));
 
-        ParentLoginAudit::query()->create([
-            'user_id' => $user->id,
+        $this->parentAccessLogService->log($request, 'login', [
+            'user' => $user,
             'phone' => $phone,
-            'normalized_phone' => ParentPhone::normalizeForMatch($phone),
-            'logged_in_at' => now(),
+            'login_method' => 'otp',
         ]);
 
         $request->session()->forget('parent_login_intended_checkout');

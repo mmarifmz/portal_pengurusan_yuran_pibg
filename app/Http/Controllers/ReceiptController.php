@@ -5,11 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\SiteSetting;
 use App\Models\Student;
+use App\Services\ParentAccessLogService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ReceiptController extends Controller
 {
+    public function __construct(
+        private readonly ParentAccessLogService $parentAccessLogService
+    ) {
+    }
+
     public function show(Request $request, string $receiptUuid): View
     {
         $transaction = FamilyPaymentTransaction::query()
@@ -41,6 +47,16 @@ class ReceiptController extends Controller
 
             return $child;
         });
+
+        if ($request->user()?->hasRole('parent')) {
+            $request->session()->put('active_portal_space', 'parent');
+            $this->parentAccessLogService->log($request, 'viewed_receipt', [
+                'user' => $request->user(),
+                'family_billing' => $transaction->familyBilling,
+                'space_key' => 'parent',
+                'meta' => ['receipt_uuid' => $receiptUuid, 'source' => 'web_receipt'],
+            ]);
+        }
 
         return view('parent.receipt-web', [
             'transaction' => $transaction,

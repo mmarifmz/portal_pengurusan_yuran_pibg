@@ -47,11 +47,30 @@
 </head>
     <body class="portal-shell min-h-screen text-[color:var(--portal-ink)] antialiased">
         @php
-            $sidebarHomeRoute = auth()->user()?->isParentOnly() ? route('parent.dashboard') : route('dashboard');
-            $isReadOnlyTeacher = auth()->user()?->isTeacher()
-                && ! auth()->user()?->isSuperTeacher()
-                && ! auth()->user()?->isSystemAdmin()
-                && ! auth()->user()?->isPta();
+            $currentUser = auth()->user();
+            $currentRouteName = request()->route()?->getName() ?? '';
+            $isDualPortalUser = $currentUser?->isParent() && $currentUser?->isStaff();
+            $activePortalSpace = session('active_portal_space');
+
+            if ($isDualPortalUser) {
+                if (str_starts_with($currentRouteName, 'parent.')) {
+                    $activePortalSpace = 'parent';
+                } elseif ($currentRouteName !== '' && ! str_starts_with($currentRouteName, 'profile.')) {
+                    $activePortalSpace = 'teacher';
+                }
+            } elseif ($currentUser?->isParentOnly()) {
+                $activePortalSpace = 'parent';
+            } else {
+                $activePortalSpace = 'teacher';
+            }
+
+            $sidebarHomeRoute = $activePortalSpace === 'parent' ? route('parent.dashboard') : route('dashboard');
+            $isReadOnlyTeacher = $currentUser?->isTeacher()
+                && ! $currentUser?->isSuperTeacher()
+                && ! $currentUser?->isSystemAdmin()
+                && ! $currentUser?->isPta();
+            $showStaffNavigation = ! $currentUser?->isParentOnly() && (! $isDualPortalUser || $activePortalSpace !== 'parent');
+            $showParentNavigation = $currentUser?->isParent() && (! $isDualPortalUser || $activePortalSpace === 'parent');
         @endphp
         <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
@@ -66,20 +85,42 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
+                @if ($isDualPortalUser)
+                    <div class="mb-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Active Space</p>
+                        <div class="mt-3 grid gap-2">
+                            <form method="POST" action="{{ route('portal-space.switch') }}">
+                                @csrf
+                                <input type="hidden" name="space" value="teacher">
+                                <button type="submit" class="w-full rounded-xl border px-3 py-2 text-left text-xs font-semibold transition {{ $activePortalSpace === 'teacher' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}">
+                                    {{ $currentUser->hasAnyRole(['teacher', 'super_teacher']) ? 'Teacher Space' : 'Staff Space' }}
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('portal-space.switch') }}">
+                                @csrf
+                                <input type="hidden" name="space" value="parent">
+                                <button type="submit" class="w-full rounded-xl border px-3 py-2 text-left text-xs font-semibold transition {{ $activePortalSpace === 'parent' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}">
+                                    Parent Space
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
+
                 <flux:sidebar.group :heading="__('Platform')" class="grid gap-1">
-                    @if (! auth()->user()->isParentOnly())
+                    @if ($showStaffNavigation)
                         <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
                         </flux:sidebar.item>
                     @endif
 
-                    @if (! auth()->user()->isParentOnly())
+                    @if ($showStaffNavigation)
                         <flux:sidebar.item icon="calendar" :href="route('school-calendar')" :current="request()->routeIs('school-calendar')" wire:navigate>
                             {{ __('School Calendar') }}
                         </flux:sidebar.item>
                     @endif
 
-                    @if (auth()->user()->canAccessTeacherRecords())
+                    @if ($showStaffNavigation && auth()->user()->canAccessTeacherRecords())
                         <flux:sidebar.item icon="chart-pie" :href="route('teacher.class-progress')" :current="request()->routeIs('teacher.class-progress')" wire:navigate>
                             {{ __('Class Progress') }}
                         </flux:sidebar.item>
@@ -93,7 +134,7 @@
                         </flux:sidebar.item>
                     @endif
 
-                    @if (auth()->user()->isSystemAdmin())
+                    @if ($showStaffNavigation && auth()->user()->isSystemAdmin())
                         <flux:sidebar.item icon="banknotes" :href="route('teacher.finance-accounting')" :current="request()->routeIs('teacher.finance-accounting*')" wire:navigate>
                             {{ __('Finance Accounting') }}
                         </flux:sidebar.item>
@@ -103,12 +144,15 @@
                         <flux:sidebar.item icon="tag" :href="route('teacher.social-tags.index')" :current="request()->routeIs('teacher.social-tags.*')" wire:navigate>
                             {{ __('Social Tags') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="users" :href="route('teacher.parent-management.index')" :current="request()->routeIs('teacher.parent-management.*')" wire:navigate>
+                            {{ __('Parent Management') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="device-phone-mobile" :href="route('teacher.family-login-monitor')" :current="request()->routeIs('teacher.family-login-monitor')" wire:navigate>
                             {{ __('Parent Access Log') }}
                         </flux:sidebar.item>
                     @endif
 
-                    @if (auth()->user()->isParent())
+                    @if ($showParentNavigation)
                         <flux:sidebar.item icon="users" :href="route('parent.dashboard')" :current="request()->routeIs('parent.dashboard')" wire:navigate>
                             {{ __('Ibu / Bapa & Penjaga') }}
                         </flux:sidebar.item>
@@ -124,7 +168,7 @@
                     @endif
                 </flux:sidebar.group>
 
-                @if (! auth()->user()->isParentOnly() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
+                @if ($showStaffNavigation && ! auth()->user()->isParentOnly() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
                     <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">
                         @if (auth()->user()->isSystemAdmin())
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
@@ -150,7 +194,7 @@
                     </flux:sidebar.group>
                 @endif
 
-                @if (! auth()->user()->isParentOnly() && auth()->user()->isSystemAdmin())
+                @if ($showStaffNavigation && ! auth()->user()->isParentOnly() && auth()->user()->isSystemAdmin())
                     <flux:sidebar.group :heading="__('System Admin')" class="grid gap-1 mt-2">
                         <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
                             {{ __('Student Import') }}

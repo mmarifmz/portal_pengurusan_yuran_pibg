@@ -11,9 +11,10 @@ use App\Models\PaymentAllocation;
 use App\Models\PaymentGatewaySetting;
 use App\Models\SiteSetting;
 use App\Models\Student;
-use App\Support\ParentPhone;
 use App\Services\FamilyPaymentPlanService;
 use App\Services\FamilyPaymentSettlementService;
+use App\Services\ParentAccessLogService;
+use App\Services\ParentAccountService;
 use App\Services\PaymentCampaignService;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\ToyyibPayService;
@@ -35,12 +36,15 @@ class ParentPaymentController extends Controller
         private readonly FamilyPaymentPlanService $paymentPlanService,
         private readonly FamilyPaymentSettlementService $paymentSettlementService,
         private readonly PaymentCampaignService $paymentCampaignService,
-        private readonly ParentPaymentNotificationService $paymentNotificationService
+        private readonly ParentPaymentNotificationService $paymentNotificationService,
+        private readonly ParentAccountService $parentAccountService,
+        private readonly ParentAccessLogService $parentAccessLogService
     ) {
     }
 
     public function checkout(Request $request, FamilyBilling $familyBilling): View|RedirectResponse
     {
+        $request->session()->put('active_portal_space', 'parent');
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
         $alreadyPaidCurrentYear = $this->familyHasCompletedCurrentYearPayment($familyBilling);
@@ -78,6 +82,12 @@ class ParentPaymentController extends Controller
         $availablePlans = $this->paymentPlanService->availablePlans((float) $familyBilling->fee_amount, $eligiblePlanTypes);
         $availablePaymentOptionLabels = $this->paymentCampaignService->eligiblePlanLabels($familyBilling);
         $paymentGatewaySetting = PaymentGatewaySetting::current();
+
+        $this->parentAccessLogService->log($request, 'viewed_payment', [
+            'user' => $request->user(),
+            'family_billing' => $familyBilling,
+            'space_key' => 'parent',
+        ]);
 
         $defaultDonation = 0.0;
         $fromTransactionId = (int) $request->query('from_transaction', 0);
@@ -266,6 +276,7 @@ class ParentPaymentController extends Controller
 
     public function create(Request $request, FamilyBilling $familyBilling): RedirectResponse
     {
+        $request->session()->put('active_portal_space', 'parent');
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
         $existingPlan = $familyBilling->paymentPlan()->first();
@@ -383,11 +394,19 @@ class ParentPaymentController extends Controller
             $donation
         );
 
+        $this->parentAccessLogService->log($request, 'clicked_pay_now', [
+            'user' => $request->user(),
+            'family_billing' => $familyBilling,
+            'space_key' => 'parent',
+            'meta' => ['transaction_id' => $transaction->id, 'amount' => $totalAmount],
+        ]);
+
         return redirect()->away($this->toyyibPayService->paymentUrl($billCode));
     }
 
     public function selectPlan(Request $request, FamilyBilling $familyBilling): RedirectResponse
     {
+        $request->session()->put('active_portal_space', 'parent');
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
         $validated = $request->validate([
@@ -435,6 +454,13 @@ class ParentPaymentController extends Controller
 
         $this->paymentPlanService->createPlan($familyBilling, $planType);
 
+        $this->parentAccessLogService->log($request, 'changed_payment_option', [
+            'user' => $request->user(),
+            'family_billing' => $familyBilling,
+            'space_key' => 'parent',
+            'meta' => ['plan_type' => $planType],
+        ]);
+
         return redirect()
             ->route('parent.payments.checkout', $familyBilling)
             ->with('status', 'Pelan bayaran berjaya dipilih.');
@@ -443,6 +469,7 @@ class ParentPaymentController extends Controller
     public function payInstallment(Request $request, FamilyPaymentInstallment $installment): RedirectResponse
     {
         $familyBilling = $installment->familyBilling()->firstOrFail();
+        $request->session()->put('active_portal_space', 'parent');
         $this->authorizeParentFamilyBilling($request, $familyBilling);
 
         $validated = $this->validatePayerInput($request, false);
@@ -555,11 +582,23 @@ class ParentPaymentController extends Controller
 
         $this->paymentPlanService->syncInstallmentAttemptStatus($transaction, 'pending');
 
+        $this->parentAccessLogService->log($request, 'clicked_pay_now', [
+            'user' => $request->user(),
+            'family_billing' => $familyBilling,
+            'space_key' => 'parent',
+            'meta' => [
+                'transaction_id' => $transaction->id,
+                'installment_id' => $installment->id,
+                'amount' => $totalAmount,
+            ],
+        ]);
+
         return redirect()->away($this->toyyibPayService->paymentUrl($billCode));
     }
 
     public function history(Request $request): View
     {
+        $request->session()->put('active_portal_space', 'parent');
         $filter = (string) $request->query('filter', 'all');
         if (! in_array($filter, ['all', 'successful', 'pending'], true)) {
             $filter = 'all';
@@ -568,7 +607,7 @@ class ParentPaymentController extends Controller
         $user = $request->user();
         $isTesterMode = (bool) $user?->isParentTester();
 
-        $familyCodes = $this->resolveOwnedFamilyCodes((string) $user?->phone);
+        $familyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($user);
 
         $transactions = FamilyPaymentTransaction::query()
             ->with('familyBilling')
@@ -605,6 +644,12 @@ class ParentPaymentController extends Controller
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->get();
+
+        $this->parentAccessLogService->log($request, 'viewed_payment', [
+            'user' => $user,
+            'space_key' => 'parent',
+            'meta' => ['filter' => $filter],
+        ]);
 
         return view('parent.payment-history', [
             'transactions' => $transactions,
@@ -737,7 +782,7 @@ class ParentPaymentController extends Controller
         return response('ok');
     }
 
-    public function summary(string $externalOrderId): View
+    public function summary(Request $request, string $externalOrderId): View
     {
         $transaction = FamilyPaymentTransaction::query()
             ->with(['familyBilling', 'installment.paymentPlan.installments'])
@@ -751,6 +796,16 @@ class ParentPaymentController extends Controller
 
         $receiptUrl = $this->paymentNotificationService->receiptUrl($transaction);
 
+        if ($request->user()?->hasRole('parent')) {
+            $request->session()->put('active_portal_space', 'parent');
+            $this->parentAccessLogService->log($request, 'viewed_receipt', [
+                'user' => $request->user(),
+                'family_billing' => $transaction->familyBilling,
+                'space_key' => 'parent',
+                'meta' => ['external_order_id' => $externalOrderId, 'source' => 'summary'],
+            ]);
+        }
+
         return view('parent.payment-summary', [
             'transaction' => $transaction,
             'familyChildren' => $familyChildren,
@@ -760,7 +815,7 @@ class ParentPaymentController extends Controller
         ]);
     }
 
-    public function receiptPdf(string $externalOrderId): Response
+    public function receiptPdf(Request $request, string $externalOrderId): Response
     {
         $transaction = FamilyPaymentTransaction::query()
             ->with(['familyBilling', 'installment.paymentPlan.installments'])
@@ -782,6 +837,16 @@ class ParentPaymentController extends Controller
             'schoolLogoUrl' => $schoolLogoUrl,
             'schoolLogoPdfSource' => $schoolLogoPdfSource,
         ])->setPaper('a4');
+
+        if ($request->user()?->hasRole('parent')) {
+            $request->session()->put('active_portal_space', 'parent');
+            $this->parentAccessLogService->log($request, 'downloaded_receipt', [
+                'user' => $request->user(),
+                'family_billing' => $transaction->familyBilling,
+                'space_key' => 'parent',
+                'meta' => ['external_order_id' => $externalOrderId],
+            ]);
+        }
 
         return $pdf->download("resit-transaksi-yuran-pibg-{$externalOrderId}.pdf");
     }
@@ -1251,26 +1316,11 @@ class ParentPaymentController extends Controller
      */
     private function resolveOwnedFamilyCodes(string $phone): Collection
     {
-        $normalizedPhone = ParentPhone::normalizeForMatch($phone);
+        $user = auth()->user();
 
-        if ($normalizedPhone === '') {
-            return collect();
-        }
-
-        $studentFamilyCodes = Student::query()
-            ->whereIn('parent_phone', ParentPhone::variants($phone))
-            ->whereNotNull('family_code')
-            ->pluck('family_code');
-
-        $registeredFamilyCodes = FamilyBilling::query()
-            ->whereHas('phones', fn ($query) => $query->where('normalized_phone', $normalizedPhone))
-            ->pluck('family_code');
-
-        return $studentFamilyCodes
-            ->merge($registeredFamilyCodes)
-            ->filter()
-            ->unique()
-            ->values();
+        return $user instanceof \App\Models\User
+            ? $this->parentAccountService->accessibleFamilyCodesForUser($user)
+            : collect();
     }
 
     private function syncParentProfileFromPaidTransaction(FamilyPaymentTransaction $transaction): void
