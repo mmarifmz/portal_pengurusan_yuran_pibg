@@ -543,14 +543,6 @@ class PaymentFunnelMonitorController extends Controller
             }
         }
 
-        try {
-            $this->paymentNotificationService->sendTeacherClassNotifications($transaction);
-        } catch (\Throwable $exception) {
-            Log::warning('Unable to send teacher WhatsApp notifications from gateway sync.', [
-                'transaction_id' => $transaction->id,
-                'error' => $exception->getMessage(),
-            ]);
-        }
     }
 
     private function mapGatewayStatus(string $billPaymentStatus): string

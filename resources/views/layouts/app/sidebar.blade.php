@@ -199,6 +199,9 @@
                         <flux:sidebar.item icon="clipboard-document-list" :href="route('students.import.form')" :current="request()->routeIs('students.import.form')" wire:navigate>
                             {{ __('Student Import') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="chat-bubble-left-right" :href="route('admin.whatsapp-queue.teacher-payment-notifications.index')" :current="request()->routeIs('admin.whatsapp-queue.*')" wire:navigate>
+                            {{ __('WhatsApp Queue') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="arrow-path-rounded-square" :href="route('teacher.reconcile.index')" :current="request()->routeIs('teacher.reconcile.*')" wire:navigate>
                             {{ __('Year Reconcile') }}
                         </flux:sidebar.item>

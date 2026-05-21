@@ -18,6 +18,7 @@ use App\Http\Controllers\TeacherFinanceAccountingController;
 use App\Http\Controllers\TeacherClassProgressController;
 use App\Http\Controllers\TeacherContributionLeaderboardController;
 use App\Http\Controllers\TeacherSocialTagController;
+use App\Http\Controllers\TeacherPaymentNotificationAdminController;
 use App\Http\Controllers\PaymentTesterUserController;
 use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\VisitorLogController;
@@ -191,6 +192,9 @@ Route::post('/payment-webhook', [ParentPaymentController::class, 'handleCallback
 Route::middleware(['auth'])->group(function () {
     Route::post('/portal-space/switch', [PortalSpaceController::class, 'switch'])
         ->name('portal-space.switch');
+    Route::post('/receipts/{receiptUuid}/share-to-teacher', [ReceiptController::class, 'shareReceiptToTeacher'])
+        ->middleware('role:parent')
+        ->name('receipts.share-to-teacher');
 
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('teacher/dashboard', [TeacherRecordsController::class, 'index'])
@@ -291,6 +295,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/whatsapp-queue', [TeacherClassProgressController::class, 'whatsappQueueIndex'])
         ->middleware('role:system_admin')
         ->name('admin.whatsapp-queue.index');
+    Route::get('/admin/whatsapp-queue/teacher-payment-notifications', [TeacherPaymentNotificationAdminController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('admin.whatsapp-queue.teacher-payment-notifications.index');
+    Route::get('/admin/whatsapp-queue/teacher-payment-notifications/{teacherPaymentNotification}', [TeacherPaymentNotificationAdminController::class, 'show'])
+        ->middleware('role:system_admin')
+        ->name('admin.whatsapp-queue.teacher-payment-notifications.show');
+    Route::post('/admin/whatsapp-queue/teacher-payment-notifications/{teacherPaymentNotification}/retry', [TeacherPaymentNotificationAdminController::class, 'retry'])
+        ->middleware('role:system_admin')
+        ->name('admin.whatsapp-queue.teacher-payment-notifications.retry');
+    Route::post('/admin/whatsapp-queue/teacher-payment-notifications/{teacherPaymentNotification}/cancel', [TeacherPaymentNotificationAdminController::class, 'cancel'])
+        ->middleware('role:system_admin')
+        ->name('admin.whatsapp-queue.teacher-payment-notifications.cancel');
     
     Route::get('/teacher/contribution-leaderboard', [TeacherContributionLeaderboardController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')

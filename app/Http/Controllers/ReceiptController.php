@@ -6,13 +6,16 @@ use App\Models\FamilyPaymentTransaction;
 use App\Models\SiteSetting;
 use App\Models\Student;
 use App\Services\ParentAccessLogService;
+use App\Services\TeacherPaymentNotificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ReceiptController extends Controller
 {
     public function __construct(
-        private readonly ParentAccessLogService $parentAccessLogService
+        private readonly ParentAccessLogService $parentAccessLogService,
+        private readonly TeacherPaymentNotificationService $teacherPaymentNotificationService
     ) {
     }
 
@@ -76,35 +79,48 @@ class ReceiptController extends Controller
                 ? $this->maskMiddle((string) ($transaction->provider_invoice_no ?: 'Belum dijana'), 3, 2)
                 : ($transaction->provider_invoice_no ?: 'Belum dijana'),
             'receiptContext' => $this->buildReceiptContext($transaction),
-            'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
+            'teacherNotificationSummary' => $request->user()?->isParent()
+                ? $this->teacherPaymentNotificationService->summaryForTransaction($transaction)
+                : null,
+            'teacherNotificationShareUrl' => $request->user()?->isParent()
+                ? route('receipts.share-to-teacher', $transaction->receipt_uuid)
+                : null,
             'schoolLogoUrl' => SiteSetting::schoolLogoUrl(),
         ]);
     }
 
-    private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
+    public function shareReceiptToTeacher(Request $request, string $receiptUuid): JsonResponse
     {
-        $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
-        $receiptContext = $this->buildReceiptContext($transaction);
+        $transaction = FamilyPaymentTransaction::query()
+            ->with(['familyBilling', 'installment.paymentPlan.installments'])
+            ->where('receipt_uuid', $receiptUuid)
+            ->firstOrFail();
 
-        $lines = [
-            'Assalamualaikum guru,',
-            '',
-            'Saya ingin kongsi resit bayaran PIBG:',
-            'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
-            'Yuran Dibayar: RM'.number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2),
-            'Sumbangan Tambahan: RM'.number_format((float) ($receiptContext['donation_paid_this_transaction'] ?? 0), 2),
-            'Jumlah Dibayar: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_display,
-            'Resit web: '.$receiptUrl,
-        ];
+        try {
+            $result = $this->teacherPaymentNotificationService->shareReceiptToTeachers($transaction, $request->user());
 
-        if ($receiptContext['installment_label'] !== null) {
-            array_splice($lines, 5, 0, ['Ansuran: '.$receiptContext['installment_label']]);
+            foreach ($result['notifications'] as $notification) {
+                \App\Jobs\SendTeacherPaymentNotificationJob::dispatch($notification->id)
+                    ->onQueue('teacher-notification');
+            }
+
+            return response()->json([
+                'ok' => true,
+                'duplicate' => (bool) $result['duplicate'],
+                'message' => $result['duplicate']
+                    ? 'Makluman ini telah berada dalam giliran penghantaran.'
+                    : 'Makluman kepada guru kelas telah dimasukkan ke dalam giliran penghantaran.',
+                'status' => $result['summary']['status'] ?? null,
+                'status_label' => $result['summary']['label'] ?? null,
+                'created_count' => $result['created_count'],
+                'duplicate_count' => $result['duplicate_count'],
+            ]);
+        } catch (\DomainException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage(),
+            ], 422);
         }
-
-        $message = implode("\n", $lines);
-
-        return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
     }
 
     /**
@@ -158,29 +174,6 @@ class ReceiptController extends Controller
             'payment_status_label' => (float) $plan->balance_amount <= 0 ? 'Selesai Dibayar' : 'Bayaran Sebahagian',
             'fully_paid' => (float) $plan->balance_amount <= 0,
         ];
-    }
-
-    private function normalizeWaPhone(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-
-        if ($digits === '') {
-            return '60123103205';
-        }
-
-        if (str_starts_with($digits, '60')) {
-            return $digits;
-        }
-
-        if (str_starts_with($digits, '0')) {
-            return '6'.$digits;
-        }
-
-        if (str_starts_with($digits, '1')) {
-            return '60'.$digits;
-        }
-
-        return $digits;
     }
 
     private function resolvePreviousInAppUrl(Request $request, string $currentUrl, string $fallbackUrl): string

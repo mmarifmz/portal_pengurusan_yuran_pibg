@@ -35,8 +35,15 @@
         .breakdown-row--accent { border-color: #bbf7d0; background: #f0fdf4; }
         .breakdown-row--accent strong { color: #047857; }
         .actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
-        .wa-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; text-decoration: none; border: 1px solid #22c55e; color: #166534; background: #ecfdf5; }
+        .wa-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; text-decoration: none; border: 1px solid #22c55e; color: #166534; background: #ecfdf5; cursor: pointer; }
         .wa-btn:hover { background: #dcfce7; }
+        .share-status { margin-top: 12px; border-radius: 14px; border: 1px solid #d4d4d8; background: #fafafa; padding: 12px 14px; font-size: 13px; color: #3f3f46; }
+        .share-flash { margin-top: 10px; border-radius: 14px; border: 1px solid #bbf7d0; background: #f0fdf4; padding: 12px 14px; font-size: 13px; color: #166534; display: none; }
+        .share-flash.error { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(24, 24, 27, 0.45); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 50; }
+        .modal-card { width: min(100%, 460px); background: #fff; border-radius: 22px; border: 1px solid #e4e4e7; box-shadow: 0 30px 70px rgba(24, 24, 27, 0.2); padding: 22px; }
+        .modal-actions { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+        .ghost-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; border: 1px solid #d4d4d8; color: #3f3f46; background: #fff; cursor: pointer; }
         .children { display: grid; gap: 12px; }
         .child { border: 1px solid #e4e4e7; border-radius: 18px; background: #fafafa; padding: 14px 16px; }
         .child-name { font-size: 15px; font-weight: 700; color: #18181b; }
@@ -70,8 +77,16 @@
             <div class="grid">
                 @unless ($isPublicReceipt ?? true)
                     <div class="actions">
-                        <a href="{{ $teacherShareUrl }}" target="_blank" rel="noopener" class="wa-btn">Share with Teacher (WhatsApp)</a>
+                        @if (! empty($teacherNotificationShareUrl))
+                            <button type="button" class="wa-btn" data-share-teacher-trigger>Kongsi Resit Kepada Guru Kelas</button>
+                        @endif
                     </div>
+                    @if (! empty($teacherNotificationSummary))
+                        <div class="share-status" data-share-teacher-status>{{ $teacherNotificationSummary['label'] }}</div>
+                    @else
+                        <div class="share-status" data-share-teacher-status style="display:none;"></div>
+                    @endif
+                    <div class="share-flash" data-share-teacher-flash></div>
                 @endunless
                 <div class="cols">
                     <div>
@@ -154,6 +169,82 @@
             </div>
         </section>
     </main>
+
+    @if (! empty($teacherNotificationShareUrl))
+        <div class="modal-backdrop" id="shareTeacherReceiptModal">
+            <div class="modal-card">
+                <p class="meta" style="color:#71717a;">Pengesahan</p>
+                <h3 style="margin:8px 0 0; font-size:22px; color:#18181b;">Kongsi Resit Kepada Guru Kelas</h3>
+                <p style="margin:14px 0 0; font-size:14px; color:#52525b; line-height:1.7;">
+                    Makluman bayaran akan dihantar kepada guru kelas melalui WhatsApp.
+                </p>
+                <div class="modal-actions">
+                    <button type="button" class="ghost-btn" data-share-teacher-close>Batal</button>
+                    <button type="button" class="wa-btn" data-share-teacher-confirm data-url="{{ $teacherNotificationShareUrl }}">Ya, Hantar Kepada Guru</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if (! empty($teacherNotificationShareUrl))
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modal = document.getElementById('shareTeacherReceiptModal');
+                const trigger = document.querySelector('[data-share-teacher-trigger]');
+                const closeButtons = document.querySelectorAll('[data-share-teacher-close]');
+                const confirmButton = document.querySelector('[data-share-teacher-confirm]');
+                const statusBox = document.querySelector('[data-share-teacher-status]');
+                const flashBox = document.querySelector('[data-share-teacher-flash]');
+
+                if (!modal || !trigger || !confirmButton) {
+                    return;
+                }
+
+                const openModal = () => modal.style.display = 'flex';
+                const closeModal = () => modal.style.display = 'none';
+
+                trigger.addEventListener('click', openModal);
+                closeButtons.forEach((button) => button.addEventListener('click', closeModal));
+                modal.addEventListener('click', function (event) {
+                    if (event.target === modal) {
+                        closeModal();
+                    }
+                });
+
+                confirmButton.addEventListener('click', async function () {
+                    confirmButton.disabled = true;
+
+                    try {
+                        const response = await fetch(confirmButton.dataset.url, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            },
+                        });
+                        const payload = await response.json();
+
+                        flashBox.textContent = payload.message || 'Status penghantaran sedang dikemas kini.';
+                        flashBox.style.display = 'block';
+                        flashBox.classList.toggle('error', !payload.ok);
+
+                        if (payload.status_label) {
+                            statusBox.textContent = payload.status_label;
+                            statusBox.style.display = 'block';
+                        }
+
+                        closeModal();
+                    } catch (_error) {
+                        flashBox.textContent = 'Makluman tidak dapat dihantar buat masa ini. Sila cuba lagi.';
+                        flashBox.style.display = 'block';
+                        flashBox.classList.add('error');
+                    } finally {
+                        confirmButton.disabled = false;
+                    }
+                });
+            });
+        </script>
+    @endif
 
 </body>
 </html>

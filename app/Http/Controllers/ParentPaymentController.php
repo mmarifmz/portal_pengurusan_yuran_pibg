@@ -17,6 +17,7 @@ use App\Services\ParentAccessLogService;
 use App\Services\ParentAccountService;
 use App\Services\PaymentCampaignService;
 use App\Services\ParentPaymentNotificationService;
+use App\Services\TeacherPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -37,6 +38,7 @@ class ParentPaymentController extends Controller
         private readonly FamilyPaymentSettlementService $paymentSettlementService,
         private readonly PaymentCampaignService $paymentCampaignService,
         private readonly ParentPaymentNotificationService $paymentNotificationService,
+        private readonly TeacherPaymentNotificationService $teacherPaymentNotificationService,
         private readonly ParentAccountService $parentAccountService,
         private readonly ParentAccessLogService $parentAccessLogService
     ) {
@@ -811,7 +813,12 @@ class ParentPaymentController extends Controller
             'familyChildren' => $familyChildren,
             'receiptUrl' => $receiptUrl,
             'receiptContext' => $this->buildReceiptContext($transaction),
-            'teacherShareUrl' => $this->buildTeacherShareUrl($transaction, $receiptUrl),
+            'teacherNotificationSummary' => $request->user()?->isParent()
+                ? $this->teacherPaymentNotificationService->summaryForTransaction($transaction)
+                : null,
+            'teacherNotificationShareUrl' => $request->user()?->isParent()
+                ? route('receipts.share-to-teacher', $transaction->receipt_uuid)
+                : null,
         ]);
     }
 
@@ -933,25 +940,6 @@ class ParentPaymentController extends Controller
             }
         }
 
-        try {
-            $teacherDeliveries = $this->paymentNotificationService->sendTeacherClassNotifications($transaction);
-
-            if ($teacherDeliveries !== []) {
-                Log::info('Teacher WhatsApp notifications sent for successful payment.', [
-                    'transaction_id' => $transaction->id,
-                    'teacher_count' => count($teacherDeliveries),
-                    'teachers' => collect($teacherDeliveries)->map(fn (array $row) => [
-                        'teacher_id' => $row['teacher_id'] ?? null,
-                        'teacher_class' => $row['teacher_class'] ?? null,
-                    ])->values()->all(),
-                ]);
-            }
-        } catch (\Throwable $exception) {
-            Log::warning('Unable to send teacher WhatsApp notifications.', [
-                'transaction_id' => $transaction->id,
-                'error' => $exception->getMessage(),
-            ]);
-        }
     }
 
 
@@ -967,33 +955,6 @@ class ParentPaymentController extends Controller
 
         return 'PBG-'.strtoupper((string) Str::ulid());
     }
-    private function buildTeacherShareUrl(FamilyPaymentTransaction $transaction, string $receiptUrl): string
-    {
-        $phone = $this->normalizeWaPhone((string) config('services.teacher_whatsapp_phone', '60123103205'));
-        $receiptContext = $this->buildReceiptContext($transaction);
-        $installmentLine = $receiptContext['installment_label'] !== null
-            ? 'Ansuran: '.$receiptContext['installment_label']
-            : null;
-
-        $lines = [
-            'Assalamualaikum guru,',
-            '',
-            'Saya ingin kongsi resit bayaran PIBG:',
-            'Kod keluarga: '.($transaction->familyBilling->family_code ?? '-'),
-            'Jumlah: RM'.number_format((float) $transaction->amount, 2),
-            'Order ID: '.$transaction->external_order_display,
-            'Resit web: '.$receiptUrl,
-        ];
-
-        if ($installmentLine) {
-            array_splice($lines, 5, 0, [$installmentLine]);
-        }
-
-        $message = implode("\n", $lines);
-
-        return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
-    }
-
     private function resolveFullPaymentDonation(array $validated): float
     {
         return round(max(

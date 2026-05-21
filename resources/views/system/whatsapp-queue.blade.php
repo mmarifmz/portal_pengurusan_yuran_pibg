@@ -7,9 +7,14 @@
                     <h1 class="text-2xl font-bold tracking-tight text-zinc-900">WhatsApp Queue</h1>
                     <p class="mt-1 text-sm text-zinc-600">Monitor pending, sending, sent, and failed class payment reports.</p>
                 </div>
-                <a href="{{ route('teacher.class-progress') }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                    Back to Class Progress
-                </a>
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ route('admin.whatsapp-queue.teacher-payment-notifications.index') }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                        Teacher Payment Notifications
+                    </a>
+                    <a href="{{ route('teacher.class-progress') }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                        Back to Class Progress
+                    </a>
+                </div>
             </div>
 
             <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

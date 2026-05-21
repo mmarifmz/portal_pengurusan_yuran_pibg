@@ -193,7 +193,24 @@
             <div class="no-print mt-4 flex flex-wrap gap-2">
                 <a href="{{ route('parent.payments.receipt', $transaction->external_order_id) }}" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Muat Turun Resit</a>
                 <a href="{{ $receiptUrl }}" class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Buka Resit Web</a>
+                @if ((string) $transaction->status === 'success' && ! empty($teacherNotificationShareUrl))
+                    <button type="button" data-share-teacher-trigger class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+                        Kongsi Resit Kepada Guru Kelas
+                    </button>
+                @endif
             </div>
+
+            @if (! empty($teacherNotificationSummary))
+                <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700" data-share-teacher-status>
+                    {{ $teacherNotificationSummary['label'] }}
+                </div>
+            @elseif ((string) $transaction->status === 'success' && ! empty($teacherNotificationShareUrl))
+                <div class="mt-4 hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700" data-share-teacher-status></div>
+            @endif
+
+            @if ((string) $transaction->status === 'success' && ! empty($teacherNotificationShareUrl))
+                <div class="mt-3 hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" data-share-teacher-flash></div>
+            @endif
         </div>
 
         <div class="box bg-[color:var(--brand-soft)] p-5 sm:p-6 print-optional">
@@ -232,4 +249,102 @@
             </div>
         </div>
     </div>
+
+    @if ((string) $transaction->status === 'success' && ! empty($teacherNotificationShareUrl))
+        <div id="shareTeacherSummaryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4 py-6">
+            <div class="w-full max-w-lg rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Pengesahan</p>
+                        <h3 class="mt-1 text-lg font-semibold text-zinc-900">Kongsi Resit Kepada Guru Kelas</h3>
+                    </div>
+                    <button type="button" data-share-teacher-close class="rounded-xl border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                        Tutup
+                    </button>
+                </div>
+                <p class="mt-4 text-sm leading-6 text-zinc-600">
+                    Makluman bayaran akan dihantar kepada guru kelas melalui WhatsApp.
+                </p>
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" data-share-teacher-close class="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100">
+                        Batal
+                    </button>
+                    <button type="button" data-share-teacher-confirm data-url="{{ $teacherNotificationShareUrl }}" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">
+                        Ya, Hantar Kepada Guru
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modal = document.getElementById('shareTeacherSummaryModal');
+                const trigger = document.querySelector('[data-share-teacher-trigger]');
+                const closeButtons = document.querySelectorAll('[data-share-teacher-close]');
+                const confirmButton = document.querySelector('[data-share-teacher-confirm]');
+                const statusBox = document.querySelector('[data-share-teacher-status]');
+                const flashBox = document.querySelector('[data-share-teacher-flash]');
+
+                if (!modal || !trigger || !confirmButton) {
+                    return;
+                }
+
+                trigger.addEventListener('click', () => {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+                });
+
+                closeButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    });
+                });
+
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) {
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    }
+                });
+
+                confirmButton.addEventListener('click', async () => {
+                    confirmButton.disabled = true;
+
+                    try {
+                        const response = await fetch(confirmButton.dataset.url, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            },
+                        });
+                        const payload = await response.json();
+
+                        flashBox.textContent = payload.message || 'Status penghantaran sedang dikemas kini.';
+                        flashBox.classList.remove('hidden', 'border-rose-200', 'bg-rose-50', 'text-rose-700');
+                        flashBox.classList.add(payload.ok ? 'border-emerald-200' : 'border-rose-200');
+                        flashBox.classList.add(payload.ok ? 'bg-emerald-50' : 'bg-rose-50');
+                        flashBox.classList.add(payload.ok ? 'text-emerald-700' : 'text-rose-700');
+
+                        if (payload.status_label) {
+                            statusBox.textContent = payload.status_label;
+                            statusBox.classList.remove('hidden');
+                        }
+
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    } catch (_error) {
+                        flashBox.textContent = 'Makluman tidak dapat dihantar buat masa ini. Sila cuba lagi.';
+                        flashBox.classList.remove('hidden');
+                        flashBox.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-700');
+                        modal.classList.add('hidden');
+                        modal.classList.remove('flex');
+                    } finally {
+                        confirmButton.disabled = false;
+                    }
+                });
+            });
+        </script>
+    @endif
 </x-layouts::app>
