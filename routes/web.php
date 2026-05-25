@@ -31,6 +31,8 @@ use App\Http\Controllers\PaymentPlanController;
 use App\Http\Controllers\ParentManagementController;
 use App\Http\Controllers\ParentInviteAuthController;
 use App\Http\Controllers\SchoolCalendarPageController;
+use App\Http\Controllers\TeacherApiAccessController;
+use App\Http\Controllers\AdminApiMonitorController;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
@@ -277,6 +279,27 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/class-progress', [TeacherClassProgressController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress');
+    Route::get('/teacher/api-access', [TeacherApiAccessController::class, 'index'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access');
+    Route::get('/teacher/api-access/docs', [TeacherApiAccessController::class, 'docs'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.docs');
+    Route::get('/teacher/api-access/keys', [TeacherApiAccessController::class, 'keys'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.keys');
+    Route::get('/teacher/api-access/stats', [TeacherApiAccessController::class, 'stats'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.stats');
+    Route::post('/teacher/api-access/generate', [TeacherApiAccessController::class, 'generate'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.generate');
+    Route::post('/teacher/api-access/regenerate', [TeacherApiAccessController::class, 'regenerate'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.regenerate');
+    Route::post('/teacher/api-access/revoke', [TeacherApiAccessController::class, 'revoke'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.api-access.revoke');
     Route::get('/teacher/class-progress/{class}/details', [TeacherClassProgressController::class, 'classDetails'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress.details');
@@ -295,6 +318,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/whatsapp-queue', [TeacherClassProgressController::class, 'whatsappQueueIndex'])
         ->middleware('role:system_admin')
         ->name('admin.whatsapp-queue.index');
+    Route::get('/admin/api-monitor', [AdminApiMonitorController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('admin.api-monitor.index');
+    Route::get('/admin/api-monitor/export', [AdminApiMonitorController::class, 'export'])
+        ->middleware('role:system_admin')
+        ->name('admin.api-monitor.export');
+    Route::get('/admin/api-keys', [AdminApiMonitorController::class, 'keyRegistry'])
+        ->middleware('role:system_admin')
+        ->name('admin.api-keys.index');
+    Route::post('/admin/api-monitor/keys/{teacherApiKey}/revoke', [AdminApiMonitorController::class, 'revoke'])
+        ->middleware('role:system_admin')
+        ->name('admin.api-monitor.keys.revoke');
     Route::get('/admin/whatsapp-queue/teacher-payment-notifications', [TeacherPaymentNotificationAdminController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('admin.whatsapp-queue.teacher-payment-notifications.index');

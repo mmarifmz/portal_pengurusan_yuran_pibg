@@ -71,6 +71,10 @@
                 && ! $currentUser?->isPta();
             $showStaffNavigation = ! $currentUser?->isParentOnly() && (! $isDualPortalUser || $activePortalSpace !== 'parent');
             $showParentNavigation = $currentUser?->isParent() && (! $isDualPortalUser || $activePortalSpace === 'parent');
+            $showApiNavigation = $showStaffNavigation && $currentUser?->hasAnyRole(['teacher', 'super_teacher', 'system_admin']);
+            $apiNavigationIsActive = request()->routeIs('teacher.api-access*')
+                || request()->routeIs('admin.api-monitor.*')
+                || request()->routeIs('admin.api-keys.*');
         @endphp
         <flux:sidebar sticky collapsible="mobile" class="portal-sidebar border-e border-zinc-200/80 bg-white/85 backdrop-blur-sm">
             <flux:sidebar.header>
@@ -167,6 +171,35 @@
                         </flux:sidebar.item>
                     @endif
                 </flux:sidebar.group>
+
+                @if ($showApiNavigation)
+                    <flux:sidebar.group
+                        :heading="__('API Access')"
+                        icon="key"
+                        expandable
+                        :expanded="$apiNavigationIsActive"
+                        class="grid gap-1 mt-2"
+                    >
+                        <flux:sidebar.item icon="book-open" :href="route('teacher.api-access.docs')" :current="request()->routeIs('teacher.api-access.docs')" wire:navigate>
+                            {{ __('API Documentation') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="key" :href="route('teacher.api-access.keys')" :current="request()->routeIs('teacher.api-access.keys')" wire:navigate>
+                            {{ __('API Key Management') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="chart-bar" :href="route('teacher.api-access.stats')" :current="request()->routeIs('teacher.api-access.stats')" wire:navigate>
+                            {{ __('API Usage Stats') }}
+                        </flux:sidebar.item>
+
+                        @if (auth()->user()->isSystemAdmin())
+                            <flux:sidebar.item icon="shield-check" :href="route('admin.api-monitor.index')" :current="request()->routeIs('admin.api-monitor.*')" wire:navigate>
+                                {{ __('API Monitor') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="circle-stack" :href="route('admin.api-keys.index')" :current="request()->routeIs('admin.api-keys.*')" wire:navigate>
+                                {{ __('API Key Registry') }}
+                            </flux:sidebar.item>
+                        @endif
+                    </flux:sidebar.group>
+                @endif
 
                 @if ($showStaffNavigation && ! auth()->user()->isParentOnly() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
                     <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">

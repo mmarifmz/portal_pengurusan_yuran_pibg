@@ -27,10 +27,18 @@
                                 {{ __('Teacher') }}
                             </x-nav-link>
                         @endif
+                        @if (Auth::user()->hasAnyRole(['teacher', 'super_teacher', 'system_admin']))
+                            <x-nav-link :href="route('teacher.api-access.docs')" :active="request()->routeIs('teacher.api-access*')">
+                                {{ __('API Access') }}
+                            </x-nav-link>
+                        @endif
                     @endif
                     @if (Auth::user()->isSystemAdmin())
                         <x-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">
                             {{ __('Family Login Monitor') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('admin.api-monitor.index')" :active="request()->routeIs('admin.api-monitor.*')">
+                            {{ __('API Monitor') }}
                         </x-nav-link>
                     @endif
                     @if (Auth::user()->isSystemAdmin())
@@ -133,10 +141,18 @@
                         {{ __('Teacher') }}
                     </x-responsive-nav-link>
                 @endif
+                @if (Auth::user()->hasAnyRole(['teacher', 'super_teacher', 'system_admin']))
+                    <x-responsive-nav-link :href="route('teacher.api-access.docs')" :active="request()->routeIs('teacher.api-access*')">
+                        {{ __('API Access') }}
+                    </x-responsive-nav-link>
+                @endif
             @endif
             @if (Auth::user()->isSystemAdmin())
                 <x-responsive-nav-link :href="route('teacher.family-login-monitor')" :active="request()->routeIs('teacher.family-login-monitor')">
                     {{ __('Family Login Monitor') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.api-monitor.index')" :active="request()->routeIs('admin.api-monitor.*')">
+                    {{ __('API Monitor') }}
                 </x-responsive-nav-link>
             @endif
             @if (Auth::user()->isSystemAdmin())
