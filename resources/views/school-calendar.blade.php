@@ -6,8 +6,10 @@
             : "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})";
         $calendarDescription = $isParent
             ? 'Panduan aktiviti sekolah, kurikulum, dan kokurikulum sepanjang tahun'
-            : 'Angka hijau dalam hari menunjukkan jumlah keluarga yang sudah bayar pada tarikh tersebut.';
+            : 'Lencana harian menunjukkan keluarga bayar, login parent, dan lawatan portal parent.';
         $calendarPaidCounts = $isParent ? [] : $calendarPaidCountByDate;
+        $calendarLoginCounts = $isParent ? [] : $calendarLoginCountByDate;
+        $calendarVisitCounts = $isParent ? [] : $calendarVisitCountByDate;
     @endphp
 
     <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -33,6 +35,8 @@
         @include('partials.parent-calendar', [
             'calendarEvents' => $calendarEvents,
             'paidCountByDate' => $calendarPaidCounts,
+            'loginCountByDate' => $calendarLoginCounts,
+            'visitCountByDate' => $calendarVisitCounts,
             'calendarBlockLabel' => 'Takwim sekolah',
             'calendarBlockTitle' => $calendarTitle,
             'calendarBlockDescription' => $calendarDescription,

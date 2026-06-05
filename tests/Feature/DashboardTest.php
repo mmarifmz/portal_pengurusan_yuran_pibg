@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentTransaction;
+use App\Models\ParentLoginAudit;
 use App\Models\User;
 
 test('guests are redirected to the login page', function () {
@@ -78,6 +80,94 @@ test('school calendar year selector excludes future years', function () {
     $response->assertSee('name="dashboard_year"', false);
     $response->assertSee('value="'.$currentYear.'"', false);
     $response->assertDontSee('value="'.$futureYear.'"', false);
+});
+
+test('school calendar exposes daily paid and parent activity counts for staff', function () {
+    $date = now()->setDate((int) now()->year, 6, 3)->startOfDay();
+
+    $billing = FamilyBilling::query()->create([
+        'family_code' => 'CAL-ACTIVITY-001',
+        'billing_year' => $date->year,
+        'fee_amount' => 100,
+        'paid_amount' => 100,
+        'status' => 'paid',
+    ]);
+
+    FamilyPaymentTransaction::query()->create([
+        'family_billing_id' => $billing->id,
+        'payment_provider' => 'toyyibpay',
+        'external_order_id' => 'CAL-ACTIVITY-PAID-1',
+        'amount' => 100,
+        'status' => 'success',
+        'paid_at' => $date->copy()->setTime(9, 0),
+    ]);
+
+    FamilyPaymentTransaction::query()->create([
+        'family_billing_id' => $billing->id,
+        'payment_provider' => 'toyyibpay',
+        'external_order_id' => 'CAL-ACTIVITY-PAID-2',
+        'amount' => 10,
+        'status' => 'success',
+        'paid_at' => $date->copy()->setTime(10, 0),
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'phone' => '0123000002',
+        'normalized_phone' => '60123000002',
+        'action_type' => 'login',
+        'access_status' => 'successful',
+        'logged_in_at' => $date->copy()->setTime(8, 0),
+        'occurred_at' => $date->copy()->setTime(8, 0),
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'phone' => '0123000003',
+        'normalized_phone' => '60123000003',
+        'action_type' => 'login',
+        'access_status' => 'successful',
+        'logged_in_at' => $date->copy()->setTime(8, 2),
+        'occurred_at' => $date->copy()->setTime(8, 2),
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'phone' => '0123000002',
+        'normalized_phone' => '60123000002',
+        'action_type' => 'viewed_payment',
+        'access_status' => 'successful',
+        'logged_in_at' => $date->copy()->setTime(8, 5),
+        'occurred_at' => $date->copy()->setTime(8, 5),
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'phone' => '0123000002',
+        'normalized_phone' => '60123000002',
+        'action_type' => 'viewed_receipt',
+        'access_status' => 'successful',
+        'logged_in_at' => $date->copy()->setTime(8, 7),
+        'occurred_at' => $date->copy()->setTime(8, 7),
+    ]);
+
+    ParentLoginAudit::query()->create([
+        'phone' => '0123000002',
+        'normalized_phone' => '60123000002',
+        'action_type' => 'clicked_pay_now',
+        'access_status' => 'successful',
+        'logged_in_at' => $date->copy()->setTime(8, 9),
+        'occurred_at' => $date->copy()->setTime(8, 9),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+    ]);
+
+    $response = $this->actingAs($admin)->get(route('school-calendar', [
+        'dashboard_year' => $date->year,
+    ]));
+
+    $response->assertOk();
+    $response->assertSee('const paidCountByDate = {"'.$date->toDateString().'":1};', false);
+    $response->assertSee('const loginCountByDate = {"'.$date->toDateString().'":2};', false);
+    $response->assertSee('const visitCountByDate = {"'.$date->toDateString().'":3};', false);
 });
 
 test('payment funnel billing year filter excludes future years', function () {
