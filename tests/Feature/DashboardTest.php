@@ -168,6 +168,34 @@ test('school calendar exposes daily paid and parent activity counts for staff', 
     $response->assertSee('const paidCountByDate = {"'.$date->toDateString().'":1};', false);
     $response->assertSee('const loginCountByDate = {"'.$date->toDateString().'":2};', false);
     $response->assertSee('const visitCountByDate = {"'.$date->toDateString().'":3};', false);
+
+    $parent = User::factory()->create([
+        'role' => 'parent',
+    ]);
+
+    $parentResponse = $this->actingAs($parent)->get(route('school-calendar', [
+        'dashboard_year' => $date->year,
+    ]));
+
+    $parentResponse->assertOk();
+    $parentResponse->assertSee('const paidCountByDate = [];', false);
+    $parentResponse->assertSee('const loginCountByDate = [];', false);
+    $parentResponse->assertSee('const visitCountByDate = [];', false);
+    $parentResponse->assertDontSee('bilangan bayaran harian', false);
+
+    $pta = User::factory()->create([
+        'role' => 'pta',
+    ]);
+
+    $ptaResponse = $this->actingAs($pta)->get(route('school-calendar', [
+        'dashboard_year' => $date->year,
+    ]));
+
+    $ptaResponse->assertOk();
+    $ptaResponse->assertSee('const paidCountByDate = [];', false);
+    $ptaResponse->assertSee('const loginCountByDate = [];', false);
+    $ptaResponse->assertSee('const visitCountByDate = [];', false);
+    $ptaResponse->assertDontSee('bilangan bayaran harian', false);
 });
 
 test('payment funnel billing year filter excludes future years', function () {

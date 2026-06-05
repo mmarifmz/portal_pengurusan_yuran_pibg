@@ -1,15 +1,15 @@
 <x-layouts::app :title="__('School Calendar')" class="space-y-6">
     @php
-        $isParent = auth()->user()?->isParentOnly();
-        $calendarTitle = $isParent
-            ? 'Aktiviti & program semasa'
-            : "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})";
-        $calendarDescription = $isParent
-            ? 'Panduan aktiviti sekolah, kurikulum, dan kokurikulum sepanjang tahun'
-            : 'Lencana harian menunjukkan keluarga bayar, login parent, dan lawatan portal parent.';
-        $calendarPaidCounts = $isParent ? [] : $calendarPaidCountByDate;
-        $calendarLoginCounts = $isParent ? [] : $calendarLoginCountByDate;
-        $calendarVisitCounts = $isParent ? [] : $calendarVisitCountByDate;
+        $canViewCalendarCounts = (bool) ($canViewCalendarCounts ?? false);
+        $calendarTitle = $canViewCalendarCounts
+            ? "Aktiviti semasa + bilangan bayaran harian ({$selectedDashboardYear})"
+            : 'Aktiviti & program semasa';
+        $calendarDescription = $canViewCalendarCounts
+            ? 'Lencana harian menunjukkan keluarga bayar, login parent, dan lawatan portal parent.'
+            : 'Panduan aktiviti sekolah, kurikulum, dan kokurikulum sepanjang tahun';
+        $calendarPaidCounts = $canViewCalendarCounts ? $calendarPaidCountByDate : [];
+        $calendarLoginCounts = $canViewCalendarCounts ? $calendarLoginCountByDate : [];
+        $calendarVisitCounts = $canViewCalendarCounts ? $calendarVisitCountByDate : [];
     @endphp
 
     <div class="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">

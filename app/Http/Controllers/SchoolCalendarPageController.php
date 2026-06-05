@@ -38,43 +38,56 @@ class SchoolCalendarPageController extends Controller
             $selectedDashboardYear = (int) $yearOptions->first();
         }
 
-        $legacyPayments = LegacyStudentPayment::query()
-            ->where('source_year', $selectedDashboardYear)
-            ->where('payment_status', 'paid')
-            ->get();
+        $canViewCalendarCounts = (bool) $request->user()?->hasAnyRole([
+            'teacher',
+            'super_teacher',
+            'system_admin',
+            'admin',
+            'super_admin',
+        ]);
 
-        $familyBillings = FamilyBilling::query()
-            ->where('billing_year', $selectedDashboardYear)
-            ->get();
+        $calendarPaidCountByDate = [];
+        $calendarActivityCounts = ['login' => [], 'visit' => []];
 
-        $useLegacyKpiSource = $familyBillings->isEmpty() && $legacyPayments->isNotEmpty();
+        if ($canViewCalendarCounts) {
+            $legacyPayments = LegacyStudentPayment::query()
+                ->where('source_year', $selectedDashboardYear)
+                ->where('payment_status', 'paid')
+                ->get();
 
-        if ($useLegacyKpiSource) {
-            $calendarPaidCountByDate = $legacyPayments
-                ->filter(fn (LegacyStudentPayment $payment) => $payment->paid_at !== null)
-                ->groupBy(fn (LegacyStudentPayment $payment) => $payment->paid_at->format('Y-m-d'))
-                ->map(fn (Collection $group) => $group
-                    ->map(fn (LegacyStudentPayment $payment): string => trim((string) ($payment->family_code ?: $payment->student_id ?: $payment->id)))
-                    ->filter()
-                    ->unique()
-                    ->count())
-                ->toArray();
-        } else {
-            $calendarPaidCountByDate = FamilyPaymentTransaction::query()
-                ->where('status', 'success')
-                ->whereYear('paid_at', $selectedDashboardYear)
-                ->whereNotNull('paid_at')
-                ->get()
-                ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
-                ->map(fn (Collection $group) => $group
-                    ->pluck('family_billing_id')
-                    ->filter()
-                    ->unique()
-                    ->count())
-                ->toArray();
+            $familyBillings = FamilyBilling::query()
+                ->where('billing_year', $selectedDashboardYear)
+                ->get();
+
+            $useLegacyKpiSource = $familyBillings->isEmpty() && $legacyPayments->isNotEmpty();
+
+            if ($useLegacyKpiSource) {
+                $calendarPaidCountByDate = $legacyPayments
+                    ->filter(fn (LegacyStudentPayment $payment) => $payment->paid_at !== null)
+                    ->groupBy(fn (LegacyStudentPayment $payment) => $payment->paid_at->format('Y-m-d'))
+                    ->map(fn (Collection $group) => $group
+                        ->map(fn (LegacyStudentPayment $payment): string => trim((string) ($payment->family_code ?: $payment->student_id ?: $payment->id)))
+                        ->filter()
+                        ->unique()
+                        ->count())
+                    ->toArray();
+            } else {
+                $calendarPaidCountByDate = FamilyPaymentTransaction::query()
+                    ->where('status', 'success')
+                    ->whereYear('paid_at', $selectedDashboardYear)
+                    ->whereNotNull('paid_at')
+                    ->get()
+                    ->groupBy(fn (FamilyPaymentTransaction $transaction) => $transaction->paid_at->format('Y-m-d'))
+                    ->map(fn (Collection $group) => $group
+                        ->pluck('family_billing_id')
+                        ->filter()
+                        ->unique()
+                        ->count())
+                    ->toArray();
+            }
+
+            $calendarActivityCounts = $this->calendarActivityCountsByDate($selectedDashboardYear);
         }
-
-        $calendarActivityCounts = $this->calendarActivityCountsByDate($selectedDashboardYear);
 
         $calendarEvents = SchoolCalendarEvent::query()
             ->orderBy('start_date')
@@ -88,6 +101,7 @@ class SchoolCalendarPageController extends Controller
             'calendarPaidCountByDate' => $calendarPaidCountByDate,
             'calendarLoginCountByDate' => $calendarActivityCounts['login'],
             'calendarVisitCountByDate' => $calendarActivityCounts['visit'],
+            'canViewCalendarCounts' => $canViewCalendarCounts,
         ]);
     }
 
