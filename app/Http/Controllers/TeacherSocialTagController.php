@@ -7,19 +7,30 @@ use App\Models\PaymentCampaignSetting;
 use App\Models\SocialTag;
 use App\Models\Student;
 use App\Services\SocialTagService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class TeacherSocialTagController extends Controller
 {
-    public function __construct(private readonly SocialTagService $socialTagService)
-    {
-    }
+    public function __construct(private readonly SocialTagService $socialTagService) {}
 
     public function index(Request $request): View
     {
+        $controllerStartedAt = microtime(true);
+        $queryDurationMs = 0.0;
+        $measure = function (callable $callback) use (&$queryDurationMs) {
+            $startedAt = microtime(true);
+            $result = $callback();
+            $queryDurationMs += (microtime(true) - $startedAt) * 1000;
+
+            return $result;
+        };
+
         // Debugbar can exhaust memory on this analytics-heavy page while collecting
         // the rendered payload, which results in a blank response for signed-in users.
         if (app()->bound('debugbar')) {
@@ -28,7 +39,7 @@ class TeacherSocialTagController extends Controller
 
         $currentYear = (int) now()->year;
 
-        $yearOptions = Student::query()
+        $yearOptions = $measure(fn () => Student::query()
             ->whereNotNull('billing_year')
             ->where('billing_year', '<=', $currentYear)
             ->select('billing_year')
@@ -36,7 +47,7 @@ class TeacherSocialTagController extends Controller
             ->orderByDesc('billing_year')
             ->pluck('billing_year')
             ->map(fn ($year): int => (int) $year)
-            ->values();
+            ->values());
 
         if ($yearOptions->isEmpty()) {
             $yearOptions = collect([$currentYear]);
@@ -47,7 +58,7 @@ class TeacherSocialTagController extends Controller
             $selectedYear = (int) $yearOptions->first();
         }
 
-        $availableClasses = Student::query()
+        $availableClasses = $measure(fn () => Student::query()
             ->where('billing_year', $selectedYear)
             ->whereNotNull('class_name')
             ->where('class_name', '!=', '')
@@ -57,44 +68,31 @@ class TeacherSocialTagController extends Controller
             ->pluck('class_name')
             ->map(fn ($className): string => trim((string) $className))
             ->filter()
-            ->values();
+            ->values());
 
         $selectedClass = trim((string) $request->query('class_name', 'all'));
         if ($selectedClass !== 'all' && ! $availableClasses->contains($selectedClass)) {
             $selectedClass = 'all';
         }
 
-        $tagFilters = $this->socialTagService->tagFilterOptions();
+        $activeTags = $measure(fn () => $this->socialTagService->activeTags());
+        $tagFilters = $activeTags
+            ->mapWithKeys(fn (SocialTag $tag): array => [(string) $tag->slug => (string) $tag->name])
+            ->all();
         $selectedTagFilter = $this->socialTagService->resolveFilterKey(trim((string) $request->query('tag_filter', 'all')));
         if ($selectedTagFilter !== 'all' && ! array_key_exists($selectedTagFilter, $tagFilters)) {
             $selectedTagFilter = 'all';
         }
 
-        $students = Student::query()
-            ->where('billing_year', $selectedYear)
-            ->when($selectedClass !== 'all', fn ($query) => $query->where('class_name', $selectedClass))
-            ->orderBy('class_name')
-            ->orderBy('full_name')
-            ->get(['id', 'family_code', 'full_name', 'class_name', 'billing_year', 'is_b40', 'is_kwap', 'is_rmt']);
-
-        $familyBillingsByCode = FamilyBilling::query()
-            ->where('billing_year', $selectedYear)
-            ->whereIn('family_code', $students->pluck('family_code')->filter()->unique()->values())
-            ->with('socialTags')
-            ->get()
-            ->keyBy(fn (FamilyBilling $billing): string => (string) $billing->family_code);
-
-        $totalStudents = $students->count();
+        $baseStudentsQuery = $this->socialTagStudentQuery($selectedYear, $selectedClass);
+        $totalStudents = $measure(fn () => (clone $baseStudentsQuery)->count());
 
         $tagSummaries = collect($tagFilters)
-            ->map(function (string $label, string $filterKey) use ($students, $familyBillingsByCode, $totalStudents): array {
-                $count = $students->filter(
-                    fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
-                        $familyBillingsByCode->get((string) $student->family_code),
-                        $student,
-                        $filterKey
-                    )
-                )->count();
+            ->map(function (string $label, string $filterKey) use ($activeTags, $baseStudentsQuery, $measure, $totalStudents): array {
+                $tag = $activeTags->firstWhere('slug', $filterKey);
+                $count = $tag instanceof SocialTag
+                    ? $measure(fn () => $this->applySocialTagFilter(clone $baseStudentsQuery, $tag)->count())
+                    : 0;
                 $percent = $totalStudents > 0 ? round(($count / $totalStudents) * 100, 1) : 0;
 
                 return [
@@ -107,49 +105,33 @@ class TeacherSocialTagController extends Controller
             })
             ->values();
 
-        $classBreakdown = $students
-            ->groupBy(fn (Student $student): string => trim((string) ($student->class_name ?: 'Tanpa Kelas')))
-            ->map(function (Collection $classStudents, string $className) use ($tagFilters, $familyBillingsByCode): array {
-                $total = $classStudents->count();
-                $counts = collect($tagFilters)
-                    ->mapWithKeys(function (string $label, string $filterKey) use ($classStudents, $familyBillingsByCode): array {
-                        $count = $classStudents->filter(
-                            fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
-                                $familyBillingsByCode->get((string) $student->family_code),
-                                $student,
-                                $filterKey
-                            )
-                        )->count();
-
-                        return [$filterKey => $count];
-                    })
-                    ->all();
-
-                return [
-                    'class_name' => $className,
-                    'total_students' => $total,
-                    'tag_counts' => $counts,
-                ];
-            })
-            ->sortBy('class_name')
-            ->values();
+        $classBreakdown = $measure(fn () => $this->classBreakdownRows($baseStudentsQuery, $activeTags));
 
         $filteredTagStudents = collect();
         if ($selectedTagFilter !== 'all') {
-            $filteredTagStudents = $students
-                ->filter(
-                    fn (Student $student): bool => $this->socialTagService->familyMatchesFilter(
-                        $familyBillingsByCode->get((string) $student->family_code),
-                        $student,
-                        $selectedTagFilter
-                    )
-                )
-                ->values();
+            $selectedTag = $activeTags->firstWhere('slug', $selectedTagFilter);
+            if ($selectedTag instanceof SocialTag) {
+                $filteredTagStudents = $measure(fn () => $this->applySocialTagFilter(clone $baseStudentsQuery, $selectedTag)
+                    ->orderBy('class_name')
+                    ->orderBy('full_name')
+                    ->paginate(50, ['id', 'family_code', 'full_name', 'class_name', 'billing_year'], 'page')
+                    ->withQueryString());
+            }
         }
 
         $selectedTagSummary = $selectedTagFilter === 'all'
             ? null
             : $tagSummaries->firstWhere('key', $selectedTagFilter);
+
+        Log::info('teacher_social_tags.performance', [
+            'billing_year' => $selectedYear,
+            'class_name' => $selectedClass,
+            'tag_filter' => $selectedTagFilter,
+            'total_students' => $totalStudents,
+            'query_duration_ms' => round($queryDurationMs, 2),
+            'controller_duration_ms' => round((microtime(true) - $controllerStartedAt) * 1000, 2),
+            'memory_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
+        ]);
 
         return view('teacher.social-tags', [
             'selectedYear' => $selectedYear,
@@ -164,6 +146,92 @@ class TeacherSocialTagController extends Controller
             'selectedTagSummary' => $selectedTagSummary,
             'filteredTagStudents' => $filteredTagStudents,
         ]);
+    }
+
+    private function socialTagStudentQuery(int $selectedYear, string $selectedClass): Builder
+    {
+        return Student::query()
+            ->where('billing_year', $selectedYear)
+            ->when($selectedClass !== 'all', fn (Builder $query) => $query->where('class_name', $selectedClass));
+    }
+
+    private function applySocialTagFilter(Builder $query, SocialTag $tag): Builder
+    {
+        $legacyField = $this->socialTagService->legacyFieldForTag($tag);
+
+        return $query->where(function (Builder $tagQuery) use ($tag, $legacyField): void {
+            if ($legacyField !== null) {
+                $tagQuery->where($legacyField, true);
+            }
+
+            $tagQuery
+                ->orWhereExists(function ($subquery) use ($tag): void {
+                    $subquery
+                        ->selectRaw('1')
+                        ->from('family_billings')
+                        ->join('family_social_tags', 'family_social_tags.family_billing_id', '=', 'family_billings.id')
+                        ->whereColumn('family_billings.family_code', 'students.family_code')
+                        ->whereColumn('family_billings.billing_year', 'students.billing_year')
+                        ->where('family_social_tags.social_tag_id', $tag->id);
+                })
+                ->orWhereExists(function ($subquery) use ($tag): void {
+                    $tagName = strtolower(str_replace(' ', '', trim((string) $tag->name)));
+
+                    $subquery
+                        ->selectRaw('1')
+                        ->from('family_billings')
+                        ->whereColumn('family_billings.family_code', 'students.family_code')
+                        ->whereColumn('family_billings.billing_year', 'students.billing_year')
+                        ->where(function ($legacyTagQuery) use ($tagName): void {
+                            $normalizedColumn = "LOWER(REPLACE(family_billings.social_tag, ' ', ''))";
+
+                            $legacyTagQuery
+                                ->whereRaw($normalizedColumn.' = ?', [$tagName])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', [$tagName.',%'])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', [$tagName.';%'])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%,'.$tagName])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%;'.$tagName])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%,'.$tagName.',%'])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%,'.$tagName.';%'])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%;'.$tagName.',%'])
+                                ->orWhereRaw($normalizedColumn.' LIKE ?', ['%;'.$tagName.';%']);
+                        });
+                });
+        });
+    }
+
+    /**
+     * @param  Collection<int, SocialTag>  $activeTags
+     * @return Collection<int, array{class_name:string,total_students:int,tag_counts:array<string,int>}>
+     */
+    private function classBreakdownRows(Builder $baseStudentsQuery, Collection $activeTags): Collection
+    {
+        $classExpression = "COALESCE(NULLIF(TRIM(class_name), ''), 'Tanpa Kelas')";
+        $totalsByClass = (clone $baseStudentsQuery)
+            ->selectRaw($classExpression.' as class_name, COUNT(*) as total_students')
+            ->groupBy(DB::raw($classExpression))
+            ->orderBy('class_name')
+            ->get();
+
+        $tagCountsByClass = [];
+        foreach ($activeTags as $tag) {
+            $counts = $this->applySocialTagFilter(clone $baseStudentsQuery, $tag)
+                ->selectRaw($classExpression.' as class_name, COUNT(*) as tagged_students')
+                ->groupBy(DB::raw($classExpression))
+                ->pluck('tagged_students', 'class_name');
+
+            foreach ($counts as $className => $count) {
+                $tagCountsByClass[(string) $className][(string) $tag->slug] = (int) $count;
+            }
+        }
+
+        return $totalsByClass
+            ->map(fn ($row): array => [
+                'class_name' => (string) $row->class_name,
+                'total_students' => (int) $row->total_students,
+                'tag_counts' => $tagCountsByClass[(string) $row->class_name] ?? [],
+            ])
+            ->values();
     }
 
     public function storeTag(Request $request): RedirectResponse

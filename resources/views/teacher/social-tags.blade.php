@@ -391,7 +391,7 @@
                                 {{ $selectedTagSummary['hashtag'] }} Student List
                             </h2>
                             <p class="mt-1 text-xs text-zinc-500">
-                                Paparan murid mengikut tag sosial keluarga yang dipilih ({{ number_format($filteredTagStudents->count()) }} murid).
+                                Paparan murid mengikut tag sosial keluarga yang dipilih ({{ number_format(method_exists($filteredTagStudents, 'total') ? $filteredTagStudents->total() : $filteredTagStudents->count()) }} murid).
                             </p>
                         </div>
                     </div>
@@ -426,6 +426,12 @@
                             </tbody>
                         </table>
                     </div>
+
+                    @if (method_exists($filteredTagStudents, 'links') && $filteredTagStudents->hasPages())
+                        <div class="mt-4">
+                            {{ $filteredTagStudents->links() }}
+                        </div>
+                    @endif
                 </section>
             @endif
 
