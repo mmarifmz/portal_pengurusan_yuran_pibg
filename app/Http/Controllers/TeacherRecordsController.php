@@ -12,6 +12,7 @@ use App\Models\ParentLoginAudit;
 use App\Models\SiteSetting;
 use App\Models\SocialTag;
 use App\Models\Student;
+use App\Models\StudentNameChange;
 use App\Models\User;
 use App\Services\PaymentReportingService;
 use Illuminate\Http\Request;
@@ -47,7 +48,7 @@ class TeacherRecordsController extends Controller
         $requestedSortDir = trim((string) $request->string('sort_dir')->toString());
         $studentNameSearchQuery = mb_strlen($studentNameQuery) >= 3 ? $studentNameQuery : '';
         $studentNameTooShort = $studentNameQuery !== '' && mb_strlen($studentNameQuery) < 3;
-        if (! in_array($studentStatusFilter, [Student::STATUS_ACTIVE, Student::STATUS_TRANSFERRED, 'all'], true)) {
+        if (! in_array($studentStatusFilter, array_merge(array_keys(Student::statusOptions()), ['all']), true)) {
             $studentStatusFilter = Student::STATUS_ACTIVE;
         }
         if ($includeTransferred && $studentStatusFilter === Student::STATUS_ACTIVE) {
@@ -65,8 +66,8 @@ class TeacherRecordsController extends Controller
 
         if ($studentStatusFilter === Student::STATUS_ACTIVE) {
             $studentsQuery->active();
-        } elseif ($studentStatusFilter === Student::STATUS_TRANSFERRED) {
-            $studentsQuery->transferred();
+        } elseif ($studentStatusFilter !== 'all') {
+            $studentsQuery->where('status', $studentStatusFilter);
         }
 
         $students = $studentsQuery
@@ -424,7 +425,7 @@ class TeacherRecordsController extends Controller
                 $familyCode = (string) ($student->family_code ?? '');
                 $currentMetric = $familyCode !== '' ? $currentYearMetrics->get($familyCode) : null;
 
-                if ($student->isTransferred() && $currentMetric === null) {
+                if (! $student->isActiveStatus() && $currentMetric === null) {
                     $student->setAttribute('current_year_outstanding_balance', 0.0);
                 } elseif ($familyCode !== '' && $outstandingByFamilyCode->has($familyCode)) {
                     $student->setAttribute('current_year_outstanding_balance', (float) $outstandingByFamilyCode->get($familyCode));
@@ -446,11 +447,11 @@ class TeacherRecordsController extends Controller
                 );
                 $student->setAttribute(
                     'current_year_payment_status',
-                    (string) ($currentMetric['status_label'] ?? ($student->isTransferred() ? 'Dikecualikan' : 'Belum Mula'))
+                    (string) ($currentMetric['status_label'] ?? (! $student->isActiveStatus() ? 'Dikecualikan' : 'Belum Mula'))
                 );
                 $student->setAttribute(
                     'current_year_payment_status_key',
-                    (string) ($currentMetric['status_key'] ?? ($student->isTransferred() ? 'transferred' : 'not_started'))
+                    (string) ($currentMetric['status_key'] ?? (! $student->isActiveStatus() ? (string) $student->status : 'not_started'))
                 );
                 $student->setAttribute('current_year_payment_plan_label', (string) ($currentMetric['plan_label'] ?? '-'));
                 $student->setAttribute('current_year_paid_amount', (float) ($currentMetric['paid_amount'] ?? 0));
@@ -511,6 +512,7 @@ class TeacherRecordsController extends Controller
             'studentStatusFilter' => $studentStatusFilter,
             'includeTransferred' => $includeTransferred,
             'studentNameTooShort' => $studentNameTooShort,
+            'studentStatusOptions' => Student::statusOptions(),
             'filtersActive' => $filtersActive,
             'paidLastYearFamilyCodes' => $paidLastYearFamilyCodes,
             'sortBy' => $sortBy,
@@ -816,6 +818,15 @@ class TeacherRecordsController extends Controller
         $parentProfileName = (string) ($students->pluck('parent_name')->filter()->first() ?? '');
         $parentProfileEmail = (string) ($students->pluck('parent_email')->filter()->first() ?? '');
         $studentIds = $students->pluck('id')->filter()->values();
+        $studentNameChangesByStudentId = StudentNameChange::tableIsAvailable()
+            ? StudentNameChange::query()
+                ->with('changedBy:id,name,email')
+                ->whereIn('student_id', $studentIds->all())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('student_id')
+            : collect();
         $studentNames = $students
             ->pluck('full_name')
             ->map(fn ($name) => $this->normalizeNameForLegacyMatch((string) $name))
@@ -910,6 +921,8 @@ class TeacherRecordsController extends Controller
             'availableSocialTags' => $availableSocialTags,
             'currentFamilySocialTags' => $currentFamilySocialTags,
             'socialTagLabels' => $this->enabledSocialTagLabels(),
+            'studentNameChangesByStudentId' => $studentNameChangesByStudentId,
+            'studentStatusOptions' => Student::statusOptions(),
         ]);
     }
 
@@ -1043,7 +1056,7 @@ class TeacherRecordsController extends Controller
         Gate::authorize('manageStudentRecords');
 
         $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in([Student::STATUS_ACTIVE, Student::STATUS_TRANSFERRED])],
+            'status' => ['required', 'string', Rule::in(array_keys(Student::statusOptions()))],
             'transfer_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -1082,6 +1095,50 @@ class TeacherRecordsController extends Controller
         return redirect()
             ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-status-'.$student->id)
             ->with('status', 'Student status updated successfully.');
+    }
+
+    public function updateStudentName(Request $request, Student $student): RedirectResponse
+    {
+        Gate::authorize('manageStudentIdentity');
+
+        if (! StudentNameChange::tableIsAvailable()) {
+            return redirect()
+                ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-info-'.$student->id)
+                ->withErrors(['full_name' => 'Jadual audit perubahan nama belum tersedia. Sila jalankan migrasi pangkalan data.']);
+        }
+
+        $validated = $request->validate([
+            'full_name' => ['required', 'string', 'min:3', 'max:255'],
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $oldName = $this->normalizeNameForLegacyMatch((string) $student->getRawOriginal('full_name'));
+        $newName = $this->normalizeNameForLegacyMatch((string) $validated['full_name']);
+        $reason = trim((string) $validated['reason']);
+
+        if ($oldName === $newName) {
+            return redirect()
+                ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-info-'.$student->id)
+                ->withErrors(['full_name' => 'Nama murid baharu sama seperti nama semasa.']);
+        }
+
+        DB::transaction(function () use ($student, $oldName, $newName, $reason, $request): void {
+            $student->update([
+                'full_name' => $newName,
+            ]);
+
+            StudentNameChange::query()->create([
+                'student_id' => $student->id,
+                'old_name' => $oldName,
+                'new_name' => $newName,
+                'reason' => $reason,
+                'changed_by_user_id' => $request->user()?->id,
+            ]);
+        });
+
+        return redirect()
+            ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-info-'.$student->id)
+            ->with('status', 'Nama murid berjaya dikemaskini.');
     }
 
     public function exportFamilyPayments(Request $request, string $familyCode): StreamedResponse

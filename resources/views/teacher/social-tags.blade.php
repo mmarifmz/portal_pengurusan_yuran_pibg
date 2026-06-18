@@ -12,12 +12,126 @@
             </section>
         @endif
 
+        @php
+            $bulkReport = session('bulk_tag_report');
+        @endphp
+        @if (is_array($bulkReport))
+            @php
+                $bulkReportSections = [
+                    [
+                        'title' => 'Invalid list',
+                        'description' => 'Baris ini tidak ada nama murid yang boleh dibaca. Betulkan format atau kolum nama sebelum upload semula.',
+                        'items' => collect(data_get($bulkReport, 'invalid_entries', []))->filter()->values(),
+                        'tone' => 'rose',
+                    ],
+                    [
+                        'title' => 'Unmatched student names',
+                        'description' => 'Nama ini tidak jumpa dalam tahun dan class filter yang dipilih.',
+                        'items' => collect(data_get($bulkReport, 'unmatched_entries', []))->filter()->values(),
+                        'tone' => 'amber',
+                    ],
+                    [
+                        'title' => 'Duplicate upload rows',
+                        'description' => 'Baris ini berulang dalam senarai upload dan tidak diproses kali kedua.',
+                        'items' => collect(data_get($bulkReport, 'duplicate_entries', []))->filter()->values(),
+                        'tone' => 'sky',
+                    ],
+                    [
+                        'title' => 'Multiple family matches',
+                        'description' => 'Nama ini padan kepada lebih daripada satu family code. Guna class filter atau semak data murid.',
+                        'items' => collect(data_get($bulkReport, 'ambiguous_entries', []))->filter()->values(),
+                        'tone' => 'violet',
+                    ],
+                    [
+                        'title' => 'Matched but no billing',
+                        'description' => 'Family code ini dijumpai pada murid tetapi tiada rekod bil untuk tahun dipilih.',
+                        'items' => collect(data_get($bulkReport, 'missing_billing_family_codes', []))->filter()->values(),
+                        'tone' => 'zinc',
+                    ],
+                ];
+                $bulkIssueCount = (int) data_get($bulkReport, 'invalid_count', 0)
+                    + (int) data_get($bulkReport, 'unmatched_count', 0)
+                    + (int) data_get($bulkReport, 'duplicate_count', 0)
+                    + (int) data_get($bulkReport, 'ambiguous_count', 0)
+                    + (int) data_get($bulkReport, 'missing_billing_count', 0);
+            @endphp
+
+            <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Bulk Upload Insight</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">{{ data_get($bulkReport, 'tag_label', '-') }} upload report</h2>
+                        <p class="mt-1 text-xs text-zinc-500">
+                            {{ number_format((int) data_get($bulkReport, 'matched_families_count', 0)) }} family ditag daripada
+                            {{ number_format((int) data_get($bulkReport, 'line_count', 0)) }} baris.
+                        </p>
+                    </div>
+
+                    <div class="rounded-xl border {{ $bulkIssueCount > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800' }} px-3 py-2 text-xs font-semibold">
+                        {{ number_format($bulkIssueCount) }} item perlu semakan
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Tagged families</p>
+                        <p class="mt-1 text-xl font-bold text-emerald-800">{{ number_format((int) data_get($bulkReport, 'matched_families_count', 0)) }}</p>
+                    </div>
+                    <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Invalid</p>
+                        <p class="mt-1 text-xl font-bold text-rose-800">{{ number_format((int) data_get($bulkReport, 'invalid_count', 0)) }}</p>
+                    </div>
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Unmatched</p>
+                        <p class="mt-1 text-xl font-bold text-amber-800">{{ number_format((int) data_get($bulkReport, 'unmatched_count', 0)) }}</p>
+                    </div>
+                    <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Duplicate</p>
+                        <p class="mt-1 text-xl font-bold text-sky-800">{{ number_format((int) data_get($bulkReport, 'duplicate_count', 0)) }}</p>
+                    </div>
+                    <div class="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-violet-700">Multiple matches</p>
+                        <p class="mt-1 text-xl font-bold text-violet-800">{{ number_format((int) data_get($bulkReport, 'ambiguous_count', 0)) }}</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                    @foreach ($bulkReportSections as $section)
+                        @if ($section['items']->isNotEmpty())
+                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-zinc-900">{{ $section['title'] }}</h3>
+                                        <p class="mt-1 text-[11px] text-zinc-500">{{ $section['description'] }}</p>
+                                    </div>
+                                    <span class="rounded-full border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700">
+                                        {{ number_format($section['items']->count()) }}
+                                    </span>
+                                </div>
+                                <textarea
+                                    readonly
+                                    rows="{{ min(8, max(3, $section['items']->count())) }}"
+                                    class="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs text-zinc-800"
+                                >{{ $section['items']->implode("\n") }}</textarea>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+
+                @if ($bulkIssueCount === 0)
+                    <p class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                        Semua baris berjaya dipadankan untuk upload ini.
+                    </p>
+                @endif
+            </section>
+        @endif
+
         <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
                     <h1 class="text-2xl font-bold text-zinc-900">Social Tags Analytics</h1>
-                    <p class="mt-1 text-sm text-zinc-600">Pantau tag sosial keluarga, padankan secara pukal, dan sediakan tag untuk kempen bayaran ansuran.</p>
+                    <p class="mt-1 text-sm text-zinc-600">Pantau tag sosial pada family billing, padankan melalui senarai murid, dan sediakan tag untuk kempen bayaran ansuran.</p>
                 </div>
                 <a
                     href="{{ route('teacher.records') }}"
@@ -63,7 +177,7 @@
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">Master Social Tags</h2>
-                        <p class="mt-1 text-xs text-zinc-500">Tag ini akan digunakan untuk kempen bayaran, analitik, dan tugasan family-ke-tag.</p>
+                        <p class="mt-1 text-xs text-zinc-500">Tag ini disimpan pada family billing dan digunakan untuk kempen bayaran serta analitik murid.</p>
                     </div>
                 </div>
 
@@ -109,7 +223,7 @@
                             <tr>
                                 <th class="px-4 py-3">Tag</th>
                                 <th class="px-4 py-3">Slug</th>
-                                <th class="px-4 py-3">Family Tagged</th>
+                                <th class="px-4 py-3">Tagged Families</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Kemaskini</th>
                             </tr>
@@ -178,7 +292,7 @@
         <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 class="text-lg font-semibold text-zinc-900">Bulk Tag Family</h2>
+                    <h2 class="text-lg font-semibold text-zinc-900">Bulk Tag Families by Student List</h2>
                     <p class="mt-1 text-xs text-zinc-500">
                         Tampal senarai murid dari spreadsheet. Sistem akan padankan family code untuk tahun yang dipilih dan lekatkan tag kepada family billing.
                     </p>
@@ -220,27 +334,12 @@
 
                 <div class="lg:col-span-6 flex flex-wrap items-center gap-2">
                     <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
-                        Apply Bulk Tag
+                        Apply Family Tag
                     </button>
                     <p class="text-[11px] text-zinc-500">Cadangan: guna tahun semasa dan class filter yang tepat untuk elak padanan bertindih.</p>
                 </div>
             </form>
 
-            @php($bulkReport = session('bulk_tag_report'))
-            @if (is_array($bulkReport))
-                <div class="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
-                    <p class="font-semibold text-zinc-900">
-                        Laporan bulk tag {{ data_get($bulkReport, 'tag_label', '-') }}:
-                        {{ number_format((int) data_get($bulkReport, 'matched_families_count', 0)) }} family ditag,
-                        {{ number_format((int) data_get($bulkReport, 'missing_billing_count', 0)) }} family tiada bil tahun ini.
-                    </p>
-                    <p class="mt-1">
-                        Baris diproses: {{ number_format((int) data_get($bulkReport, 'line_count', 0)) }} |
-                        Tidak jumpa: {{ number_format((int) data_get($bulkReport, 'unmatched_count', 0)) }} |
-                        Bertindih: {{ number_format((int) data_get($bulkReport, 'ambiguous_count', 0)) }}
-                    </p>
-                </div>
-            @endif
         </section>
 
         @if ($socialTags->isEmpty())

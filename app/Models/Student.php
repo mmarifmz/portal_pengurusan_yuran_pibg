@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 #[Fillable([
     'student_no',
@@ -37,6 +39,12 @@ class Student extends Model
 
     public const STATUS_TRANSFERRED = 'transferred';
 
+    public const STATUS_GRADUATED_YEAR_6 = 'graduated_year_6';
+
+    public const STATUS_STOPPED = 'stopped';
+
+    public const STATUS_DUPLICATE = 'duplicate';
+
     /**
      * @return array<string, string>
      */
@@ -59,7 +67,7 @@ class Student extends Model
         return $query->where(function (Builder $builder): void {
             $builder
                 ->whereNull('status')
-                ->orWhere('status', '!=', self::STATUS_TRANSFERRED);
+                ->orWhereNotIn('status', array_keys(self::inactiveStatusOptions()));
         });
     }
 
@@ -92,9 +100,46 @@ class Student extends Model
         return (string) $this->getAttribute('status') === self::STATUS_TRANSFERRED;
     }
 
+    public function isActiveStatus(): bool
+    {
+        $status = (string) ($this->getAttribute('status') ?: self::STATUS_ACTIVE);
+
+        return ! array_key_exists($status, self::inactiveStatusOptions());
+    }
+
+    public function nameChanges(): HasMany
+    {
+        return $this->hasMany(StudentNameChange::class);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function statusOptions(): array
+    {
+        return [
+            self::STATUS_ACTIVE => 'Aktif',
+            self::STATUS_TRANSFERRED => 'Telah Berpindah',
+            self::STATUS_GRADUATED_YEAR_6 => 'Tamat Tahun 6',
+            self::STATUS_STOPPED => 'Berhenti Sekolah',
+            self::STATUS_DUPLICATE => 'Duplicate Record',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function inactiveStatusOptions(): array
+    {
+        return collect(self::statusOptions())
+            ->except(self::STATUS_ACTIVE)
+            ->all();
+    }
+
     public function statusLabel(): string
     {
-        return $this->isTransferred() ? 'Telah Berpindah' : 'Aktif';
+        return self::statusOptions()[(string) ($this->getAttribute('status') ?: self::STATUS_ACTIVE)]
+            ?? Str::headline((string) $this->getAttribute('status'));
     }
 
     public function getOutstandingBalanceAttribute(): float

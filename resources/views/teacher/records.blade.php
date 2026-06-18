@@ -188,11 +188,12 @@
                             name="student_status"
                             class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                         >
-                            <option value="active" @selected($studentStatusFilter === \App\Models\Student::STATUS_ACTIVE)>Aktif</option>
-                            <option value="transferred" @selected($studentStatusFilter === \App\Models\Student::STATUS_TRANSFERRED)>Telah Berpindah</option>
+                            @foreach ($studentStatusOptions as $statusValue => $statusLabel)
+                                <option value="{{ $statusValue }}" @selected($studentStatusFilter === $statusValue)>{{ $statusLabel }}</option>
+                            @endforeach
                             <option value="all" @selected($studentStatusFilter === 'all')>Semua</option>
                         </select>
-                        <span class="mt-1 block text-[11px] font-medium text-zinc-500">Murid berpindah dikecualikan daripada statistik kutipan aktif.</span>
+                        <span class="mt-1 block text-[11px] font-medium text-zinc-500">Status tidak aktif dikecualikan daripada statistik kutipan aktif.</span>
                     </label>
 
                     <label class="md:col-span-3 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-700">
@@ -376,9 +377,9 @@
                                     <td class="px-5 py-4 font-semibold text-zinc-900">
                                         <div class="flex flex-wrap items-center gap-2">
                                             <span>{{ $student->full_name }}</span>
-                                            @if ($student->isTransferred())
+                                            @if (! $student->isActiveStatus())
                                                 <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                                                    Telah Berpindah
+                                                    {{ $student->statusLabel() }}
                                                 </span>
                                             @endif
                                         </div>
@@ -448,9 +449,9 @@
                                                     Duplicate
                                                 </span>
                                             @endif
-                                            @if ($student->isTransferred())
+                                            @if (! $student->isActiveStatus())
                                                 <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
-                                                    Telah Berpindah
+                                                    {{ $student->statusLabel() }}
                                                 </span>
                                             @endif
                                         </div>

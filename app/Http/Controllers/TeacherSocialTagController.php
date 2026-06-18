@@ -256,14 +256,33 @@ class TeacherSocialTagController extends Controller
                 ->withErrors(['social_tag_id' => 'Tag sosial pilihan tidak sah.']);
         }
 
-        $entries = $this->parseBulkEntries($rawLines);
+        $parsedBulkInput = $this->parseBulkInput($rawLines);
+        $entries = $parsedBulkInput['entries'];
+        $invalidEntries = $parsedBulkInput['invalid_entries'];
+
         if ($entries->isEmpty()) {
             return redirect()
                 ->route('teacher.social-tags.index', [
                     'billing_year' => $selectedYear,
                     'class_name' => $selectedClass,
                 ])
-                ->withErrors(['match_lines' => 'Tiada baris data yang boleh dipadankan.']);
+                ->withErrors(['match_lines' => 'Tiada baris data yang boleh dipadankan.'])
+                ->with('bulk_tag_report', [
+                    'line_count' => $invalidEntries->count(),
+                    'matched_families_count' => 0,
+                    'missing_billing_count' => 0,
+                    'invalid_count' => $invalidEntries->count(),
+                    'duplicate_count' => 0,
+                    'unmatched_count' => 0,
+                    'ambiguous_count' => 0,
+                    'missing_billing_family_codes' => [],
+                    'invalid_entries' => $invalidEntries->values()->all(),
+                    'duplicate_entries' => [],
+                    'unmatched_entries' => [],
+                    'ambiguous_entries' => [],
+                    'social_tag_id' => $socialTag->id,
+                    'tag_label' => (string) $socialTag->name,
+                ]);
         }
 
         $students = Student::query()
@@ -279,6 +298,8 @@ class TeacherSocialTagController extends Controller
         $matchedFamilyCodes = collect();
         $unmatchedEntries = collect();
         $ambiguousEntries = collect();
+        $duplicateEntries = collect();
+        $seenEntryKeys = [];
 
         foreach ($entries as $entry) {
             $nameToken = $entry['name_token'];
@@ -288,6 +309,14 @@ class TeacherSocialTagController extends Controller
                 continue;
             }
 
+            $entryKey = $nameToken.'|'.$classToken;
+            if (array_key_exists($entryKey, $seenEntryKeys)) {
+                $duplicateEntries->push($entry['raw']);
+
+                continue;
+            }
+
+            $seenEntryKeys[$entryKey] = true;
             $matchedStudents = collect();
 
             if ($classToken !== '') {
@@ -352,17 +381,18 @@ class TeacherSocialTagController extends Controller
                 ]);
         }
 
-        $lineCount = $entries->count();
+        $lineCount = $entries->count() + $invalidEntries->count();
+        $invalidCount = $invalidEntries->count();
+        $duplicateCount = $duplicateEntries->count();
         $unmatchedCount = $unmatchedEntries->count();
         $ambiguousCount = $ambiguousEntries->count();
+        $issueCount = $missingBillingCount + $invalidCount + $duplicateCount + $unmatchedCount + $ambiguousCount;
 
         $status = sprintf(
-            'Bulk tag #%s selesai: %d family ditag, %d family tiada bil tahun ini, %d baris tidak jumpa, %d baris bertindih.',
+            'Bulk tag #%s selesai: %d family ditag, %d item perlu semakan.',
             ltrim($this->asHashtag((string) $socialTag->name), '#'),
             $updatedFamiliesCount,
-            $missingBillingCount,
-            $unmatchedCount,
-            $ambiguousCount
+            $issueCount
         );
 
         return redirect()
@@ -376,8 +406,13 @@ class TeacherSocialTagController extends Controller
                 'line_count' => $lineCount,
                 'matched_families_count' => $updatedFamiliesCount,
                 'missing_billing_count' => $missingBillingCount,
+                'invalid_count' => $invalidCount,
+                'duplicate_count' => $duplicateCount,
                 'unmatched_count' => $unmatchedCount,
                 'ambiguous_count' => $ambiguousCount,
+                'missing_billing_family_codes' => $missingBillingFamilyCodes->all(),
+                'invalid_entries' => $invalidEntries->values()->all(),
+                'duplicate_entries' => $duplicateEntries->values()->all(),
                 'unmatched_entries' => $unmatchedEntries->values()->all(),
                 'ambiguous_entries' => $ambiguousEntries->values()->all(),
                 'social_tag_id' => $socialTag->id,
@@ -411,18 +446,21 @@ class TeacherSocialTagController extends Controller
     }
 
     /**
-     * @return Collection<int, array{raw:string,name_token:string,class_token:string}>
+     * @return array{entries: Collection<int, array{raw:string,name_token:string,class_token:string}>, invalid_entries: Collection<int, string>}
      */
-    private function parseBulkEntries(string $rawLines): Collection
+    private function parseBulkInput(string $rawLines): array
     {
         $lines = preg_split('/\R/u', $rawLines) ?: [];
+        $invalidEntries = collect();
 
-        return collect($lines)
+        $entries = collect($lines)
             ->map(fn ($line): string => trim((string) $line))
             ->filter()
-            ->map(function (string $line): ?array {
+            ->map(function (string $line) use ($invalidEntries): ?array {
                 $columns = $this->splitBulkColumns($line);
                 if ($columns === []) {
+                    $invalidEntries->push($line);
+
                     return null;
                 }
 
@@ -441,6 +479,8 @@ class TeacherSocialTagController extends Controller
 
                 $nameToken = $this->normalizeToken($name);
                 if ($nameToken === '') {
+                    $invalidEntries->push($line);
+
                     return null;
                 }
 
@@ -452,6 +492,11 @@ class TeacherSocialTagController extends Controller
             })
             ->filter()
             ->values();
+
+        return [
+            'entries' => $entries,
+            'invalid_entries' => $invalidEntries->values(),
+        ];
     }
 
     /**
@@ -459,6 +504,7 @@ class TeacherSocialTagController extends Controller
      */
     private function splitBulkColumns(string $line): array
     {
+        $line = str_replace(['[TAB]', '[tab]'], "\t", $line);
         $columns = [];
 
         if (str_contains($line, "\t")) {

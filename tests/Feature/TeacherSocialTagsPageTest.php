@@ -255,3 +255,110 @@ it('allows system admin to bulk apply real social tags onto family billing assig
     expect($billing->socialTags()->pluck('name')->all())->toContain('Asnaf');
     expect($billing->fresh()->social_tag)->toBe('Asnaf');
 });
+
+it('shows detailed bulk upload fix lists for invalid duplicate unmatched and ambiguous rows', function () {
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $billingYear = (int) now()->year;
+    $socialTag = SocialTag::query()->firstOrCreate([
+        'name' => 'KPK',
+    ], [
+        'slug' => 'kpk',
+        'is_active' => true,
+        'sort_order' => 0,
+    ]);
+
+    FamilyBilling::query()->create([
+        'family_code' => 'SSP-BULK-OK',
+        'billing_year' => $billingYear,
+        'fee_amount' => 100,
+        'paid_amount' => 0,
+        'status' => 'unpaid',
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'BULK-REPORT-001',
+        'family_code' => 'SSP-BULK-OK',
+        'full_name' => 'Nur Ok',
+        'class_name' => '1 Aman',
+        'billing_year' => $billingYear,
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'BULK-REPORT-002',
+        'family_code' => 'SSP-NOBILL',
+        'full_name' => 'No Billing',
+        'class_name' => '1 Aman',
+        'billing_year' => $billingYear,
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'BULK-REPORT-003',
+        'family_code' => 'SSP-AMB-1',
+        'full_name' => 'Siti Same',
+        'class_name' => '1 Aman',
+        'billing_year' => $billingYear,
+    ]);
+
+    Student::query()->create([
+        'student_no' => 'BULK-REPORT-004',
+        'family_code' => 'SSP-AMB-2',
+        'full_name' => 'Siti Same',
+        'class_name' => '1 Aman',
+        'billing_year' => $billingYear,
+    ]);
+
+    $postResponse = $this->actingAs($admin)
+        ->post(route('teacher.social-tags.bulk-apply'), [
+            'billing_year' => $billingYear,
+            'class_name' => 'all',
+            'social_tag_id' => $socialTag->id,
+            'match_lines' => implode("\n", [
+                "1\tNUR OK\t1 AMAN",
+                "2\tNUR OK\t1 AMAN",
+                "3\tMISSING CHILD\t1 AMAN",
+                '###',
+                "4\tNO BILLING\t1 AMAN",
+                "5\tSITI SAME\t1 AMAN",
+                "6\tSITI SAME\t1 AMAN",
+            ]),
+        ]);
+
+    $postResponse->assertRedirect();
+    $postResponse->assertSessionHas('bulk_tag_report');
+
+    $report = session('bulk_tag_report');
+
+    expect($report['matched_families_count'])->toBe(1);
+    expect($report['invalid_count'])->toBe(1);
+    expect($report['unmatched_count'])->toBe(1);
+    expect($report['duplicate_count'])->toBe(2);
+    expect($report['ambiguous_count'])->toBe(1);
+    expect($report['missing_billing_count'])->toBe(1);
+
+    $response = $this->actingAs($admin)
+        ->withSession([
+            'bulk_tag_report' => $report,
+        ])
+        ->get(route('teacher.social-tags.index', [
+            'billing_year' => $billingYear,
+            'class_name' => 'all',
+            'tag_filter' => $socialTag->slug,
+        ]));
+
+    $response->assertOk();
+    $response->assertSee('Bulk Upload Insight');
+    $response->assertSee('Invalid list');
+    $response->assertSee('###');
+    $response->assertSee('Unmatched student names');
+    $response->assertSee('MISSING CHILD');
+    $response->assertSee('Duplicate upload rows');
+    $response->assertSee('NUR OK');
+    $response->assertSee('Multiple family matches');
+    $response->assertSee('SITI SAME');
+    $response->assertSee('Matched but no billing');
+    $response->assertSee('SSP-NOBILL');
+});
