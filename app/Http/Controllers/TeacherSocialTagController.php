@@ -112,6 +112,7 @@ class TeacherSocialTagController extends Controller
             $selectedTag = $activeTags->firstWhere('slug', $selectedTagFilter);
             if ($selectedTag instanceof SocialTag) {
                 $filteredTagStudents = $measure(fn () => $this->applySocialTagFilter(clone $baseStudentsQuery, $selectedTag)
+                    ->with('socialTags')
                     ->orderBy('class_name')
                     ->orderBy('full_name')
                     ->paginate(50, ['id', 'family_code', 'full_name', 'class_name', 'billing_year'], 'page')
@@ -173,6 +174,13 @@ class TeacherSocialTagController extends Controller
                         ->whereColumn('family_billings.family_code', 'students.family_code')
                         ->whereColumn('family_billings.billing_year', 'students.billing_year')
                         ->where('family_social_tags.social_tag_id', $tag->id);
+                })
+                ->orWhereExists(function ($subquery) use ($tag): void {
+                    $subquery
+                        ->selectRaw('1')
+                        ->from('student_social_tags')
+                        ->whereColumn('student_social_tags.student_id', 'students.id')
+                        ->where('student_social_tags.social_tag_id', $tag->id);
                 })
                 ->orWhereExists(function ($subquery) use ($tag): void {
                     $tagName = strtolower(str_replace(' ', '', trim((string) $tag->name)));
@@ -280,16 +288,17 @@ class TeacherSocialTagController extends Controller
     public function destroyTag(SocialTag $socialTag): RedirectResponse
     {
         $assignedFamiliesCount = $socialTag->familyBillings()->count();
+        $assignedStudentsCount = $socialTag->students()->count();
         $campaignUsageCount = PaymentCampaignSetting::query()
             ->where('split_2_social_tag_id', $socialTag->id)
             ->orWhere('split_3_social_tag_id', $socialTag->id)
             ->count();
 
-        if ($assignedFamiliesCount > 0 || $campaignUsageCount > 0) {
+        if ($assignedFamiliesCount > 0 || $assignedStudentsCount > 0 || $campaignUsageCount > 0) {
             return redirect()
                 ->route('teacher.social-tags.index')
                 ->withErrors([
-                    'social_tag_delete' => 'Tag sosial ini masih digunakan oleh family atau kempen bayaran. Nyahaktifkan dahulu sebelum padam.',
+                    'social_tag_delete' => 'Tag sosial ini masih digunakan oleh family, murid atau kempen bayaran. Nyahaktifkan dahulu sebelum padam.',
                 ]);
         }
 

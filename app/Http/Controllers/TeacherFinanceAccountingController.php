@@ -22,9 +22,7 @@ class TeacherFinanceAccountingController extends Controller
     public function __construct(
         private readonly PaymentCampaignService $paymentCampaignService,
         private readonly PaymentReportingService $paymentReportingService
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -71,6 +69,8 @@ class TeacherFinanceAccountingController extends Controller
                 "Yuran {$yearB}",
                 "Sumbangan {$yearB}",
                 'Social Tag',
+                'family_social_tags',
+                'student_social_tags',
                 'Pelan Bayaran',
                 'Jumlah Yuran',
                 'Jumlah Dibayar',
@@ -91,6 +91,8 @@ class TeacherFinanceAccountingController extends Controller
                     number_format((float) $row["yuran_{$yearB}"], 2, '.', ''),
                     number_format((float) $row["sumbangan_{$yearB}"], 2, '.', ''),
                     $row['social_tag'],
+                    $row['family_social_tags'],
+                    $row['student_social_tags'],
                     $row['payment_plan'],
                     number_format((float) $row['plan_total_amount'], 2, '.', ''),
                     number_format((float) $row['plan_paid_amount'], 2, '.', ''),
@@ -131,7 +133,7 @@ class TeacherFinanceAccountingController extends Controller
 
     /**
      * @return array{
-     *   rows: \Illuminate\Support\Collection<int, array<string, mixed>>,
+     *   rows: Collection<int, array<string, mixed>>,
      *   totals: array<string, float>,
      *   search: string,
      *   classFilter: string,
@@ -139,10 +141,10 @@ class TeacherFinanceAccountingController extends Controller
      *   paymentPlanFilter: string,
      *   hasDonationFilter: string,
      *   socialTagFilter: string,
-     *   classOptions: \Illuminate\Support\Collection<int, string>,
+     *   classOptions: Collection<int, string>,
      *   yearA: int, yearB: int, currentYear: int, sortBy: string, sortDir: string
      * }
-    */
+     */
     private function buildDataset(Request $request): array
     {
         $yearA = (int) $request->integer('year_a', 2025);
@@ -176,6 +178,7 @@ class TeacherFinanceAccountingController extends Controller
         $currentYearMetrics = $this->paymentReportingService->familyMetricsForYear($currentYear)->keyBy('family_code');
 
         $studentsByFamily = Student::query()
+            ->with('socialTags')
             ->whereNotNull('family_code')
             ->where('family_code', '!=', '')
             ->orderBy('family_code')
@@ -184,6 +187,7 @@ class TeacherFinanceAccountingController extends Controller
             ->groupBy(fn (Student $student): string => (string) $student->family_code);
 
         $billingByYearAndFamily = FamilyBilling::query()
+            ->with('socialTags')
             ->whereIn('billing_year', [$yearA, $yearB])
             ->get()
             ->groupBy('billing_year')
@@ -328,6 +332,7 @@ class TeacherFinanceAccountingController extends Controller
                 $socialTag = $currentBilling
                     ? (implode(', ', $this->paymentCampaignService->resolveFamilySocialTags($currentBilling)->all()) ?: '-')
                     : '-';
+                $studentSocialTags = $this->resolveStudentSocialTags($familyStudents);
                 $availablePaymentOptions = $currentBilling
                     ? $this->paymentCampaignService->eligiblePlanLabels($currentBilling)
                     : [];
@@ -343,6 +348,8 @@ class TeacherFinanceAccountingController extends Controller
                     'class_name' => $this->resolveClassName($familyStudents),
                     'students' => $this->buildStudentItems($familyStudents),
                     'social_tag' => $socialTag,
+                    'family_social_tags' => $socialTag,
+                    'student_social_tags' => $studentSocialTags,
                     'available_payment_options' => $availablePaymentOptions !== [] ? implode(', ', $availablePaymentOptions) : 'Tiada',
                     'selected_payment_plan' => $selectedPaymentPlan,
                     'campaign_name' => $activeCampaign?->campaign_name ?? 'Single Payment Default',
@@ -410,7 +417,12 @@ class TeacherFinanceAccountingController extends Controller
 
         if ($socialTagFilter !== '') {
             $rows = $rows
-                ->filter(fn (array $row): bool => str_contains(mb_strtolower((string) ($row['social_tag'] ?? '')), mb_strtolower($socialTagFilter)))
+                ->filter(function (array $row) use ($socialTagFilter): bool {
+                    $needle = mb_strtolower($socialTagFilter);
+
+                    return str_contains(mb_strtolower((string) ($row['social_tag'] ?? '')), $needle)
+                        || str_contains(mb_strtolower((string) ($row['student_social_tags'] ?? '')), $needle);
+                })
                 ->values();
         }
 
@@ -561,6 +573,7 @@ class TeacherFinanceAccountingController extends Controller
                 return [
                     'full_name' => trim((string) $student->full_name) ?: '-',
                     'class_name' => trim((string) $student->class_name) ?: '-',
+                    'social_tags' => collect($student->socialTags ?? [])->pluck('name')->filter()->values()->all(),
                 ];
             })
             ->sortBy(fn (array $row): string => mb_strtolower($row['full_name']))
@@ -568,10 +581,32 @@ class TeacherFinanceAccountingController extends Controller
             ->all();
     }
 
+    private function resolveStudentSocialTags(Collection $familyStudents): string
+    {
+        $tagGroups = $familyStudents
+            ->map(function (Student $student): ?string {
+                $tagNames = collect($student->socialTags ?? [])
+                    ->pluck('name')
+                    ->map(fn ($name): string => trim((string) $name))
+                    ->filter()
+                    ->values();
+
+                if ($tagNames->isEmpty()) {
+                    return null;
+                }
+
+                return (trim((string) $student->full_name) ?: 'Murid #'.$student->id).': '.$tagNames->implode(', ');
+            })
+            ->filter()
+            ->values();
+
+        return $tagGroups->isEmpty() ? '-' : $tagGroups->implode(' | ');
+    }
+
     /**
-     * @param object|null $billing
-     * @param object|null $portalAgg
-     * @param object|null $legacyAgg
+     * @param  object|null  $billing
+     * @param  object|null  $portalAgg
+     * @param  object|null  $legacyAgg
      * @return array{0: float, 1: float}
      */
     private function resolveYearBreakdown($billing, $portalAgg, $legacyAgg): array

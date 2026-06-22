@@ -131,7 +131,7 @@
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Teacher View</p>
                     <h1 class="text-2xl font-bold text-zinc-900">Social Tags Analytics</h1>
-                    <p class="mt-1 text-sm text-zinc-600">Pantau tag sosial pada family billing, padankan melalui senarai murid, dan sediakan tag untuk kempen bayaran ansuran.</p>
+                    <p class="mt-1 text-sm text-zinc-600">Pantau tag keluarga dan Tag Murid / Jawatan Murid, padankan melalui senarai murid, dan sediakan tag untuk kempen bayaran ansuran.</p>
                 </div>
                 <a
                     href="{{ route('teacher.records') }}"
@@ -177,7 +177,7 @@
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">Master Social Tags</h2>
-                        <p class="mt-1 text-xs text-zinc-500">Tag ini disimpan pada family billing dan digunakan untuk kempen bayaran serta analitik murid.</p>
+                        <p class="mt-1 text-xs text-zinc-500">Tag master boleh digunakan sebagai Tag Keluarga atau Tag Murid / Jawatan Murid.</p>
                     </div>
                 </div>
 
@@ -224,13 +224,16 @@
                                 <th class="px-4 py-3">Tag</th>
                                 <th class="px-4 py-3">Slug</th>
                                 <th class="px-4 py-3">Tagged Families</th>
+                                <th class="px-4 py-3">Tagged Students</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Kemaskini</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-zinc-200">
                             @forelse ($socialTags as $socialTag)
-                                @php($updateFormId = 'social-tag-update-'.$socialTag->id)
+                                @php
+                                    $updateFormId = 'social-tag-update-'.$socialTag->id;
+                                @endphp
                                 <tr>
                                     <td class="px-4 py-3">
                                         <input
@@ -243,6 +246,7 @@
                                     </td>
                                     <td class="px-4 py-3 font-mono text-xs text-zinc-600">{{ $socialTag->slug }}</td>
                                     <td class="px-4 py-3 text-zinc-700">{{ number_format((int) $socialTag->family_billings_count) }}</td>
+                                    <td class="px-4 py-3 text-zinc-700">{{ number_format((int) $socialTag->students_count) }}</td>
                                     <td class="px-4 py-3">
                                         <div class="flex items-center gap-3">
                                             <input
@@ -280,7 +284,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-4 py-6 text-center text-zinc-500">Belum ada master social tag direkodkan.</td>
+                                    <td colspan="6" class="px-4 py-6 text-center text-zinc-500">Belum ada master social tag direkodkan.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -391,7 +395,7 @@
                                 {{ $selectedTagSummary['hashtag'] }} Student List
                             </h2>
                             <p class="mt-1 text-xs text-zinc-500">
-                                Paparan murid mengikut tag sosial keluarga yang dipilih ({{ number_format(method_exists($filteredTagStudents, 'total') ? $filteredTagStudents->total() : $filteredTagStudents->count()) }} murid).
+                                Paparan murid mengikut tag keluarga atau Tag Murid / Jawatan Murid yang dipilih ({{ number_format(method_exists($filteredTagStudents, 'total') ? $filteredTagStudents->total() : $filteredTagStudents->count()) }} murid).
                             </p>
                         </div>
                     </div>
@@ -403,6 +407,7 @@
                                     <th class="px-4 py-3">Family Code</th>
                                     <th class="px-4 py-3">Student</th>
                                     <th class="px-4 py-3">Class</th>
+                                    <th class="px-4 py-3">Tag Murid</th>
                                     <th class="px-4 py-3 text-right">Profile</th>
                                 </tr>
                             </thead>
@@ -412,6 +417,18 @@
                                         <td class="px-4 py-3 font-semibold text-zinc-900">{{ $student->family_code ?: '-' }}</td>
                                         <td class="px-4 py-3 text-zinc-700">{{ $student->full_name }}</td>
                                         <td class="px-4 py-3 text-zinc-700">{{ $student->class_name ?: '-' }}</td>
+                                        <td class="px-4 py-3 text-zinc-700">
+                                            @php
+                                                $studentTags = collect($student->socialTags ?? [])->pluck('name')->filter()->values();
+                                            @endphp
+                                            @forelse ($studentTags as $tagName)
+                                                <span class="mr-1 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
+                                                    {{ $tagName }}
+                                                </span>
+                                            @empty
+                                                <span class="text-xs text-zinc-400">-</span>
+                                            @endforelse
+                                        </td>
                                         <td class="px-4 py-3 text-right">
                                             <a href="{{ route('teacher.records.family', ['familyCode' => $student->family_code]) }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
                                                 Open family
@@ -420,7 +437,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="4" class="px-4 py-8 text-center text-zinc-500">No students found for selected tag and filter.</td>
+                                        <td colspan="5" class="px-4 py-8 text-center text-zinc-500">No students found for selected tag and filter.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -437,7 +454,7 @@
 
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                 <h2 class="text-lg font-semibold text-zinc-900">Tag Count by Class</h2>
-                <p class="mt-1 text-xs text-zinc-500">Kiraan murid mengikut kelas berdasarkan social tag keluarga.</p>
+                <p class="mt-1 text-xs text-zinc-500">Kiraan murid mengikut kelas berdasarkan tag keluarga atau Tag Murid / Jawatan Murid.</p>
 
                 <div class="mt-3 overflow-x-auto">
                     <table class="min-w-full divide-y divide-zinc-200 text-sm">

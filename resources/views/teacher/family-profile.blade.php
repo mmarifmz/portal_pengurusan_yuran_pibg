@@ -127,8 +127,8 @@
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                 <div class="flex items-center justify-between gap-2">
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Family Social Tags</h2>
-                        <p class="mt-1 text-xs text-zinc-500">Paparan ini mengambil tag sosial terkini untuk bil family tahun {{ $currentBilling->billing_year }}.</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">Tag Keluarga <span class="sr-only">Family Social Tags</span></h2>
+                        <p class="mt-1 text-xs text-zinc-500">Kategori bantuan, sosioekonomi atau klasifikasi bayaran untuk family tahun {{ $currentBilling->billing_year }}.</p>
                     </div>
                     @if (auth()->user()->isSystemAdmin())
                         <a href="{{ route('teacher.social-tags.index') }}" class="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-100">
@@ -137,14 +137,14 @@
                     @endif
                 </div>
                 <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Current Tags</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Tag keluarga semasa</p>
                     <div class="mt-2 flex flex-wrap gap-2">
                         @forelse ($currentFamilySocialTags as $tagName)
                             <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                                 {{ $tagName }}
                             </span>
                         @empty
-                            <span class="text-xs text-zinc-500">Belum ada tag sosial direkodkan untuk family ini.</span>
+                            <span class="text-xs text-zinc-500">Belum ada tag keluarga direkodkan untuk family ini.</span>
                         @endforelse
                     </div>
                 </div>
@@ -153,12 +153,22 @@
                     <form method="POST" action="{{ route('teacher.records.family.social-tags.update', ['familyCode' => $familyCode]) }}" class="mt-4 space-y-3">
                         @csrf
                         @method('PATCH')
+                        <input type="hidden" name="target_type" value="family">
 
                         <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                            <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Update Family Tags</p>
-                            <div class="mt-3 flex flex-wrap gap-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Kemaskini Tag Keluarga</p>
+                            <label class="mt-3 block text-xs font-semibold text-zinc-600">
+                                Cari tag
+                                <input
+                                    type="search"
+                                    placeholder="Taip untuk tapis tag keluarga"
+                                    data-tag-search="family-tag-options"
+                                    class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                />
+                            </label>
+                            <div id="family-tag-options" class="mt-3 flex flex-wrap gap-3">
                                 @foreach ($availableSocialTags as $socialTag)
-                                    <label class="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700">
+                                    <label data-tag-option="{{ mb_strtolower($socialTag->name) }}" class="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700">
                                         <input
                                             type="checkbox"
                                             name="social_tag_ids[]"
@@ -169,6 +179,16 @@
                                     </label>
                                 @endforeach
                             </div>
+                            <label class="mt-3 block text-xs font-semibold text-zinc-600">
+                                Cipta tag baharu jika tiada dalam senarai
+                                <input
+                                    type="text"
+                                    name="new_social_tag_name"
+                                    value="{{ old('new_social_tag_name') }}"
+                                    placeholder="Contoh: Asnaf"
+                                    class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                />
+                            </label>
                             @error('social_tag_ids')
                                 <p class="mt-2 text-[11px] font-medium text-rose-600">{{ $message }}</p>
                             @enderror
@@ -179,13 +199,13 @@
 
                         <div>
                             <button type="submit" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100">
-                                Save Family Tags
+                                Simpan Tag Keluarga
                             </button>
                         </div>
                     </form>
                 @else
                     <p class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
-                        Teacher access is read-only here. Social tags can only be updated by Super Admin.
+                        Teacher access is read-only here. Tag hanya boleh dikemaskini oleh Super Admin.
                     </p>
                 @endcan
             </section>
@@ -199,6 +219,7 @@
                         <tr>
                             <th class="px-4 py-3">Student No</th>
                             <th class="px-4 py-3">Name</th>
+                            <th class="px-4 py-3">Tag Murid / Jawatan</th>
                             <th class="px-4 py-3">Class</th>
                             <th class="px-4 py-3">Status Murid</th>
                             <th class="px-4 py-3">Parent Name</th>
@@ -210,6 +231,20 @@
                             <tr>
                                 <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $student->student_no ?: '-' }}</td>
                                 <td class="px-4 py-3 font-semibold text-zinc-900">{{ $student->full_name }}</td>
+                                <td class="px-4 py-3 text-zinc-700">
+                                    @php
+                                        $studentRoleTags = collect($student->resolved_student_social_tags ?? []);
+                                    @endphp
+                                    <div class="flex flex-wrap gap-1">
+                                        @forelse ($studentRoleTags as $tag)
+                                            <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
+                                                {{ $tag }}
+                                            </span>
+                                        @empty
+                                            <span class="text-xs text-zinc-500">Belum ada tag untuk murid ini.</span>
+                                        @endforelse
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3 text-zinc-700">{{ $student->class_name ?: '-' }}</td>
                                 <td class="px-4 py-3 text-zinc-700">
                                     <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ ! $student->isActiveStatus() ? 'border-zinc-300 bg-zinc-100 text-zinc-600' : 'border-emerald-200 bg-emerald-50 text-emerald-700' }}">
@@ -227,6 +262,114 @@
                 </table>
             </div>
         </section>
+
+        @can('manageStudentRecords')
+            <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-zinc-900">Tag Murid / Jawatan Murid</h2>
+                        <p class="text-xs text-zinc-500">Tambah tag untuk jawatan, peranan atau kategori khas murid. Tag ini melekat pada murid tertentu, bukan seluruh family.</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-4">
+                    @foreach ($students as $student)
+                        @php
+                            $studentTagIds = $student->socialTags->pluck('id')->map(fn ($id) => (string) $id);
+                            $studentTagNames = collect($student->resolved_student_social_tags ?? []);
+                        @endphp
+                        <form
+                            id="student-tags-{{ $student->id }}"
+                            method="POST"
+                            action="{{ route('teacher.records.students.tags.update', $student) }}"
+                            class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+                        >
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="target_type" value="student">
+                            <input type="hidden" name="family_code" value="{{ $familyCode }}">
+
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-zinc-900">{{ $student->full_name }}</h3>
+                                    <p class="text-xs text-zinc-500">{{ $student->class_name ?: 'Tiada kelas' }} | {{ $student->student_no ?: '-' }}</p>
+                                </div>
+                                <div class="flex max-w-xl flex-wrap justify-end gap-1">
+                                    @forelse ($studentTagNames as $tag)
+                                        <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-800">
+                                            {{ $tag }}
+                                        </span>
+                                    @empty
+                                        <span class="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] text-zinc-500">Belum ada tag untuk murid ini.</span>
+                                    @endforelse
+                                </div>
+                            </div>
+
+                            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                                <label class="text-xs font-semibold text-zinc-600">
+                                    Cari Tag
+                                    <input
+                                        type="search"
+                                        placeholder="Contoh: Pengawas, Ketua Kelas"
+                                        data-select-search="student-tag-select-{{ $student->id }}"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                </label>
+
+                                <label class="text-xs font-semibold text-zinc-600">
+                                    Tag baharu
+                                    <input
+                                        type="text"
+                                        name="new_social_tag_name"
+                                        placeholder="Contoh: Ketua Kelas"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                </label>
+
+                                <label class="text-xs font-semibold text-zinc-600 md:col-span-2">
+                                    Pilih Tag
+                                    <select
+                                        id="student-tag-select-{{ $student->id }}"
+                                        name="social_tag_ids[]"
+                                        multiple
+                                        size="{{ min(8, max(4, $availableSocialTags->count())) }}"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    >
+                                        @foreach ($availableSocialTags as $socialTag)
+                                            <option value="{{ $socialTag->id }}" @selected($studentTagIds->contains((string) $socialTag->id))>{{ $socialTag->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <span class="mt-1 block text-[11px] text-zinc-500">Gunakan Ctrl/Cmd untuk pilih lebih daripada satu tag. Buang pilihan untuk Buang Tag.</span>
+                                </label>
+
+                                <label class="text-xs font-semibold text-zinc-600 md:col-span-2">
+                                    Nota
+                                    <textarea
+                                        name="notes"
+                                        rows="2"
+                                        placeholder="Nota ringkas jika perlu"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    ></textarea>
+                                </label>
+                            </div>
+
+                            <div class="mt-3">
+                                <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                                    Simpan Tag Murid
+                                </button>
+                            </div>
+                        </form>
+                    @endforeach
+                </div>
+            </section>
+        @else
+            <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <h2 class="text-lg font-semibold text-zinc-900">Tag Murid / Jawatan Murid</h2>
+                <p class="mt-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+                    Teacher access is read-only here. Tag murid hanya boleh dikemaskini oleh Super Admin.
+                </p>
+            </section>
+        @endcan
 
         @can('manageStudentRecords')
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -637,6 +780,35 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-tag-search]').forEach((input) => {
+                const container = document.getElementById(input.dataset.tagSearch);
+                if (! container) {
+                    return;
+                }
+
+                input.addEventListener('input', () => {
+                    const needle = input.value.trim().toLocaleLowerCase();
+                    container.querySelectorAll('[data-tag-option]').forEach((option) => {
+                        const label = option.dataset.tagOption || '';
+                        option.classList.toggle('hidden', needle !== '' && ! label.includes(needle));
+                    });
+                });
+            });
+
+            document.querySelectorAll('[data-select-search]').forEach((input) => {
+                const select = document.getElementById(input.dataset.selectSearch);
+                if (! select) {
+                    return;
+                }
+
+                input.addEventListener('input', () => {
+                    const needle = input.value.trim().toLocaleLowerCase();
+                    Array.from(select.options).forEach((option) => {
+                        option.hidden = needle !== '' && ! option.text.toLocaleLowerCase().includes(needle);
+                    });
+                });
+            });
+
             document.querySelectorAll('[data-uppercase-input]').forEach((input) => {
                 input.addEventListener('input', () => {
                     const start = input.selectionStart;

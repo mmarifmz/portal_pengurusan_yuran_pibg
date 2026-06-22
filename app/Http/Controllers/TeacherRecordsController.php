@@ -2,37 +2,36 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ParentProfileSyncFromPaymentsService;
-use App\Services\SocialTagService;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
-use App\Models\ParentLoginOtp;
 use App\Models\ParentLoginAudit;
+use App\Models\ParentLoginOtp;
 use App\Models\SiteSetting;
 use App\Models\SocialTag;
 use App\Models\Student;
 use App\Models\StudentNameChange;
 use App\Models\User;
+use App\Services\ParentProfileSyncFromPaymentsService;
 use App\Services\PaymentReportingService;
-use Illuminate\Http\Request;
+use App\Services\SocialTagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeacherRecordsController extends Controller
 {
     public function __construct(
         private readonly SocialTagService $socialTagService,
         private readonly PaymentReportingService $paymentReportingService
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -40,6 +39,7 @@ class TeacherRecordsController extends Controller
         $recordFilter = (string) $request->string('record_filter')->toString();
         $selectedClass = trim((string) $request->string('class_name')->toString());
         $selectedSocialTag = trim((string) $request->string('social_tag')->toString());
+        $selectedStudentSocialTag = trim((string) $request->string('student_social_tag')->toString());
         $familyCodeQuery = trim((string) $request->string('family_code')->toString());
         $studentNameQuery = trim((string) $request->string('student_name')->toString());
         $studentStatusFilter = trim((string) $request->string('student_status', Student::STATUS_ACTIVE)->toString());
@@ -62,6 +62,7 @@ class TeacherRecordsController extends Controller
             : ($sortBy === 'paid_latest' ? 'desc' : 'asc');
 
         $studentsQuery = Student::query()
+            ->with('socialTags')
             ->where('billing_year', $billingYear);
 
         if ($studentStatusFilter === Student::STATUS_ACTIVE) {
@@ -114,6 +115,10 @@ class TeacherRecordsController extends Controller
         $selectedSocialTag = $this->socialTagService->resolveFilterKey($selectedSocialTag);
         if ($selectedSocialTag !== '' && ! array_key_exists($selectedSocialTag, $socialTagLabels)) {
             $selectedSocialTag = '';
+        }
+        $selectedStudentSocialTag = $this->socialTagService->resolveFilterKey($selectedStudentSocialTag);
+        if ($selectedStudentSocialTag !== '' && ! array_key_exists($selectedStudentSocialTag, $socialTagLabels)) {
+            $selectedStudentSocialTag = '';
         }
 
         $familyBillingsByCode = FamilyBilling::query()
@@ -311,6 +316,9 @@ class TeacherRecordsController extends Controller
                     $selectedSocialTag
                 )
             ))
+            ->when($selectedStudentSocialTag !== '', fn ($collection) => $collection->filter(
+                fn (Student $student) => $this->socialTagService->studentMatchesFilter($student, $selectedStudentSocialTag)
+            ))
             ->when($selectedClass !== '', fn ($collection) => $collection->filter(fn (Student $student) => (string) $student->class_name === $selectedClass))
             ->when($familyCodeQuery !== '', function ($collection) use ($familyCodeQuery) {
                 $needle = mb_strtolower($familyCodeQuery);
@@ -446,6 +454,10 @@ class TeacherRecordsController extends Controller
                         : []
                 );
                 $student->setAttribute(
+                    'resolved_student_social_tags',
+                    $this->socialTagService->resolveStudentTagNames($student)->values()->all()
+                );
+                $student->setAttribute(
                     'current_year_payment_status',
                     (string) ($currentMetric['status_label'] ?? (! $student->isActiveStatus() ? 'Dikecualikan' : 'Belum Mula'))
                 );
@@ -470,6 +482,7 @@ class TeacherRecordsController extends Controller
 
         $filtersActive = $recordFilter !== ''
             || $selectedSocialTag !== ''
+            || $selectedStudentSocialTag !== ''
             || $selectedClass !== ''
             || $familyCodeQuery !== ''
             || $studentNameQuery !== ''
@@ -506,6 +519,7 @@ class TeacherRecordsController extends Controller
             'availableClasses' => $availableClasses,
             'recordFilter' => $recordFilter,
             'selectedSocialTag' => $selectedSocialTag,
+            'selectedStudentSocialTag' => $selectedStudentSocialTag,
             'selectedClass' => $selectedClass,
             'familyCodeQuery' => $familyCodeQuery,
             'studentNameQuery' => $studentNameQuery,
@@ -633,6 +647,7 @@ class TeacherRecordsController extends Controller
     public function familyDetail(string $familyCode): View
     {
         $students = Student::query()
+            ->with('socialTags')
             ->where('family_code', $familyCode)
             ->orderBy('full_name')
             ->get();
@@ -740,6 +755,10 @@ class TeacherRecordsController extends Controller
                 }
 
                 $student->setAttribute('resolved_parent_name', $resolvedParentName);
+                $student->setAttribute(
+                    'resolved_student_social_tags',
+                    $this->socialTagService->resolveStudentTagNames($student)->values()->all()
+                );
 
                 return $student;
             })
@@ -857,6 +876,7 @@ class TeacherRecordsController extends Controller
                 }
 
                 $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+
                 return $legacyName !== '' && $studentNames->contains($legacyName);
             })
             ->values();
@@ -867,6 +887,7 @@ class TeacherRecordsController extends Controller
                 if ($reference !== '') {
                     // Normalize reference key so mixed case/spacing from legacy imports still collapse to one payer detail.
                     $normalizedReference = preg_replace('/\s+/', '', mb_strtoupper($reference)) ?? '';
+
                     return $normalizedReference !== '' ? $normalizedReference : $reference;
                 }
 
@@ -990,13 +1011,25 @@ class TeacherRecordsController extends Controller
         abort_if(! $currentBilling, 404);
 
         $validated = $request->validate([
+            'target_type' => ['nullable', 'string', Rule::in(['family'])],
             'social_tag_ids' => ['nullable', 'array'],
-            'social_tag_ids.*' => ['integer', 'exists:social_tags,id'],
+            'social_tag_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('social_tags', 'id')->where('is_active', true),
+            ],
+            'new_social_tag_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $selectedTags = SocialTag::query()
             ->whereIn('id', collect($validated['social_tag_ids'] ?? [])->map(fn ($id): int => (int) $id)->all())
+            ->where('is_active', true)
             ->get();
+
+        $newTag = $this->socialTagService->findOrCreateByName((string) ($validated['new_social_tag_name'] ?? ''), $request->user()?->id);
+        if ($newTag && $newTag->is_active) {
+            $selectedTags = $selectedTags->push($newTag)->unique('id')->values();
+        }
 
         $currentBilling->socialTags()->sync($selectedTags->pluck('id')->all());
         $currentBilling->load('socialTags');
@@ -1011,6 +1044,55 @@ class TeacherRecordsController extends Controller
     public function updateStudentTags(Request $request, Student $student): RedirectResponse|JsonResponse
     {
         Gate::authorize('manageStudentRecords');
+
+        if ($request->has('social_tag_ids') || $request->input('target_type') === 'student') {
+            $validated = $request->validate([
+                'target_type' => ['nullable', 'string', Rule::in(['student'])],
+                'family_code' => ['required', 'string', 'max:255'],
+                'social_tag_ids' => ['nullable', 'array'],
+                'social_tag_ids.*' => [
+                    'integer',
+                    'distinct',
+                    Rule::exists('social_tags', 'id')->where('is_active', true),
+                ],
+                'new_social_tag_name' => ['nullable', 'string', 'max:255'],
+                'notes' => ['nullable', 'string', 'max:2000'],
+            ]);
+
+            if ((string) $student->family_code !== (string) $validated['family_code']) {
+                throw ValidationException::withMessages([
+                    'family_code' => 'Murid ini tidak berada dalam family yang dipilih.',
+                ]);
+            }
+
+            $tagIds = collect($validated['social_tag_ids'] ?? [])
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0)
+                ->values();
+            $newTag = $this->socialTagService->findOrCreateByName((string) ($validated['new_social_tag_name'] ?? ''), $request->user()?->id);
+            if ($newTag && $newTag->is_active) {
+                $tagIds->push((int) $newTag->id);
+            }
+
+            $selectedTags = $this->socialTagService->syncStudentTags(
+                $student,
+                $tagIds->unique()->values()->all(),
+                $request->user()?->id,
+                filled($validated['notes'] ?? null) ? trim((string) $validated['notes']) : null
+            );
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'Tag murid berjaya dikemaskini.',
+                    'student_id' => $student->id,
+                    'updated_tags' => $selectedTags->pluck('name')->values()->all(),
+                ]);
+            }
+
+            return redirect()
+                ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-tags-'.$student->id)
+                ->with('status', 'Tag murid berjaya dikemaskini.');
+        }
 
         $enabledTagFields = collect(array_keys($this->enabledSocialTagLabels()));
 
@@ -1211,8 +1293,6 @@ class TeacherRecordsController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
-
-
 
     /**
      * @return array<string, string>

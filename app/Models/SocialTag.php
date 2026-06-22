@@ -35,6 +35,13 @@ class SocialTag extends Model
             ->withTimestamps();
     }
 
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'student_social_tags')
+            ->withPivot(['assigned_by', 'notes'])
+            ->withTimestamps();
+    }
+
     public function split2Campaigns(): HasMany
     {
         return $this->hasMany(PaymentCampaignSetting::class, 'split_2_social_tag_id');

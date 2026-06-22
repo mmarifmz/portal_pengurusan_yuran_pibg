@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -110,6 +111,15 @@ class Student extends Model
     public function nameChanges(): HasMany
     {
         return $this->hasMany(StudentNameChange::class);
+    }
+
+    public function socialTags(): BelongsToMany
+    {
+        return $this->belongsToMany(SocialTag::class, 'student_social_tags')
+            ->withPivot(['assigned_by', 'notes'])
+            ->withTimestamps()
+            ->orderBy('sort_order')
+            ->orderBy('name');
     }
 
     /**

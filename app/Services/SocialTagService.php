@@ -29,7 +29,7 @@ class SocialTagService
     public function allTags(): Collection
     {
         return SocialTag::query()
-            ->withCount('familyBillings')
+            ->withCount(['familyBillings', 'students'])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -190,6 +190,98 @@ class SocialTagService
 
         return $this->resolveFamilyTagNames($familyBilling, $student)
             ->contains(fn (string $name): bool => $this->normalizeTagName($name) === $required);
+    }
+
+    public function studentMatchesFilter(?Student $student, string $filterKey): bool
+    {
+        if (! $student || trim($filterKey) === '') {
+            return false;
+        }
+
+        $requiredName = $this->resolveFilterName($filterKey);
+        if ($requiredName === '') {
+            return false;
+        }
+
+        $required = $this->normalizeTagName($requiredName);
+
+        return $this->resolveStudentTagNames($student)
+            ->contains(fn (string $name): bool => $this->normalizeTagName($name) === $required);
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    public function resolveStudentTagNames(Student $student): Collection
+    {
+        if ($student->exists) {
+            $student->loadMissing('socialTags');
+        }
+
+        $normalized = [];
+
+        return collect($student->socialTags ?? [])
+            ->pluck('name')
+            ->map(fn ($name): string => trim((string) $name))
+            ->filter()
+            ->filter(function (string $name) use (&$normalized): bool {
+                $key = $this->normalizeTagName($name);
+
+                if ($key === '' || in_array($key, $normalized, true)) {
+                    return false;
+                }
+
+                $normalized[] = $key;
+
+                return true;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  array<int, int|string>  $tagIds
+     * @return Collection<int, SocialTag>
+     */
+    public function activeTagsByIds(array $tagIds): Collection
+    {
+        $ids = collect($tagIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return SocialTag::query()
+            ->where('is_active', true)
+            ->whereIn('id', $ids->all())
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * @param  array<int, int|string>  $tagIds
+     * @return Collection<int, SocialTag>
+     */
+    public function syncStudentTags(Student $student, array $tagIds, ?int $actorId = null, ?string $notes = null): Collection
+    {
+        $selectedTags = $this->activeTagsByIds($tagIds);
+        $pivotValues = $selectedTags
+            ->mapWithKeys(fn (SocialTag $tag): array => [
+                $tag->id => [
+                    'assigned_by' => $actorId,
+                    'notes' => $notes,
+                ],
+            ])
+            ->all();
+
+        $student->socialTags()->sync($pivotValues);
+        $student->load('socialTags');
+
+        return $selectedTags;
     }
 
     public function findByName(string $name): ?SocialTag

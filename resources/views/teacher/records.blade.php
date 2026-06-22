@@ -3,6 +3,7 @@
         $baseQuery = [
             'record_filter' => $recordFilter ?: null,
             'social_tag' => $selectedSocialTag ?: null,
+            'student_social_tag' => $selectedStudentSocialTag ?: null,
             'class_name' => $selectedClass ?: null,
             'family_code' => $familyCodeQuery ?: null,
             'student_name' => $studentNameQuery ?: null,
@@ -134,6 +135,9 @@
                     @if ($selectedSocialTag !== '')
                         <input type="hidden" name="social_tag" value="{{ $selectedSocialTag }}">
                     @endif
+                    @if ($selectedStudentSocialTag !== '')
+                        <input type="hidden" name="student_social_tag" value="{{ $selectedStudentSocialTag }}">
+                    @endif
                     <input type="hidden" name="sort_by" value="{{ $sortBy }}">
                     <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
 
@@ -214,6 +218,7 @@
                             <a href="{{ route('teacher.records', array_filter([
                                 'record_filter' => $recordFilter ?: null,
                                 'social_tag' => $selectedSocialTag ?: null,
+                                'student_social_tag' => $selectedStudentSocialTag ?: null,
                                 'sort_by' => $sortBy,
                                 'sort_dir' => $sortDir,
                             ])) }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
@@ -289,7 +294,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500">By social tag</span>
+                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500"><span class="sr-only">By social tag</span>Tag Keluarga</span>
                     <a
                         href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
                             'social_tag' => null,
@@ -304,6 +309,28 @@
                                 'social_tag' => $tagField,
                             ]))) }}"
                             class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition {{ $selectedSocialTag === $tagField ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:bg-zinc-100' }}"
+                        >
+                            {{ $tagLabel }}
+                        </a>
+                    @endforeach
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Tag Murid / Jawatan Murid</span>
+                    <a
+                        href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
+                            'student_social_tag' => null,
+                        ]))) }}"
+                        class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold transition {{ $selectedStudentSocialTag === '' ? 'border-cyan-700 bg-cyan-700 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-cyan-300 hover:text-cyan-700' }}"
+                    >
+                        Semua tag murid
+                    </a>
+                    @foreach ($socialTagLabels as $tagField => $tagLabel)
+                        <a
+                            href="{{ route('teacher.records', array_filter(array_merge($baseQuery, [
+                                'student_social_tag' => $tagField,
+                            ]))) }}"
+                            class="inline-flex items-center rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition {{ $selectedStudentSocialTag === $tagField ? 'border-cyan-900 bg-cyan-900 text-white' : 'border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100' }}"
                         >
                             {{ $tagLabel }}
                         </a>
@@ -375,8 +402,16 @@
                                         @endif
                                     </td>
                                     <td class="px-5 py-4 font-semibold text-zinc-900">
+                                        @php
+                                            $studentRoleTags = collect($student->resolved_student_social_tags ?? []);
+                                        @endphp
                                         <div class="flex flex-wrap items-center gap-2">
                                             <span>{{ $student->full_name }}</span>
+                                            @foreach ($studentRoleTags as $tag)
+                                                <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
+                                                    {{ $tag }}
+                                                </span>
+                                            @endforeach
                                             @if (! $student->isActiveStatus())
                                                 <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
                                                     {{ $student->statusLabel() }}
@@ -399,7 +434,7 @@
                                             <div class="mt-1 flex flex-wrap gap-1">
                                                 @foreach ($studentTags as $tag)
                                                     <span class="inline-flex items-center rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-700">
-                                                        {{ $tag }}
+                                                        Family: {{ $tag }}
                                                     </span>
                                                 @endforeach
                                             </div>

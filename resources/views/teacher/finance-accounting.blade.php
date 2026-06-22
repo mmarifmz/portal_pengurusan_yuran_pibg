@@ -208,7 +208,8 @@
                                     Sumbangan {{ $yearB }}
                                 @endif
                             </th>
-                            <th class="px-5 py-3">Social Tag</th>
+                            <th class="px-5 py-3">Family Social Tags</th>
+                            <th class="px-5 py-3">Student Social Tags</th>
                             <th class="px-5 py-3">Pelan Bayaran</th>
                             <th class="px-5 py-3 text-right">Jumlah Yuran</th>
                             <th class="px-5 py-3 text-right">Jumlah Dibayar</th>
@@ -241,6 +242,15 @@
                                                     <div class="rounded-md border border-zinc-200 bg-white px-2.5 py-2">
                                                         <p class="font-medium text-zinc-800">{{ $student['full_name'] }}</p>
                                                         <p class="mt-0.5 text-zinc-500">Kelas: {{ $student['class_name'] }}</p>
+                                                        @if (! empty($student['social_tags']))
+                                                            <div class="mt-1 flex flex-wrap gap-1">
+                                                                @foreach ($student['social_tags'] as $tagName)
+                                                                    <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-800">
+                                                                        {{ $tagName }}
+                                                                    </span>
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -252,7 +262,8 @@
                                 <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearA}"], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row["yuran_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["yuran_{$yearB}"], 2) }}</td>
                                 <td class="px-5 py-4 text-right {{ (float) $row["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700 font-semibold" : "text-zinc-400" }}">RM {{ number_format((float) $row["sumbangan_{$yearB}"], 2) }}</td>
-                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['social_tag'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['family_social_tags'] }}</td>
+                                <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['student_social_tags'] }}</td>
                                 <td class="px-5 py-4 text-sm text-zinc-700">{{ $row['payment_plan'] }}</td>
                                 <td class="px-5 py-4 text-right text-zinc-700">RM {{ number_format((float) $row['plan_total_amount'], 2) }}</td>
                                 <td class="px-5 py-4 text-right font-semibold text-emerald-700">RM {{ number_format((float) $row['plan_paid_amount'], 2) }}</td>
@@ -277,7 +288,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="16" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
+                                <td colspan="17" class="px-5 py-8 text-center text-sm text-zinc-500">No family records found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -290,6 +301,7 @@
                             <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearA}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearA}"], 2) }}</td>
                             <td class="px-5 py-3 text-right {{ (float) $totals["yuran_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["yuran_{$yearB}"], 2) }}</td>
                             <td class="px-5 py-3 text-right {{ (float) $totals["sumbangan_{$yearB}"] > 0.01 ? "text-blue-700" : "text-zinc-400" }}">RM {{ number_format((float) $totals["sumbangan_{$yearB}"], 2) }}</td>
+                            <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3"></td>
                             <td class="px-5 py-3 text-right">RM {{ number_format((float) $totals['plan_total_amount'], 2) }}</td>
