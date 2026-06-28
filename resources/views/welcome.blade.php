@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     @php
-        $title = 'Portal Yuran PIBG SK Sri Petaling';
+        $title = 'Portal Sumbangan PIBG SK Sri Petaling';
     @endphp
     @include('partials.head')
 
@@ -79,7 +79,7 @@
                 <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="Logo SK Sri Petaling" class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm sm:h-14 sm:w-14" />
                 <div>
                     <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">Portal Rasmi</p>
-                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Yuran & Sumbangan PIBG SK Sri Petaling</p>
+                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Sumbangan PIBG SK Sri Petaling</p>
                 </div>
             </div>
 
@@ -99,10 +99,10 @@
                     </p>
                     <h1 class="hero-title mt-4 font-extrabold text-zinc-900">
                         Semakan & Bayaran
-                        <span class="text-[color:var(--brand-green)]">Yuran PIBG</span>
+                        <span class="text-[color:var(--brand-green)]">Sumbangan PIBG</span>
                     </h1>
                     <p class="mt-4 max-w-3xl text-sm leading-relaxed text-zinc-700 sm:text-base">
-                        Portal ini digunakan untuk semakan murid, semakan status yuran, dan rujukan pembayaran sumbangan PIBG.
+                        Portal ini digunakan untuk semakan murid, semakan status sumbangan, dan rujukan pembayaran sumbangan PIBG.
                         Kadar asas ialah <strong>RM100 setahun bagi setiap keluarga</strong> berdasarkan kod keluarga.
                     </p>
                     <form action="{{ route('parent.search') }}" method="GET" class="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -122,7 +122,7 @@
                         <div class="mt-3 space-y-2 text-sm text-zinc-700">
                             <p>&#x1F4C5; Takwim sekolah untuk perancangan aktiviti anak</p>
                             <p>&#x1F9FE; Rekod dan resit pembayaran bermula 2025</p>
-                            <p>&#x1F4B3; Pembayaran yuran terkini secara online</p>
+                            <p>&#x1F4B3; Pembayaran sumbangan terkini secara online</p>
                             <p>&#x1F510; Akses selamat tanpa kata laluan (TAC OTP)</p>
                         </div>
                     </div>
@@ -201,7 +201,7 @@
         <section class="mt-5 box p-5 sm:p-6">
             <div class="flex items-center justify-between gap-3">
                 <div>
-                    <h2 class="section-title text-lg font-bold text-[color:var(--brand-forest)]">Ranking Kutipan Yuran PIBG</h2>
+                    <h2 class="section-title text-lg font-bold text-[color:var(--brand-forest)]">Ranking Kutipan Sumbangan PIBG</h2>
                     <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
                 </div>
                 <a href="{{ route('parent.login.form') }}" class="text-sm font-semibold text-[color:var(--brand-green)] hover:opacity-80">Log masuk untuk lihat penuh</a>
@@ -249,8 +249,8 @@
 
     <footer class="border-t border-zinc-200/80 bg-white/80">
         <div class="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-4 text-center text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:text-left lg:px-8">
-            <p>Portal Yuran & Sumbangan PIBG SK Sri Petaling 2026</p>
-            <p>Demi kemudahan Semakan keluarga & bayaran yuran tahunan</p>
+            <p>Portal Sumbangan PIBG SK Sri Petaling 2026</p>
+            <p>Demi kemudahan semakan keluarga & bayaran sumbangan tahunan</p>
         </div>
     </footer>
 
@@ -260,9 +260,7 @@
         <script>
             document.addEventListener('DOMContentLoaded', () => {
                 const desktopMessages = @js(($recentPaymentToasts ?? collect())->values()->all());
-                const mobileMessages = desktopMessages.map((message) =>
-                    String(message).replace('Yuran + Sumbangan Tambahan', 'Yuran + Sumbangan')
-                );
+                const mobileMessages = desktopMessages;
 
                 const isMobile = window.matchMedia('(max-width: 640px)').matches;
                 const messages = isMobile ? mobileMessages : desktopMessages;

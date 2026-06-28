@@ -3,7 +3,7 @@
     "short_name": "PortalPIBG",
     "background_color": "#020617",
     "display": "standalone",
-    "description": "Portal pembayaran yuran PIBG untuk ibu bapa dan penjaga.",
+    "description": "Portal pembayaran sumbangan PIBG untuk ibu bapa dan penjaga.",
     "theme_color": "#0f172a",
     "start_url": "/",
     "icons": [

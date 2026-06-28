@@ -47,7 +47,7 @@ class TeacherPaymentNotificationMessageBuilder
             '💳 PECAHAN BAYARAN',
             '━━━━━━━━━━━━━━━',
             '',
-            '• Yuran PIBG:',
+            '• Sumbangan PIBG:',
             'RM'.$this->money($context['pibg_amount'] ?? 0),
         ];
 

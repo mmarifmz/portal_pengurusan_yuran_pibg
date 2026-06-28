@@ -2,15 +2,13 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class WhatsAppTacSender
 {
-    public function __construct(private readonly WaSenderService $waSenderService)
-    {
-    }
+    public function __construct(private readonly WaSenderService $waSenderService) {}
 
     public function sendTac(string $phone, string $code, ?string $familyCode = null): array
     {
@@ -22,7 +20,7 @@ class WhatsAppTacSender
             ."Requested for family code {$familyCodeText}\n"
             ."-----\n"
             ."Kod ini sah selama 5 minit.\n"
-            ."Source : https://yuranpibg.sripetaling.edu.my/"
+            .'Source : https://sumbangan-pibg.sripetaling.edu.my/'
         );
     }
 

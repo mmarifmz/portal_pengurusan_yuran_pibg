@@ -69,10 +69,10 @@ class PortalSeoSettingsController extends Controller
     private function defaultSettings(): array
     {
         return [
-            'seo_site_title' => 'Portal Yuran PIBG SK Sri Petaling',
-            'seo_description' => 'Portal rasmi semakan dan pembayaran Yuran & Sumbangan PIBG SK Sri Petaling, didukung oleh Avante Intelligence dan Arif.my sebagai inisiatif pendigitalan pendidikan sekolah.',
-            'seo_keywords' => 'Portal Yuran PIBG, SK Sri Petaling, Avante Intelligence, Arif.my, digitalisasi pendidikan, pendigitalan sekolah, semakan yuran, pembayaran PIBG, portal ibu bapa, inisiatif pendidikan digital',
-            'seo_og_site_name' => 'Portal Yuran PIBG SK Sri Petaling',
+            'seo_site_title' => 'Portal Sumbangan PIBG SK Sri Petaling',
+            'seo_description' => 'Portal rasmi semakan dan pembayaran Sumbangan PIBG SK Sri Petaling, didukung oleh Avante Intelligence dan Arif.my sebagai inisiatif pendigitalan pendidikan sekolah.',
+            'seo_keywords' => 'Portal Sumbangan PIBG, SK Sri Petaling, Avante Intelligence, Arif.my, digitalisasi pendidikan, pendigitalan sekolah, semakan sumbangan, pembayaran PIBG, portal ibu bapa, inisiatif pendidikan digital',
+            'seo_og_site_name' => 'Portal Sumbangan PIBG SK Sri Petaling',
             'seo_favicon_url' => asset('images/sksp-logo.png'),
             'school_logo_url' => asset('images/sksp-logo.png'),
             'order_id_shortform' => 'PBG',

@@ -23,7 +23,7 @@ it('builds summary message with whatsapp formatting and emojis', function () {
 
     $body = $messages[0]['body'];
 
-    expect($body)->toContain('📊 *Ringkasan Yuran & Sumbangan PIBG*');
+    expect($body)->toContain('📊 *Ringkasan Sumbangan PIBG*');
     expect($body)->toContain('Assalamualaikum / Salam Sejahtera *CIKGU KAREN*,');
     expect($body)->toContain('Berikut adalah status kutipan semasa bagi kelas *4 ANGGERIK* 🏫');
     expect($body)->toContain('📈 *Peratus Bayaran:* *80.77%*');

@@ -1,42 +1,41 @@
 <?php
 
+use App\Http\Controllers\AdminApiMonitorController;
 use App\Http\Controllers\BillingSetupController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ParentDashboardController;
+use App\Http\Controllers\ParentInviteAuthController;
+use App\Http\Controllers\ParentManagementController;
 use App\Http\Controllers\ParentOtpAuthController;
 use App\Http\Controllers\ParentPaymentController;
-use App\Http\Controllers\ReceiptController;
-use App\Http\Controllers\SchoolCalendarEventController;
-use App\Http\Controllers\PtaDashboardController;
-use App\Http\Controllers\PublicParentSearchController;
-use App\Http\Controllers\StudentFamilyController;
-use App\Http\Controllers\StudentImportController;
-use App\Http\Controllers\TeacherReconciliationController;
-use App\Http\Controllers\TeacherRecordsController;
-use App\Http\Controllers\TeacherUserManagementController;
-use App\Http\Controllers\TeacherFamilyLoginMonitorController;
-use App\Http\Controllers\TeacherFinanceAccountingController;
-use App\Http\Controllers\TeacherClassProgressController;
-use App\Http\Controllers\TeacherContributionLeaderboardController;
-use App\Http\Controllers\TeacherSocialTagController;
-use App\Http\Controllers\TeacherPaymentNotificationAdminController;
-use App\Http\Controllers\PaymentTesterUserController;
-use App\Http\Controllers\PortalSeoSettingsController;
-use App\Http\Controllers\VisitorLogController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\PortalSpaceController;
-use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\PaymentCampaignSettingController;
+use App\Http\Controllers\PaymentFunnelMonitorController;
 use App\Http\Controllers\PaymentGatewaySettingController;
 use App\Http\Controllers\PaymentPlanController;
-use App\Http\Controllers\ParentManagementController;
-use App\Http\Controllers\ParentInviteAuthController;
+use App\Http\Controllers\PaymentTesterUserController;
+use App\Http\Controllers\PortalSeoSettingsController;
+use App\Http\Controllers\PortalSpaceController;
+use App\Http\Controllers\PtaDashboardController;
+use App\Http\Controllers\PublicParentSearchController;
+use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\SchoolCalendarEventController;
 use App\Http\Controllers\SchoolCalendarPageController;
+use App\Http\Controllers\StudentFamilyController;
+use App\Http\Controllers\StudentImportController;
 use App\Http\Controllers\TeacherApiAccessController;
-use App\Http\Controllers\AdminApiMonitorController;
+use App\Http\Controllers\TeacherClassProgressController;
+use App\Http\Controllers\TeacherContributionLeaderboardController;
+use App\Http\Controllers\TeacherFamilyLoginMonitorController;
+use App\Http\Controllers\TeacherFinanceAccountingController;
+use App\Http\Controllers\TeacherPaymentNotificationAdminController;
+use App\Http\Controllers\TeacherReconciliationController;
+use App\Http\Controllers\TeacherRecordsController;
+use App\Http\Controllers\TeacherSocialTagController;
+use App\Http\Controllers\TeacherUserManagementController;
+use App\Http\Controllers\VisitorLogController;
 use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\Student;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -93,10 +92,10 @@ Route::get('/', function () {
             }
 
             if ($donation > 0) {
-                return "Parent in {$className} just paid Yuran + Sumbangan Tambahan";
+                return "Parent in {$className} just paid Sumbangan PIBG + Sumbangan Tambahan";
             }
 
-            return "Parent in {$className} just paid Yuran";
+            return "Parent in {$className} just paid Sumbangan PIBG";
         })
         ->filter()
         ->unique()
@@ -345,7 +344,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/whatsapp-queue/teacher-payment-notifications/{teacherPaymentNotification}/cancel', [TeacherPaymentNotificationAdminController::class, 'cancel'])
         ->middleware('role:system_admin')
         ->name('admin.whatsapp-queue.teacher-payment-notifications.cancel');
-    
+
     Route::get('/teacher/contribution-leaderboard', [TeacherContributionLeaderboardController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.contribution-leaderboard');

@@ -6,9 +6,7 @@ use Illuminate\Support\Collection;
 
 class MessageFormatterService
 {
-    public function __construct(private readonly int $safeMessageLength = 1500)
-    {
-    }
+    public function __construct(private readonly int $safeMessageLength = 1500) {}
 
     /**
      * @param  Collection<int, array<string, mixed>>  $paidStudents
@@ -29,7 +27,7 @@ class MessageFormatterService
         Collection $paidStudents
     ): array {
         $lines = [
-            '📊 *Ringkasan Yuran & Sumbangan PIBG*',
+            '📊 *Ringkasan Sumbangan PIBG*',
             '',
             "Assalamualaikum / Salam Sejahtera *{$teacherName}*,",
             '',
@@ -40,7 +38,7 @@ class MessageFormatterService
             "⏳ *Belum Bayar:* {$unpaidCount}",
             '📈 *Peratus Bayaran:* *'.number_format($paymentPercentage, 2).'%*',
             '',
-            '💰 *Yuran PIBG:* '.$this->formatCurrency($pibgAmount),
+            '💰 *Sumbangan PIBG:* '.$this->formatCurrency($pibgAmount),
             '🎁 *Sumbangan Tambahan:* '.$this->formatCurrency($additionalDonation),
             '🧾 *Jumlah Kutipan:* *'.$this->formatCurrency($totalCollected).'*',
             '🎯 *Sasaran Kutipan:* '.$this->formatCurrency($expectedAmount),
@@ -55,7 +53,7 @@ class MessageFormatterService
         $lines[] = '';
         $lines[] = '🙏 Terima kasih atas bantuan cikgu untuk mengingatkan ibu bapa yang masih belum membuat bayaran.';
 
-        return $this->chunkMessage('summary', '📊 *Ringkasan Yuran & Sumbangan PIBG*', $lines);
+        return $this->chunkMessage('summary', '📊 *Ringkasan Sumbangan PIBG*', $lines);
     }
 
     /**

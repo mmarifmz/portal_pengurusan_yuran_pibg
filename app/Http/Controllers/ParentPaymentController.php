@@ -11,20 +11,21 @@ use App\Models\PaymentAllocation;
 use App\Models\PaymentGatewaySetting;
 use App\Models\SiteSetting;
 use App\Models\Student;
+use App\Models\User;
 use App\Services\FamilyPaymentPlanService;
 use App\Services\FamilyPaymentSettlementService;
 use App\Services\ParentAccessLogService;
 use App\Services\ParentAccountService;
-use App\Services\PaymentCampaignService;
 use App\Services\ParentPaymentNotificationService;
+use App\Services\PaymentCampaignService;
 use App\Services\TeacherPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -41,8 +42,7 @@ class ParentPaymentController extends Controller
         private readonly TeacherPaymentNotificationService $teacherPaymentNotificationService,
         private readonly ParentAccountService $parentAccountService,
         private readonly ParentAccessLogService $parentAccessLogService
-    ) {
-    }
+    ) {}
 
     public function checkout(Request $request, FamilyBilling $familyBilling): View|RedirectResponse
     {
@@ -157,6 +157,7 @@ class ParentPaymentController extends Controller
                 }
 
                 $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+
                 return $legacyName !== '' && $childNames->contains($legacyName);
             })
             ->values();
@@ -166,6 +167,7 @@ class ParentPaymentController extends Controller
                 $reference = trim((string) $payment->payment_reference);
                 if ($reference !== '') {
                     $normalizedReference = preg_replace('/\s+/', '', mb_strtoupper($reference)) ?? '';
+
                     return $normalizedReference !== '' ? $normalizedReference : $reference;
                 }
 
@@ -234,6 +236,7 @@ class ParentPaymentController extends Controller
         }
 
         $derived = (float) $transaction->amount - (float) ($transaction->fee_amount_paid ?? 0);
+
         return round(max(0, $derived), 2);
     }
 
@@ -333,14 +336,14 @@ class ParentPaymentController extends Controller
         $paymentGatewaySetting = PaymentGatewaySetting::current();
         $this->supersedePendingTransactions($familyBilling);
         $billDescription = $this->buildToyyibPayBillDescription(
-            sprintf('Yuran PIBG %d', (int) $familyBilling->billing_year),
+            sprintf('Sumbangan PIBG %d', (int) $familyBilling->billing_year),
             $outstanding,
             $donation
         );
 
         try {
             $billCode = $this->toyyibPayService->createBill(array_merge([
-                'billName' => "Yuran PIBG {$familyBilling->billing_year} - {$familyBilling->family_code}",
+                'billName' => "Sumbangan PIBG {$familyBilling->billing_year} - {$familyBilling->family_code}",
                 'billDescription' => $billDescription,
                 'billPriceSetting' => 1,
                 'billPayorInfo' => 1,
@@ -855,7 +858,7 @@ class ParentPaymentController extends Controller
             ]);
         }
 
-        return $pdf->download("resit-transaksi-yuran-pibg-{$externalOrderId}.pdf");
+        return $pdf->download("resit-transaksi-sumbangan-pibg-{$externalOrderId}.pdf");
     }
 
     private function schoolLogoUrl(): string
@@ -942,7 +945,6 @@ class ParentPaymentController extends Controller
 
     }
 
-
     private function generateExternalOrderId(): string
     {
         for ($attempt = 0; $attempt < 8; $attempt++) {
@@ -955,6 +957,7 @@ class ParentPaymentController extends Controller
 
         return 'PBG-'.strtoupper((string) Str::ulid());
     }
+
     private function resolveFullPaymentDonation(array $validated): float
     {
         return round(max(
@@ -1105,7 +1108,7 @@ class ParentPaymentController extends Controller
         $isPlaceholderEmail = str_ends_with($payerEmail, '@placeholder.local');
 
         if ($isPlaceholderName || $isPlaceholderEmail) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'payer_name' => 'Sila pastikan nama ibu/bapa/penjaga yang dimasukkan adalah tepat dan sebenar sebelum meneruskan pembayaran.',
                 'payer_email' => 'Sila gunakan alamat email yang sah dan aktif.',
             ]);
@@ -1279,7 +1282,7 @@ class ParentPaymentController extends Controller
     {
         $user = auth()->user();
 
-        return $user instanceof \App\Models\User
+        return $user instanceof User
             ? $this->parentAccountService->accessibleFamilyCodesForUser($user)
             : collect();
     }

@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     @php
-        $title = 'Carian Murid | Portal Yuran PIBG SK Sri Petaling';
+        $title = 'Carian Murid | Portal Sumbangan PIBG SK Sri Petaling';
     @endphp
     @include('partials.head')
 
@@ -113,7 +113,7 @@
                 <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="Logo SK Sri Petaling" class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm sm:h-14 sm:w-14" />
                 <div>
                     <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">Portal Rasmi</p>
-                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Yuran &amp; Sumbangan PIBG SK Sri Petaling</p>
+                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Sumbangan PIBG SK Sri Petaling</p>
                 </div>
             </a>
 
@@ -282,7 +282,7 @@
                                                 @php
                                                     $buttonLabel = $family['billing']->outstanding_amount <= 0
                                                         ? 'Log Masuk Portal Ibu Bapa'
-                                                        : ($family['has_registered_phone'] ? 'Log Masuk & Bayar Yuran' : 'Daftar Masuk & Bayar Yuran');
+                                                        : ($family['has_registered_phone'] ? 'Log Masuk & Bayar Sumbangan' : 'Daftar Masuk & Bayar Sumbangan');
                                                     $buttonClasses = $family['billing']->outstanding_amount <= 0
                                                         ? 'bg-sky-600 hover:bg-sky-700'
                                                         : ($family['has_registered_phone'] ? 'bg-[color:var(--brand-green)] hover:bg-[color:var(--brand-forest)]' : 'bg-orange-500 hover:bg-orange-600');
@@ -329,8 +329,8 @@
 
     <footer class="border-t border-zinc-200/80 bg-white/80">
         <div class="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-4 text-center text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:text-left lg:px-8">
-            <p>Portal Yuran &amp; Sumbangan PIBG SK Sri Petaling 2026</p>
-            <p>Demi kemudahan semakan keluarga &amp; bayaran yuran tahunan</p>
+            <p>Portal Sumbangan PIBG SK Sri Petaling 2026</p>
+            <p>Demi kemudahan semakan keluarga &amp; bayaran sumbangan tahunan</p>
         </div>
     </footer>
 

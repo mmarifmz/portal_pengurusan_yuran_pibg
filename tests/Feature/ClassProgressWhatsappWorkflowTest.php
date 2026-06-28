@@ -24,7 +24,7 @@ it('class whatsapp preview returns 3 message parts', function () {
 
     $parts = collect($response->json('generated_messages'))->pluck('message_part')->unique()->values()->all();
     expect($parts)->toBe(['summary', 'paid_list', 'unpaid_list']);
-    expect($response->json('generated_messages.0.body'))->toContain('📊 *Ringkasan Yuran & Sumbangan PIBG*');
+    expect($response->json('generated_messages.0.body'))->toContain('📊 *Ringkasan Sumbangan PIBG*');
     expect($response->json('generated_messages.1.body'))->toContain('✅ *1 Angsana - Senarai Telah Bayar*');
     expect($response->json('generated_messages.2.body'))->toContain('⏳ *1 Angsana - Senarai Belum Bayar*');
 });

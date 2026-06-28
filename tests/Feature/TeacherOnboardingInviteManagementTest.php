@@ -12,7 +12,7 @@ beforeEach(function () {
 it('super admin can generate whatsapp web onboarding invite link without queueing or calling wasender', function () {
     config()->set('teacher.default_password', 'change-this-password');
 
-    $sender = \Mockery::mock(WhatsAppTacSender::class);
+    $sender = Mockery::mock(WhatsAppTacSender::class);
     $sender->shouldNotReceive('sendMessage');
     $this->app->instance(WhatsAppTacSender::class, $sender);
 
@@ -82,7 +82,7 @@ it('generated onboarding message stays visible after full page reload', function
 
     $page->assertOk();
     $page->assertSee('CIKGU NADIA', false);
-    $page->assertSee('Portal Yuran PIBG SK Sri Petaling', false);
+    $page->assertSee('Portal Sumbangan PIBG SK Sri Petaling', false);
     $page->assertSee('Kata Laluan Sementara', false);
     $page->assertSee('change-this-password', false);
 });
@@ -249,7 +249,7 @@ it('mark sent keeps onboarding message visible after refresh', function () {
 
     $page->assertOk();
     $page->assertSee('Sent Manually', false);
-    $page->assertSee('Portal Yuran PIBG SK Sri Petaling', false);
+    $page->assertSee('Portal Sumbangan PIBG SK Sri Petaling', false);
     $page->assertSee('Kata Laluan Sementara', false);
     $page->assertSee('change-this-password', false);
 });

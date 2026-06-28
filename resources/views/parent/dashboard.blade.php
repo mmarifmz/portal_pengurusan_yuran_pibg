@@ -177,14 +177,14 @@
                                 href="{{ route('parent.payments.checkout', $nextOutstandingBilling) }}"
                                 class="portal-pay-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
                             >
-                                <span>Bayar Yuran PIBG {{ $billingYear }}</span>
+                                <span>Bayar Sumbangan PIBG {{ $billingYear }}</span>
                             </a>
                         @else
                             <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                                 @if (! empty($hasAdditionalDonationForLatestPaidYear))
-                                    Tahniah ! Anda telah membayar yuran PIBG serta memberi sumbangan tambahan bagi tahun {{ $latestPaidYear ?? $billingYear }}.
+                                    Tahniah ! Anda telah membayar sumbangan PIBG serta memberi sumbangan tambahan bagi tahun {{ $latestPaidYear ?? $billingYear }}.
                                 @else
-                                    Tahniah ! Anda telah membayar yuran PIBG bagi tahun {{ $latestPaidYear ?? $billingYear }}.
+                                    Tahniah ! Anda telah membayar sumbangan PIBG bagi tahun {{ $latestPaidYear ?? $billingYear }}.
                                 @endif
                             </div>
                         @endif
@@ -216,7 +216,7 @@
                                 href="{{ route('parent.payments.receipt', $latestCurrentYearReceipt->external_order_id) }}"
                                 class="portal-outline-btn inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition"
                             >
-                                Muat Turun Resit Yuran {{ $billingYear }}
+                                Muat Turun Resit Sumbangan {{ $billingYear }}
                             </a>
                         @endif
                         @if (! empty($latestPastYearReceipt))
@@ -296,7 +296,7 @@
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="portal-table-title text-lg font-bold">Status Yuran PIBG Keluarga</h2>
+                        <h2 class="portal-table-title text-lg font-bold">Status Sumbangan PIBG Keluarga</h2>
                         <p class="mt-1 text-sm text-zinc-600">Ringkasan bayaran dan Resit</p>
                     </div>
                     @if (! empty($latestCurrentYearReceipt))
@@ -304,7 +304,7 @@
                             href="{{ route('parent.payments.receipt', $latestCurrentYearReceipt->external_order_id) }}"
                             class="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
                         >
-                            Muat Turun Resit Yuran {{ $billingYear }}
+                            Muat Turun Resit Sumbangan {{ $billingYear }}
                         </a>
                     @endif
                 </div>
@@ -378,7 +378,7 @@
             <div class="border-b border-zinc-200 bg-zinc-50 px-6 py-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 class="portal-table-title text-lg font-bold">Rekod Bayaran Yuran PIBG Tahun {{ $billingYear - 1 }}</h2>
+                        <h2 class="portal-table-title text-lg font-bold">Rekod Bayaran Sumbangan PIBG Tahun {{ $billingYear - 1 }}</h2>
                         <p class="mt-1 text-sm text-zinc-600">Senarai pembayaran berjaya & Resit</p>
                         <p class="mt-2 text-xs font-semibold text-zinc-700">
                             Total paid: RM {{ number_format($legacyPaidTotal ?? 0, 2) }}
@@ -434,7 +434,7 @@
 <section class="portal-card p-6">
             <div class="flex items-center justify-between gap-3">
                 <div>
-                    <h2 class="portal-table-title text-lg font-bold">Ranking Kutipan Yuran PIBG</h2>
+                    <h2 class="portal-table-title text-lg font-bold">Ranking Kutipan Sumbangan PIBG</h2>
                     <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
                 </div>
                 <a href="{{ route('parent.dashboard.class-progress') }}" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800">

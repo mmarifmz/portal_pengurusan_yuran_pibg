@@ -125,10 +125,10 @@ class AppServiceProvider extends ServiceProvider
                     }
 
                     if ($donation > 0) {
-                        return "Parent in {$className} just paid Yuran + Sumbangan Tambahan";
+                        return "Parent in {$className} just paid Sumbangan PIBG + Sumbangan Tambahan";
                     }
 
-                    return "Parent in {$className} just paid Yuran";
+                    return "Parent in {$className} just paid Sumbangan PIBG";
                 })
                 ->filter()
                 ->unique()

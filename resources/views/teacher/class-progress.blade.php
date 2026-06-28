@@ -37,7 +37,7 @@
             <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">{{ $canManageWhatsapp ? 'SUPER ADMIN VIEW' : 'TEACHER DASHBOARD' }}</p>
-                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Pemantauan Kutipan Yuran &amp; Sumbangan PIBG Mengikut Kelas</h1>
+                    <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Pemantauan Kutipan Sumbangan PIBG Mengikut Kelas</h1>
                     <p class="mt-1 max-w-3xl text-sm text-zinc-600">Pantau status bayaran PIBG, sumbangan tambahan, baki tertunggak dan prestasi kutipan setiap kelas bagi sesi {{ $billingYear }}.</p>
                     <div class="mt-3 space-y-2 text-sm text-zinc-600">
                         <p>📌 Kelas sendiri akan dipaparkan di bahagian atas sebagai <span class="font-semibold italic text-zinc-800">Kelas Saya</span> untuk semakan pantas.</p>
@@ -169,7 +169,7 @@
                                                     <span class="text-lg font-bold text-zinc-900">RM {{ number_format((float) $row['jumlah_kutipan'], 2) }}</span>
                                                 </div>
                                                 <div class="mt-2 flex items-center justify-between gap-3 text-sm">
-                                                    <span class="text-zinc-500">Yuran PIBG</span>
+                                                    <span class="text-zinc-500">Sumbangan PIBG</span>
                                                     <span class="font-semibold text-emerald-700">RM {{ number_format((float) $row['yuran_collected'], 2) }}</span>
                                                 </div>
                                                 <div class="mt-1 flex items-center justify-between gap-3 text-sm">
@@ -738,7 +738,7 @@
                     ['Telah Bayar', stats.paid_count],
                     ['Belum Bayar', stats.unpaid_count],
                     ['Peratus Bayaran', `${Number(stats.payment_percentage || 0).toFixed(2)}%`],
-                    ['Yuran PIBG', `RM ${Number(stats.pibg_amount || 0).toFixed(2)}`],
+                    ['Sumbangan PIBG', `RM ${Number(stats.pibg_amount || 0).toFixed(2)}`],
                     ['Sumbangan Tambahan', `RM ${Number(stats.additional_donation || 0).toFixed(2)}`],
                     ['Jumlah Kutipan', `RM ${Number(stats.total_collected || 0).toFixed(2)}`],
                     ['Ranking', `#${stats.current_ranking || '-'}`],

@@ -127,7 +127,7 @@ class TeacherOnboardingInviteService
     public function buildPreview(?User $teacher, ?string $temporaryPassword = null, ?string $dashboardUrl = null): string
     {
         if ($teacher === null) {
-            return "Pratonton mesej akan dipaparkan di sini selepas sekurang-kurangnya seorang guru yang layak ditemui.";
+            return 'Pratonton mesej akan dipaparkan di sini selepas sekurang-kurangnya seorang guru yang layak ditemui.';
         }
 
         return $this->buildMessage(
@@ -200,7 +200,7 @@ class TeacherOnboardingInviteService
 
         $lines = [
             "Assalamualaikum / Salam Sejahtera *{$teacher->name}*,",
-            'Akaun *Guru Kelas* untuk *Portal Yuran PIBG SK Sri Petaling* telah disediakan.',
+            'Akaun *Guru Kelas* untuk *Portal Sumbangan PIBG SK Sri Petaling* telah disediakan.',
             "🏫 *Kelas:* {$className}",
             "🔗 *Pautan Login:*\n{$dashboardUrl}",
             "📧 *Emel Login:*\n{$teacher->email}",

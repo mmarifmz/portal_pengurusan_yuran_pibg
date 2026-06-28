@@ -10,7 +10,6 @@ use App\Services\WhatsAppMessageQueueService;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class SendQueuedWhatsAppMessage implements ShouldQueue
@@ -83,7 +82,7 @@ class SendQueuedWhatsAppMessage implements ShouldQueue
                 ])->save();
 
                 WhatsAppApiThrottleLog::query()->create([
-                    'app_name' => (string) config('whatsapp.app_name', config('app.name', 'Portal Yuran PIBG')),
+                    'app_name' => (string) config('whatsapp.app_name', config('app.name', 'Portal Sumbangan PIBG')),
                     'message_id' => $message->id,
                     'recipient_phone' => (string) $message->recipient_phone,
                     'sent_at' => now(),

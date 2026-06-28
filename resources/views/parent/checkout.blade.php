@@ -87,10 +87,10 @@
                 </h2>
                 <div class="mt-4 rounded-2xl border p-4" style="border-color:rgba(255,255,255,0.26);background:rgba(255,255,255,0.12);">
                     @if (! empty($alreadyPaidCurrentYear))
-                        <p class="text-sm font-semibold" style="color:rgba(255,255,255,0.95);">Yuran PIBG {{ $familyBilling->billing_year }} telah dijelaskan.</p>
-                        <p class="mt-1 text-3xl font-black tracking-tight">Terima kasih, bayaran yuran tahunan telah selesai.</p>
+                        <p class="text-sm font-semibold" style="color:rgba(255,255,255,0.95);">Sumbangan PIBG {{ $familyBilling->billing_year }} telah dijelaskan.</p>
+                        <p class="mt-1 text-3xl font-black tracking-tight">Terima kasih, bayaran sumbangan tahunan telah selesai.</p>
                     @else
-                        <p class="text-sm" style="color:rgba(255,255,255,0.9);">Yuran PIBG {{ $familyBilling->billing_year }}</p>
+                        <p class="text-sm" style="color:rgba(255,255,255,0.9);">Sumbangan PIBG {{ $familyBilling->billing_year }}</p>
                         <p class="mt-1 text-5xl font-black tracking-tight">RM {{ number_format($baseAmount, 2) }}</p>
                     @endif
                 </div>
@@ -101,7 +101,7 @@
                         <p style="color:rgba(236,253,243,0.92);">Anda boleh memberi sumbangan tambahan pada bila-bila masa sepanjang tahun.</p>
                         <p style="color:rgba(236,253,243,0.92);">Sila nyatakan niat/tujuan sumbangan tambahan di ruangan yang disediakan.</p>
                     @else
-                        <p style="color:rgba(236,253,243,0.92);">Yuran asas dikenakan sekali setahun bagi setiap keluarga.</p>
+                        <p style="color:rgba(236,253,243,0.92);">Sumbangan asas dikenakan sekali setahun bagi setiap keluarga.</p>
                     @endif
                 </div>
 
@@ -119,7 +119,7 @@
 
                         <div class="mt-4 grid gap-3 sm:grid-cols-3">
                             <div class="rounded-2xl border px-4 py-3 text-sm" style="border-color:#d5e7dc;background:#f8fffb;">
-                                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Yuran</p>
+                                <p class="text-xs uppercase tracking-wide text-zinc-500">Jumlah Sumbangan</p>
                                 <p class="mt-1 text-lg font-bold text-zinc-900">RM {{ number_format((float) $paymentPlan->total_amount, 2) }}</p>
                             </div>
                             <div class="rounded-2xl border px-4 py-3 text-sm" style="border-color:#d5e7dc;background:#f8fffb;">
@@ -195,7 +195,7 @@
                 <p class="mt-2 text-sm text-zinc-600">{{ $paymentGatewayNotice }}</p>
                 @if (! empty($alreadyPaidCurrentYear))
                     <div class="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-                        Terima kasih dan tahniah. Yuran PIBG tahun semasa telah selesai, dan anda masih boleh memberi <span class="font-extrabold">Sumbangan Tambahan</span> sepanjang tahun.
+                        Terima kasih dan tahniah. Sumbangan PIBG tahun semasa telah selesai, dan anda masih boleh memberi <span class="font-extrabold">Sumbangan Tambahan</span> sepanjang tahun.
                     </div>
                 @endif
                 @if (! empty($isTesterMode))
@@ -208,7 +208,7 @@
                         Anda boleh teruskan sumbangan tambahan pada bila-bila masa sepanjang tahun.
                         <span class="font-semibold">Sila nyatakan niat/tujuan sumbangan tambahan</span> sebelum membuat bayaran.
                     @else
-                        Jumlah akhir = <span class="font-semibold">Yuran asas</span> + <span class="font-semibold">Sumbangan tambahan (pilihan)</span>.
+                        Jumlah akhir = <span class="font-semibold">Sumbangan asas</span> + <span class="font-semibold">Sumbangan tambahan (pilihan)</span>.
                         Sumbangan tambahan membantu aktiviti PIBG sekolah.
                     @endif
                 </div>
@@ -339,7 +339,7 @@
                                                             <div>
                                                                 <p class="text-sm font-bold text-zinc-900">Sumbangan Tambahan PIBG</p>
                                                                 <p class="mt-1 text-xs leading-relaxed text-zinc-600">
-                                                                    Sumbangan tambahan adalah pilihan. Jumlah ini akan direkodkan berasingan daripada yuran.
+                                                                    Sumbangan tambahan adalah pilihan. Jumlah ini akan direkodkan berasingan daripada sumbangan asas.
                                                                 </p>
                                                             </div>
                                                             <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
@@ -412,7 +412,7 @@
                                                                 </strong>
                                                             </div>
                                                             <p class="mt-1 text-xs text-zinc-600">
-                                                                Yuran: RM {{ number_format($installmentAmount, 2) }}
+                                                                Sumbangan asas: RM {{ number_format($installmentAmount, 2) }}
                                                                 <span data-installment-breakdown>
                                                                     @if ($resolvedDonationAmount > 0)
                                                                         + Sumbangan: RM {{ number_format($resolvedDonationAmount, 2) }}
@@ -512,7 +512,7 @@
 
                         <div class="space-y-2 rounded-2xl border border-zinc-200 bg-[color:var(--brand-soft)] px-4 py-3 text-sm">
                             <div class="flex items-center justify-between text-zinc-600">
-                                <span>Yuran Asas</span>
+                                <span>Sumbangan Asas</span>
                                 <strong id="baseAmountLabel">RM {{ number_format($baseAmount, 2) }}</strong>
                             </div>
                             <div class="flex items-center justify-between text-zinc-600">

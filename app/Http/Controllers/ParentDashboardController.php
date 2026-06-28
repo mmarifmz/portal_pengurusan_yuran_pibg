@@ -7,11 +7,10 @@ use App\Models\FamilyPaymentTransaction;
 use App\Models\LegacyStudentPayment;
 use App\Models\SiteSetting;
 use App\Models\Student;
+use App\Models\User;
 use App\Services\ParentAccessLogService;
 use App\Services\ParentAccountService;
-use App\Support\ParentPhone;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,8 +22,7 @@ class ParentDashboardController extends Controller
     public function __construct(
         private readonly ParentAccountService $parentAccountService,
         private readonly ParentAccessLogService $parentAccessLogService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -102,6 +100,7 @@ class ParentDashboardController extends Controller
                 }
 
                 $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+
                 return $legacyName !== '' && $childNames->contains($legacyName);
             })
             ->map(function (LegacyStudentPayment $payment): LegacyStudentPayment {
@@ -263,6 +262,7 @@ class ParentDashboardController extends Controller
                 }
 
                 $legacyName = $this->normalizeNameForLegacyMatch((string) $payment->student_name);
+
                 return $legacyName !== '' && $childNames->contains($legacyName);
             })
             ->map(function (LegacyStudentPayment $payment): LegacyStudentPayment {
@@ -311,6 +311,7 @@ class ParentDashboardController extends Controller
 
         return $pdf->download("resit-sejarah-bayaran-{$selectedYear}{$rujukanSuffix}.pdf");
     }
+
     private function schoolLogoPdfSource(string $schoolLogoUrl): string
     {
         $path = parse_url($schoolLogoUrl, PHP_URL_PATH);
@@ -324,6 +325,7 @@ class ParentDashboardController extends Controller
 
         return public_path('images/sksp-logo.png');
     }
+
     private function legacyReceiptRujukanSuffix(Collection $payments): string
     {
         $rujukan = (string) ($payments
@@ -464,10 +466,10 @@ class ParentDashboardController extends Controller
                 }
 
                 if ($donation > 0) {
-                    return "Parent in {$className} just paid Yuran + Sumbangan Tambahan";
+                    return "Parent in {$className} just paid Sumbangan PIBG + Sumbangan Tambahan";
                 }
 
-                return "Parent in {$className} just paid Yuran";
+                return "Parent in {$className} just paid Sumbangan PIBG";
             })
             ->filter()
             ->unique()
@@ -490,7 +492,7 @@ class ParentDashboardController extends Controller
     {
         $user = auth()->user();
 
-        return $user instanceof \App\Models\User
+        return $user instanceof User
             ? $this->parentAccountService->accessibleFamilyCodesForUser($user)
             : collect();
     }

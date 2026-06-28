@@ -725,7 +725,7 @@
             const usesExistingAccount = !resetSelectedTeachers?.checked && row.getAttribute('data-uses-existing-account') === '1';
             const lines = [
                 `Assalamualaikum / Salam Sejahtera *${teacherName}*,`,
-                'Akaun *Guru Kelas* untuk *Portal Yuran PIBG SK Sri Petaling* telah disediakan.',
+                'Akaun *Guru Kelas* untuk *Portal Sumbangan PIBG SK Sri Petaling* telah disediakan.',
                 `🏫 *Kelas:* ${className}`,
                 `🔗 *Pautan Login:*\n${dashboardUrl}`,
                 `📧 *Emel Login:*\n${teacherEmail}`,

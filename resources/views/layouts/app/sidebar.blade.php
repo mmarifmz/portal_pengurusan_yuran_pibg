@@ -81,7 +81,7 @@
                 <a href="{{ $sidebarHomeRoute }}" class="flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-zinc-200/80 hover:bg-[color:var(--portal-soft)]" wire:navigate>
                     <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="SK Sri Petaling crest" class="h-10 w-10 rounded-full border border-zinc-200 bg-white p-1 shadow-sm" />
                     <div class="flex flex-col text-sm font-semibold leading-tight">
-                        <span class="text-[color:var(--portal-forest)]">Portal Yuran PIBG</span>
+                        <span class="text-[color:var(--portal-forest)]">Portal Sumbangan PIBG</span>
                         <span class="text-xs text-zinc-500">Sekolah Kebangsaan Sri Petaling</span>
                     </div>
                 </a>
@@ -313,9 +313,7 @@
             <script>
                 document.addEventListener('DOMContentLoaded', () => {
                     const desktopMessages = @js(($globalRecentPaymentToasts ?? collect())->values()->all());
-                    const mobileMessages = desktopMessages.map((message) =>
-                        String(message).replace('Yuran + Sumbangan Tambahan', 'Yuran + Sumbangan')
-                    );
+                    const mobileMessages = desktopMessages;
 
                     const isMobile = window.matchMedia('(max-width: 640px)').matches;
                     const messages = isMobile ? mobileMessages : desktopMessages;

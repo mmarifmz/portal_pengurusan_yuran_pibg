@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SendQueuedWhatsAppMessage;
 use App\Models\FamilyBilling;
-use App\Models\FamilyPaymentTransaction;
 use App\Models\FamilyBillingPhone;
+use App\Models\FamilyPaymentTransaction;
 use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginInvite;
 use App\Models\ParentLoginOtp;
@@ -14,8 +14,8 @@ use App\Models\User;
 use App\Models\WhatsAppMessageQueue;
 use App\Models\WhatsAppQueueBatch;
 use App\Services\ClassTeacherWhatsAppReportService;
-use App\Services\WhatsAppMessageQueueService;
 use App\Services\ParentPaymentNotificationService;
+use App\Services\WhatsAppMessageQueueService;
 use App\Services\WhatsAppTacSender;
 use App\Support\MalaysianPhone;
 use App\Support\ParentPhone;
@@ -170,8 +170,8 @@ class PaymentTesterUserController extends Controller
 
         $loginLink = route('parent.invite.login', ['token' => $invite->token]);
         $message = "Assalamualaikum & Salam Sejahtera, nombor telefon anda telah didaftarkan ke Portal PIBG SSP secara manual.\n"
-            ."Sila klik link ini untuk membuat bayaran yuran : <{$loginLink}>\n"
-            ."Pautan ini sah selama 24 jam.";
+            ."Sila klik link ini untuk membuat bayaran sumbangan : <{$loginLink}>\n"
+            .'Pautan ini sah selama 24 jam.';
 
         $sendWhatsapp = (bool) ($validated['send_whatsapp'] ?? true);
 
@@ -519,6 +519,7 @@ class PaymentTesterUserController extends Controller
                 if ($existsTarget) {
                     $row->delete();
                     $familyPhoneDeleted++;
+
                     continue;
                 }
 

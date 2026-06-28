@@ -2,7 +2,7 @@
 <html lang="ms">
 <head>
     <meta charset="utf-8">
-    <title>Resit Transaksi Yuran PIBG SK Sri Petaling</title>
+    <title>Resit Transaksi Sumbangan PIBG SK Sri Petaling</title>
     <style>
         body {
             font-family: DejaVu Sans, Arial, sans-serif;
@@ -179,8 +179,8 @@
                 <table class="hero-header">
                     <tr>
                         <td>
-                            <p class="hero-meta">Portal Yuran PIBG</p>
-                            <p class="hero-title">Resit Transaksi Yuran PIBG</p>
+                            <p class="hero-meta">Portal Sumbangan PIBG</p>
+                            <p class="hero-title">Resit Transaksi Sumbangan PIBG</p>
                             <p class="hero-sub">Rujukan {{ $transaction->receipt_uuid }}</p>
                         </td>
                         <td style="text-align: right; width: 70px;"><img src="{{ $schoolLogoPdfSource ?? public_path('images/sksp-logo.png') }}" alt="Logo Sekolah" class="hero-logo"></td>
@@ -245,7 +245,7 @@
                 <p class="label" style="margin-top: 2px;">Pecahan bayaran</p>
                 <table class="breakdown" style="margin-top: 8px;">
                     <tr>
-                        <td>Yuran Dibayar</td>
+                        <td>Sumbangan Dibayar</td>
                         <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2) }}</td>
                     </tr>
                     <tr>
@@ -257,7 +257,7 @@
                         <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['transaction_amount'] ?? $transaction->amount), 2) }}</td>
                     </tr>
                     <tr>
-                        <td>Baki Yuran</td>
+                        <td>Baki Sumbangan</td>
                         <td style="text-align: right; font-weight: 700;">RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}</td>
                     </tr>
                 </table>

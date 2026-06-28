@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Password;
 
 class TeacherUserInviteService
 {
-    public function __construct(private readonly WhatsAppTacSender $whatsAppTacSender)
-    {
-    }
+    public function __construct(private readonly WhatsAppTacSender $whatsAppTacSender) {}
 
     /**
      * @return array{
@@ -127,7 +125,7 @@ class TeacherUserInviteService
         if ($usesExistingAccount) {
             return implode("\n\n", [
                 "Assalamualaikum / Salam Sejahtera {$teacher->name},",
-                'Akses Guru Kelas untuk Portal Yuran PIBG SK Sri Petaling telah diaktifkan pada akaun sedia ada cikgu.',
+                'Akses Guru Kelas untuk Portal Sumbangan PIBG SK Sri Petaling telah diaktifkan pada akaun sedia ada cikgu.',
                 "Kelas: {$className}",
                 "Sila login menggunakan akaun sedia ada melalui pautan berikut:\n{$dashboardUrl}",
                 'Selepas login, cikgu boleh pilih Teacher Dashboard untuk melihat status bayaran kelas.',
@@ -137,7 +135,7 @@ class TeacherUserInviteService
 
         return implode("\n\n", [
             "Assalamualaikum / Salam Sejahtera {$teacher->name},",
-            'Akaun Guru Kelas untuk Portal Yuran PIBG SK Sri Petaling telah diwujudkan.',
+            'Akaun Guru Kelas untuk Portal Sumbangan PIBG SK Sri Petaling telah diwujudkan.',
             "Kelas: {$className}",
             "Sila login melalui pautan berikut:\n{$dashboardUrl}",
             "Emel: {$teacher->email}",

@@ -2,7 +2,7 @@
     <div class="space-y-6">
         <div class="flex flex-col gap-1">
             <h1 class="text-2xl font-bold text-gray-900">Finance Accounting Dashboard</h1>
-            <p class="text-sm text-gray-500">Family-level yuran and sumbangan view for {{ $yearA }} and {{ $yearB }}.</p>
+            <p class="text-sm text-gray-500">Family-level sumbangan view for {{ $yearA }} and {{ $yearB }}.</p>
         </div>
 
         <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -82,7 +82,7 @@
                 </label>
 
                 <label class="text-xs font-semibold text-zinc-600">
-                    Yuran/Sumbangan Year A
+                    Sumbangan Year A
                     <input
                         type="number"
                         name="year_a"
@@ -94,7 +94,7 @@
                 </label>
 
                 <label class="text-xs font-semibold text-zinc-600">
-                    Yuran/Sumbangan Year B
+                    Sumbangan Year B
                     <input
                         type="number"
                         name="year_b"
@@ -154,13 +154,13 @@
                                         $nextCurrentDir = $sortBy === 'current_year' && $sortDir === 'asc' ? 'desc' : 'asc';
                                     @endphp
                                     <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year', 'sort_dir' => $nextCurrentDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
-                                        Yuran {{ $yearA }}
+                                        Sumbangan {{ $yearA }}
                                         @if ($sortBy === 'current_year')
                                             <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
                                         @endif
                                     </a>
                                 @else
-                                    Yuran {{ $yearA }}
+                                    Sumbangan {{ $yearA }}
                                 @endif
                             </th>
                             <th class="px-5 py-3 text-right">
@@ -184,13 +184,13 @@
                                         $nextCurrentDir = $sortBy === 'current_year' && $sortDir === 'asc' ? 'desc' : 'asc';
                                     @endphp
                                     <a href="{{ route('teacher.finance-accounting', array_merge(request()->query(), ['sort_by' => 'current_year', 'sort_dir' => $nextCurrentDir])) }}" class="inline-flex items-center gap-1 hover:text-zinc-900">
-                                        Yuran {{ $yearB }}
+                                        Sumbangan {{ $yearB }}
                                         @if ($sortBy === 'current_year')
                                             <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
                                         @endif
                                     </a>
                                 @else
-                                    Yuran {{ $yearB }}
+                                    Sumbangan {{ $yearB }}
                                 @endif
                             </th>
                             <th class="px-5 py-3 text-right">
@@ -211,7 +211,7 @@
                             <th class="px-5 py-3">Family Social Tags</th>
                             <th class="px-5 py-3">Student Social Tags</th>
                             <th class="px-5 py-3">Pelan Bayaran</th>
-                            <th class="px-5 py-3 text-right">Jumlah Yuran</th>
+                            <th class="px-5 py-3 text-right">Jumlah Sumbangan</th>
                             <th class="px-5 py-3 text-right">Jumlah Dibayar</th>
                             <th class="px-5 py-3 text-right">Baki Bayaran</th>
                             <th class="px-5 py-3">Ansuran Dibayar</th>

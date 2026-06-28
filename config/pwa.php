@@ -23,7 +23,7 @@ return [
         'short_name' => env('PWA_SHORT_NAME', 'PortalPIBG'),
         'background_color' => env('PWA_BACKGROUND_COLOR', '#020617'),
         'display' => env('PWA_DISPLAY', 'standalone'),
-        'description' => env('PWA_DESCRIPTION', 'Portal pembayaran yuran PIBG untuk ibu bapa dan penjaga.'),
+        'description' => env('PWA_DESCRIPTION', 'Portal pembayaran sumbangan PIBG untuk ibu bapa dan penjaga.'),
         'theme_color' => env('PWA_THEME_COLOR', '#0f172a'),
         'icons' => [
             [

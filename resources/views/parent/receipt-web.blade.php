@@ -2,7 +2,7 @@
 <html lang="ms">
 <head>
     @php
-        $title = 'Resit Bayaran | Portal Yuran PIBG SK Sri Petaling';
+        $title = 'Resit Bayaran | Portal Sumbangan PIBG SK Sri Petaling';
     @endphp
     @include('partials.head')
     <style>
@@ -59,7 +59,7 @@
                 <img src="{{ $schoolLogoUrl ?? asset('images/sksp-logo.png') }}" alt="Logo SK Sri Petaling">
                 <div>
                     <p class="brand-title">Portal Rasmi</p>
-                    <p class="brand-sub">Yuran &amp; Sumbangan PIBG SK Sri Petaling</p>
+                    <p class="brand-sub">Sumbangan PIBG SK Sri Petaling</p>
                 </div>
             </a>
             <a href="{{ $backUrl ?? ($portalUrl ?? route('home')) }}" class="back-link">{{ $backLabel ?? 'Back to portal' }}</a>
@@ -69,7 +69,7 @@
     <main>
         <section class="card">
             <div class="hero">
-                <p class="meta">Portal Yuran PIBG</p>
+                <p class="meta">Portal Sumbangan PIBG</p>
                 <h1 class="title">Resit Bayaran</h1>
                 <p class="sub">Rujukan {{ $transaction->receipt_uuid }}</p>
             </div>
@@ -121,7 +121,7 @@
                     <p class="label">Pecahan bayaran</p>
                     <div class="breakdown" style="margin-top: 12px;">
                         <div class="breakdown-row">
-                            <span>Yuran Dibayar</span>
+                            <span>Sumbangan Dibayar</span>
                             <strong>RM {{ number_format((float) ($receiptContext['yuran_paid_this_transaction'] ?? 0), 2) }}</strong>
                         </div>
                         <div class="breakdown-row">
@@ -133,7 +133,7 @@
                             <strong>RM {{ number_format((float) ($receiptContext['transaction_amount'] ?? $transaction->amount), 2) }}</strong>
                         </div>
                         <div class="breakdown-row">
-                            <span>Baki Yuran</span>
+                            <span>Baki Sumbangan</span>
                             <strong>RM {{ number_format((float) ($receiptContext['remaining_balance'] ?? 0), 2) }}</strong>
                         </div>
                     </div>

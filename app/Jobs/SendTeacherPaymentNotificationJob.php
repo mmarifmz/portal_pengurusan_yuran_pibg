@@ -77,7 +77,7 @@ class SendTeacherPaymentNotificationJob implements ShouldQueue
                 $notification->markSent($delivery);
 
                 WhatsAppApiThrottleLog::query()->create([
-                    'app_name' => (string) config('whatsapp.app_name', config('app.name', 'Portal Yuran PIBG')),
+                    'app_name' => (string) config('whatsapp.app_name', config('app.name', 'Portal Sumbangan PIBG')),
                     'message_id' => $notification->id,
                     'recipient_phone' => (string) $notification->teacher_phone,
                     'sent_at' => now(),

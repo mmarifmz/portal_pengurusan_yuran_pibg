@@ -1,10 +1,10 @@
-<x-layouts::app :title="__('Ranking Kutipan Yuran PIBG')">
+<x-layouts::app :title="__('Ranking Kutipan Sumbangan PIBG')">
     <div class="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <section class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Parent View</p>
-                    <h1 class="mt-2 text-2xl font-bold text-zinc-900">Ranking Kutipan Yuran PIBG</h1>
+                    <h1 class="mt-2 text-2xl font-bold text-zinc-900">Ranking Kutipan Sumbangan PIBG</h1>
                     <p class="mt-1 text-sm text-zinc-600">Setiap Sumbangan Membina Masa Depan Anak-anak Kita</p>
                 </div>
             </div>

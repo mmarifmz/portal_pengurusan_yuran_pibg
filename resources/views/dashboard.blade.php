@@ -35,7 +35,7 @@
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan yuran</p>
+                <p class="text-xs uppercase tracking-wide text-zinc-500">Kutipan sumbangan asas</p>
                 <h3 class="mt-2 text-3xl font-bold text-emerald-700">RM {{ number_format((float) ($tuitionCollected ?? 0), 2) }}</h3>
                 <p class="mt-1 text-xs text-zinc-500">Tahun {{ $selectedDashboardYear }}</p>
             </article>
@@ -57,7 +57,7 @@
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wide text-zinc-500">Bayaran sebahagian</p>
                 <h3 class="mt-2 text-3xl font-bold text-amber-600">{{ number_format((int) ($familiesPartial ?? 0)) }}</h3>
-                <p class="mt-1 text-xs text-zinc-500">Keluarga bayar sebahagian yuran</p>
+                <p class="mt-1 text-xs text-zinc-500">Keluarga bayar sebahagian sumbangan</p>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wide text-zinc-500">Belum bayar</p>
@@ -304,7 +304,7 @@
                                 labels: @json($classChartLabels),
                                 datasets: [
                                     {
-                                        label: 'Yuran (RM)',
+                                        label: 'Sumbangan Asas (RM)',
                                         data: @json($classChartYuran ?? []),
                                         backgroundColor: 'rgba(16, 185, 129, 0.75)',
                                         borderColor: 'rgba(16, 185, 129, 1)',

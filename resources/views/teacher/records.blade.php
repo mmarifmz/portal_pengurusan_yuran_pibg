@@ -117,7 +117,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Full Student Directory</h2>
-                    <p class="text-sm text-gray-700">Default sort: latest paid yuran timestamp (newest first).</p>
+                    <p class="text-sm text-gray-700">Default sort: latest paid sumbangan timestamp (newest first).</p>
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wide text-gray-700">
                     {{ number_format($students->count()) }} students

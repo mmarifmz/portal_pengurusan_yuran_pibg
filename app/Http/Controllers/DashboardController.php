@@ -3,24 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\FamilyBilling;
-use App\Models\LegacyStudentPayment;
 use App\Models\FamilyPaymentTransaction;
+use App\Models\LegacyStudentPayment;
 use App\Models\SchoolCalendarEvent;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\PaymentReportingService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
-use App\Services\PaymentReportingService;
 
 class DashboardController extends Controller
 {
     public function __construct(
         private readonly PaymentReportingService $paymentReportingService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -29,6 +29,7 @@ class DashboardController extends Controller
 
         if ($user?->isParentOnly()) {
             $request->session()->put('active_portal_space', 'parent');
+
             return redirect()->route('parent.dashboard');
         }
 
@@ -117,7 +118,7 @@ class DashboardController extends Controller
                     );
                 })
                 ->map(function ($group) {
-                    /** @var \Illuminate\Support\Collection<int, \App\Models\LegacyStudentPayment> $group */
+                    /** @var Collection<int, LegacyStudentPayment> $group */
                     $first = $group->first();
                     $className = (string) ($group->pluck('class_name')
                         ->filter()
@@ -125,6 +126,7 @@ class DashboardController extends Controller
                         ->sortDesc()
                         ->keys()
                         ->first() ?? ($first?->class_name ?: 'Unassigned'));
+
                     return [
                         'paid_at' => $group->pluck('paid_at')->filter()->sort()->first() ?? $first?->paid_at,
                         'amount_paid' => (float) $group->max('amount_paid'),
@@ -151,7 +153,7 @@ class DashboardController extends Controller
             ->filter(fn (Student $student): bool => filled($student->family_code))
             ->groupBy(fn (Student $student) => (string) $student->family_code)
             ->map(function ($familyStudents): string {
-                /** @var \Illuminate\Support\Collection<int, \App\Models\Student> $familyStudents */
+                /** @var Collection<int, Student> $familyStudents */
                 return (string) ($familyStudents
                     ->pluck('class_name')
                     ->map(fn ($className) => trim((string) $className))
@@ -182,6 +184,7 @@ class DashboardController extends Controller
                 ->groupBy('family_key')
                 ->map(function ($group): array {
                     $first = $group->first();
+
                     return [
                         'family_code' => (string) ($first['family_code'] ?? ''),
                         'class_name' => (string) ($first['class_name'] ?? 'Unassigned'),
@@ -243,6 +246,7 @@ class DashboardController extends Controller
                 ->map(function ($group, string $className) use ($yuranThreshold) {
                     $yuran = (float) $group->sum(fn (array $payment): float => min((float) ($payment['amount_paid'] ?? 0), $yuranThreshold));
                     $sumbangan = (float) $group->sum(fn (array $payment): float => max(0, (float) ($payment['amount_paid'] ?? 0) - $yuranThreshold));
+
                     return [
                         'class_name' => $className,
                         'yuran' => round($yuran, 2),
@@ -364,6 +368,7 @@ class DashboardController extends Controller
                 }
 
                 $classYear = $this->extractClassYear((string) ($row['class_name'] ?? ''));
+
                 return $classYear !== null && (string) $classYear === $selectedClassYearFilter;
             })
             ->sortBy([
@@ -655,7 +660,7 @@ class DashboardController extends Controller
 
         $user = $request->user();
         $entry = sprintf(
-            "[%s] %s (%s): %s\\n",
+            '[%s] %s (%s): %s\\n',
             now()->format('Y-m-d H:i:s'),
             $user?->name ?? 'Guest',
             $user?->email ?? 'anonymous',
@@ -666,20 +671,20 @@ class DashboardController extends Controller
 
         $portalUrl = route('home');
 
-        $waText = "Assalamualaikum Bendahari PIBG,
+        $waText = 'Assalamualaikum Bendahari PIBG,
 
-"
+'
             .$request->input('message')
-            ."
+            .'
 
 Daripada:
-"
+'
             .($user?->name ?? 'Guest')
             .' ('.($user?->email ?? 'anonymous').')'
-            ."
+            .'
 
-Portal Yuran:
-"
+Portal Sumbangan:
+'
             .$portalUrl;
 
         $treasuryPhone = $this->normalizeWaPhone((string) config('services.treasury_whatsapp_phone', '60136454001'));
@@ -789,10 +794,10 @@ Portal Yuran:
                 }
 
                 if ($donation > 0) {
-                    return "Parent in {$className} just paid Yuran + Sumbangan Tambahan";
+                    return "Parent in {$className} just paid Sumbangan PIBG + Sumbangan Tambahan";
                 }
 
-                return "Parent in {$className} just paid Yuran";
+                return "Parent in {$className} just paid Sumbangan PIBG";
             })
             ->filter()
             ->unique()
@@ -807,6 +812,7 @@ Portal Yuran:
         }
 
         $year = (int) ($matches[1] ?? 0);
+
         return $year > 0 ? $year : null;
     }
 

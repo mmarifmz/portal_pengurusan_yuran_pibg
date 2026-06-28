@@ -267,7 +267,7 @@ it('creates a fresh toyyibpay bill for a new installment attempt so parents can 
 
     createPendingInstallmentTransaction($installment, 'PBG-INSTALL-OLD', 'BILLINST-OLD');
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('createBill')->once()->andReturn('BILLINST-NEW');
     $toyyib->shouldReceive('paymentUrl')
         ->once()
@@ -297,7 +297,7 @@ it('includes optional donation in the installment bill amount and stores separat
     $plan = app(FamilyPaymentPlanService::class)->createPlan($billing, FamilyPaymentPlan::PLAN_TWO_TIMES);
     $installment = $plan->installments()->where('installment_no', 1)->firstOrFail();
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('createBill')
         ->once()
         ->withArgs(function (array $payload): bool {
@@ -341,7 +341,7 @@ it('marks the plan as partial after the first instalment payment succeeds', func
     $installment = $plan->installments()->where('installment_no', 1)->firstOrFail();
     $transaction = createPendingInstallmentTransaction($installment, 'PBG-INSTALL-001', 'BILLINST001');
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('verifyCallbackHash')->once()->andReturnTrue();
     $toyyib->shouldReceive('getBillTransactions')
         ->once()
@@ -383,7 +383,7 @@ it('records donation separately from yuran and keeps the yuran balance unchanged
     $plan = app(FamilyPaymentPlanService::class)->createPlan($billing, FamilyPaymentPlan::PLAN_TWO_TIMES);
     $installment = $plan->installments()->where('installment_no', 1)->firstOrFail();
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('createBill')->once()->andReturn('BILLINST-DONATION-SETTLE');
     $toyyib->shouldReceive('paymentUrl')
         ->once()
@@ -463,7 +463,7 @@ it('marks the family as paid after the final instalment succeeds', function () {
     $secondInstallment = $plan->installments()->where('installment_no', 2)->firstOrFail();
     $transaction = createPendingInstallmentTransaction($secondInstallment, 'PBG-INSTALL-002', 'BILLINST002');
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('verifyCallbackHash')->once()->andReturnTrue();
     $toyyib->shouldReceive('getBillTransactions')
         ->once()
@@ -506,7 +506,7 @@ it('does not double count duplicate ToyyibPay callbacks', function () {
     $installment = $plan->installments()->where('installment_no', 1)->firstOrFail();
     $transaction = createPendingInstallmentTransaction($installment, 'PBG-INSTALL-003', 'BILLINST003');
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('verifyCallbackHash')->twice()->andReturnTrue();
     $toyyib->shouldReceive('getBillTransactions')
         ->once()
@@ -547,7 +547,7 @@ it('does not duplicate yuran or donation stats when a donation callback is repea
     $plan = app(FamilyPaymentPlanService::class)->createPlan($billing, FamilyPaymentPlan::PLAN_TWO_TIMES);
     $installment = $plan->installments()->where('installment_no', 1)->firstOrFail();
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('createBill')->once()->andReturn('BILLINST-DUP-DONATION');
     $toyyib->shouldReceive('paymentUrl')
         ->once()
@@ -615,7 +615,7 @@ it('renders the donation section on unpaid installment cards', function () {
         ->get(route('parent.payments.review', $billing))
         ->assertOk()
         ->assertSee('Sumbangan Tambahan PIBG')
-        ->assertSee('Sumbangan tambahan adalah pilihan. Jumlah ini akan direkodkan berasingan daripada yuran.')
+        ->assertSee('Sumbangan tambahan adalah pilihan. Jumlah ini akan direkodkan berasingan daripada sumbangan asas.')
         ->assertSee('Jumlah bayaran');
 });
 
@@ -684,7 +684,7 @@ it('calculates leaderboard completion using fully paid families only while count
 it('keeps the existing full payment flow working', function () {
     [$billing, $parent] = createParentFamilyBilling('SSP-FULL-COMPAT');
 
-    $toyyib = \Mockery::mock(ToyyibPayService::class);
+    $toyyib = Mockery::mock(ToyyibPayService::class);
     $toyyib->shouldReceive('createBill')->once()->andReturn('BILLFULL001');
     $toyyib->shouldReceive('paymentUrl')->once()->with('BILLFULL001')->andReturn('https://toyyibpay.com/BILLFULL001');
     $toyyib->shouldReceive('verifyCallbackHash')->once()->andReturnTrue();

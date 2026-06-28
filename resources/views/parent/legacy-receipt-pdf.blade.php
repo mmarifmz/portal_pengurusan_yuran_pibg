@@ -179,7 +179,7 @@
                 <table class="hero-header">
                     <tr>
                         <td>
-                            <p class="hero-meta">Portal Yuran PIBG</p>
+                            <p class="hero-meta">Portal Sumbangan PIBG</p>
                             <p class="hero-title">Resit Sejarah Bayaran Tahun Lepas</p>
                             <p class="hero-sub">Tahun {{ $selectedYear }} | Dijana {{ $generatedAt->format('d M Y H:i') }}</p>
                         </td>

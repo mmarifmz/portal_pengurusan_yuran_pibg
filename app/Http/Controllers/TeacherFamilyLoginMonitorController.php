@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\FamilyBilling;
 use App\Models\ParentLoginAudit;
 use App\Models\ParentLoginInvite;
-use App\Models\ParentLoginOtp;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\ParentAccountService;
@@ -24,9 +23,7 @@ class TeacherFamilyLoginMonitorController extends Controller
     public function __construct(
         private readonly WhatsAppTacSender $whatsAppTacSender,
         private readonly ParentAccountService $parentAccountService
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -141,8 +138,8 @@ class TeacherFamilyLoginMonitorController extends Controller
         $loginLink = route('parent.invite.login', ['token' => $invite->token]);
 
         $message = "Assalamualaikum & Salam Sejahtera, nombor telefon anda telah didaftarkan ke Portal PIBG SSP secara manual.\n"
-            ."Sila klik link ini untuk membuat bayaran yuran : <{$loginLink}>\n"
-            ."Pautan ini sah selama 24 jam.";
+            ."Sila klik link ini untuk membuat bayaran sumbangan : <{$loginLink}>\n"
+            .'Pautan ini sah selama 24 jam.';
 
         try {
             $this->whatsAppTacSender->sendMessage($phone, $message);
@@ -168,9 +165,9 @@ class TeacherFamilyLoginMonitorController extends Controller
 
     /**
      * @return array{
-     *   rows: \Illuminate\Support\Collection<int, array<string, mixed>>,
-     *   generatedAt: \Illuminate\Support\Carbon,
-     *   classOptions: \Illuminate\Support\Collection<int, string>,
+     *   rows: Collection<int, array<string, mixed>>,
+     *   generatedAt: Carbon,
+     *   classOptions: Collection<int, string>,
      *   search: string,
      *   selectedClass: string,
      *   selectedAction: string,
