@@ -42,6 +42,17 @@
             </div>
         @endif
 
+        @if ($errors->any())
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <p class="font-semibold">The payment could not be updated.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
             <div class="space-y-6">
                 <section class="rounded-2xl border border-zinc-200 bg-white/90 p-6 shadow-sm">
@@ -147,6 +158,7 @@
                                 <tr class="text-left text-xs font-semibold uppercase tracking-wide text-zinc-600">
                                     <th class="px-3 py-2">Family</th>
                                     <th class="px-3 py-2">Amount</th>
+                                    <th class="px-3 py-2">Source</th>
                                     <th class="px-3 py-2">Status</th>
                                     <th class="px-3 py-2">Paid At</th>
                                 </tr>
@@ -156,12 +168,18 @@
                                     <tr>
                                         <td class="px-3 py-2 font-semibold text-zinc-900">{{ $payment->familyBilling?->family_code ?: '-' }}</td>
                                         <td class="px-3 py-2">RM {{ number_format((float) $payment->amount, 2) }}</td>
+                                        <td class="px-3 py-2">
+                                            <span class="font-medium">{{ $payment->payment_provider === 'manual' ? 'Manual' : ucfirst((string) $payment->payment_provider) }}</span>
+                                            @if ($payment->provider_ref_no)
+                                                <span class="block text-xs text-zinc-500">{{ $payment->provider_ref_no }}</span>
+                                            @endif
+                                        </td>
                                         <td class="px-3 py-2">{{ ucfirst((string) $payment->status) }}</td>
                                         <td class="px-3 py-2">{{ $payment->paid_at_for_display?->format('d M Y H:i') ?: '-' }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="4" class="px-3 py-6 text-center text-zinc-500">No payment activity yet.</td>
+                                        <td colspan="5" class="px-3 py-6 text-center text-zinc-500">No payment activity yet.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -262,6 +280,67 @@
                                             <span class="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">{{ $socialTag->name }}</span>
                                         @endforeach
                                     </div>
+                                @endif
+                                @if ($billing->outstanding_amount > 0)
+                                    <details class="mt-4 rounded-xl border border-amber-200 bg-amber-50/70">
+                                        <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-amber-800">
+                                            Mark payment complete manually
+                                        </summary>
+                                        <form
+                                            method="POST"
+                                            action="{{ route('teacher.parent-management.payments.complete', [$parentUser, $billing]) }}"
+                                            class="space-y-3 border-t border-amber-200 px-3 py-3"
+                                            onsubmit="return window.confirm('Mark the outstanding RM {{ number_format((float) $billing->outstanding_amount, 2) }} payment as complete? This will create an audited manual transaction.');"
+                                        >
+                                            @csrf
+                                            <p class="text-xs leading-5 text-amber-800">
+                                                This records the full outstanding balance of <strong>RM {{ number_format((float) $billing->outstanding_amount, 2) }}</strong>. Use it only after checking the receipt or bank evidence.
+                                            </p>
+                                            <label class="block text-xs font-semibold text-zinc-700">
+                                                Payment received at
+                                                <input
+                                                    type="datetime-local"
+                                                    name="paid_at"
+                                                    value="{{ old('paid_at', now()->format('Y-m-d\TH:i')) }}"
+                                                    max="{{ now()->format('Y-m-d\TH:i') }}"
+                                                    required
+                                                    class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                                                />
+                                            </label>
+                                            <label class="block text-xs font-semibold text-zinc-700">
+                                                Payment / receipt reference
+                                                <input
+                                                    type="text"
+                                                    name="payment_reference"
+                                                    value="{{ old('payment_reference') }}"
+                                                    placeholder="Example: TP2606234794216255"
+                                                    maxlength="100"
+                                                    required
+                                                    class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                                                />
+                                            </label>
+                                            <label class="block text-xs font-semibold text-zinc-700">
+                                                Verification note
+                                                <textarea
+                                                    name="verification_note"
+                                                    rows="3"
+                                                    maxlength="1000"
+                                                    required
+                                                    placeholder="Example: Verified against parent’s ToyyibPay receipt shared through WhatsApp."
+                                                    class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                                                >{{ old('verification_note') }}</textarea>
+                                            </label>
+                                            <label class="flex items-start gap-2 text-xs font-medium text-zinc-700">
+                                                <input type="checkbox" name="verified" value="1" required class="mt-0.5 rounded border-zinc-300 text-amber-600 focus:ring-amber-500" />
+                                                <span>I verified the payment evidence and understand this changes finance reports.</span>
+                                            </label>
+                                            <div class="flex justify-end">
+                                                <button type="submit" class="inline-flex items-center rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-800">
+                                                    Mark Payment Complete
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </details>
                                 @endif
                             </div>
                         @empty

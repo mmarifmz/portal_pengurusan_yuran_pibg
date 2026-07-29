@@ -275,6 +275,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/teacher/parent-management/{user}/reset-access', [ParentManagementController::class, 'resetAccess'])
         ->middleware('can:manageParentManagement')
         ->name('teacher.parent-management.reset-access');
+    Route::post('/teacher/parent-management/{user}/billings/{familyBilling}/complete-payment', [ParentManagementController::class, 'completePayment'])
+        ->middleware('can:manageParentManagement')
+        ->name('teacher.parent-management.payments.complete');
     Route::get('/teacher/finance-accounting', [TeacherFinanceAccountingController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('teacher.finance-accounting');

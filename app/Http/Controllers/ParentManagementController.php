@@ -6,13 +6,14 @@ use App\Models\FamilyBilling;
 use App\Models\FamilyPaymentTransaction;
 use App\Models\ParentLoginAudit;
 use App\Models\Role;
-use App\Models\SocialTag;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\UserChangeAudit;
+use App\Services\ManualFamilyPaymentService;
 use App\Services\ParentAccountService;
 use App\Services\SocialTagService;
 use App\Services\TeacherRoleAssignmentService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,10 +27,10 @@ class ParentManagementController extends Controller
 {
     public function __construct(
         private readonly ParentAccountService $parentAccountService,
+        private readonly ManualFamilyPaymentService $manualFamilyPaymentService,
         private readonly SocialTagService $socialTagService,
         private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -209,7 +210,7 @@ class ParentManagementController extends Controller
             : collect();
         $familyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($user);
         $latestBillings = $this->latestBillingsByFamily()
-            ->only($familyCodes->all())
+            ->filter(fn (FamilyBilling $billing, string $familyCode): bool => $familyCodes->contains($familyCode))
             ->values();
         $recentPayments = FamilyPaymentTransaction::query()
             ->with('familyBilling:id,family_code,billing_year,status,fee_amount,paid_amount')
@@ -360,7 +361,8 @@ class ParentManagementController extends Controller
 
         if ($request->exists('social_tag_id')) {
             $familyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($user);
-            $billings = $this->latestBillingsByFamily()->only($familyCodes->all());
+            $billings = $this->latestBillingsByFamily()
+                ->filter(fn (FamilyBilling $billing, string $familyCode): bool => $familyCodes->contains($familyCode));
             $before = $billings
                 ->flatMap(fn (FamilyBilling $billing) => $billing->socialTags->pluck('id'))
                 ->unique()
@@ -511,6 +513,47 @@ class ParentManagementController extends Controller
         return redirect()
             ->route('teacher.parent-management.show', $user)
             ->with('status', 'Parent access has been reset. TAC verification will be required again.');
+    }
+
+    public function completePayment(Request $request, User $user, FamilyBilling $familyBilling): RedirectResponse
+    {
+        Gate::authorize('manageParentManagement');
+        abort_unless($user->hasRole('parent'), 404);
+
+        $familyCodes = $this->parentAccountService->accessibleFamilyCodesForUser($user);
+        abort_unless($familyCodes->contains(trim((string) $familyBilling->family_code)), 404);
+
+        $validated = $request->validate([
+            'paid_at' => ['required', 'date', 'before_or_equal:now'],
+            'payment_reference' => ['required', 'string', 'max:100'],
+            'verification_note' => ['required', 'string', 'max:1000'],
+            'verified' => ['accepted'],
+        ], [
+            'paid_at.before_or_equal' => 'The payment received time cannot be in the future.',
+            'payment_reference.required' => 'Enter the payment or receipt reference.',
+            'verification_note.required' => 'Enter a note describing how the payment was verified.',
+            'verified.accepted' => 'Confirm that the payment evidence has been verified.',
+        ]);
+
+        $transaction = $this->manualFamilyPaymentService->complete(
+            $familyBilling,
+            $user,
+            $request->user(),
+            CarbonImmutable::parse((string) $validated['paid_at'], config('app.timezone')),
+            trim((string) $validated['payment_reference']),
+            trim((string) $validated['verification_note'])
+        );
+
+        return redirect()
+            ->route('teacher.parent-management.show', $user)
+            ->with(
+                'status',
+                sprintf(
+                    'Payment marked complete for %s. Manual transaction %s was recorded.',
+                    $familyBilling->family_code,
+                    $transaction->external_order_display
+                )
+            );
     }
 
     /**
