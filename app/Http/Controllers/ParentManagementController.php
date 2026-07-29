@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UserChangeAudit;
 use App\Services\ManualFamilyPaymentService;
 use App\Services\ParentAccountService;
+use App\Services\ParentPaymentNotificationService;
 use App\Services\SocialTagService;
 use App\Services\TeacherRoleAssignmentService;
 use Carbon\CarbonImmutable;
@@ -20,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -28,6 +30,7 @@ class ParentManagementController extends Controller
     public function __construct(
         private readonly ParentAccountService $parentAccountService,
         private readonly ManualFamilyPaymentService $manualFamilyPaymentService,
+        private readonly ParentPaymentNotificationService $parentPaymentNotificationService,
         private readonly SocialTagService $socialTagService,
         private readonly TeacherRoleAssignmentService $teacherRoleAssignmentService
     ) {}
@@ -543,6 +546,7 @@ class ParentManagementController extends Controller
             trim((string) $validated['payment_reference']),
             trim((string) $validated['verification_note'])
         );
+        $notificationStatus = $this->notifyParentOfManualPayment($transaction, $user);
 
         return redirect()
             ->route('teacher.parent-management.show', $user)
@@ -552,8 +556,51 @@ class ParentManagementController extends Controller
                     'Payment marked complete for %s. Manual transaction %s was recorded.',
                     $familyBilling->family_code,
                     $transaction->external_order_display
-                )
+                ).' '.$notificationStatus
             );
+    }
+
+    private function notifyParentOfManualPayment(FamilyPaymentTransaction $transaction, User $parentUser): string
+    {
+        $transaction->refresh();
+
+        if ($transaction->receipt_notified_at) {
+            return 'The WhatsApp receipt had already been sent.';
+        }
+
+        $phone = trim((string) $transaction->payer_phone);
+
+        if ($phone === '') {
+            $phone = trim((string) $transaction->familyBilling?->phones()->latest('id')->value('phone'));
+        }
+
+        if ($phone === '') {
+            return 'No WhatsApp receipt was sent because this parent has no registered phone number.';
+        }
+
+        if (blank($transaction->payer_phone)) {
+            $transaction->forceFill([
+                'payer_phone' => $phone,
+            ])->save();
+        }
+
+        try {
+            $this->parentPaymentNotificationService->sendPaymentReceipt(
+                $transaction,
+                $phone,
+                (string) $parentUser->name
+            );
+
+            return 'A WhatsApp confirmation with the receipt link was sent to the registered parent.';
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to send manual payment receipt WhatsApp notification.', [
+                'transaction_id' => $transaction->id,
+                'payer_phone' => $phone,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return 'The payment remains complete, but the WhatsApp receipt could not be sent.';
+        }
     }
 
     /**

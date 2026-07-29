@@ -9,6 +9,7 @@ use App\Models\PaymentAllocation;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\UserChangeAudit;
+use App\Services\WhatsAppTacSender;
 
 it('allows system admin to autosave parent access status and audit the change', function () {
     $admin = User::factory()->create([
@@ -222,6 +223,22 @@ it('allows system admin to complete a verified payment manually with an audit tr
         'status' => PaymentAllocation::STATUS_PENDING,
     ]);
 
+    $sender = Mockery::mock(WhatsAppTacSender::class);
+    $sender->shouldReceive('sendMessage')
+        ->once()
+        ->with('0123456789', Mockery::on(function (string $message): bool {
+            return str_contains($message, 'Pembayaran PIBG anda telah berjaya diterima.')
+                && str_contains($message, '• Kod Keluarga: FAM-MANUAL')
+                && str_contains($message, '• Jumlah: RM60.00')
+                && str_contains($message, 'Resit Web:')
+                && str_contains($message, '/receipts/');
+        }))
+        ->andReturn([
+            'status' => 'success',
+            'message_id' => 'MANUAL-RECEIPT-001',
+        ]);
+    $this->app->instance(WhatsAppTacSender::class, $sender);
+
     $this->actingAs($admin)
         ->get(route('teacher.parent-management.show', $parent))
         ->assertOk()
@@ -243,7 +260,10 @@ it('allows system admin to complete a verified payment manually with an audit tr
     );
 
     $response->assertRedirect(route('teacher.parent-management.show', $parent));
-    $response->assertSessionHas('status');
+    $response->assertSessionHas('status', fn (string $status): bool => str_contains(
+        $status,
+        'A WhatsApp confirmation with the receipt link was sent to the registered parent.'
+    ));
 
     $billing->refresh();
     expect((float) $billing->paid_amount)->toBe(100.0)
@@ -258,7 +278,9 @@ it('allows system admin to complete a verified payment manually with an audit tr
         ->and((float) $manualTransaction->fee_amount_paid)->toBe(60.0)
         ->and($manualTransaction->status)->toBe('success')
         ->and($manualTransaction->provider_ref_no)->toBe('TP2606234794216255')
-        ->and($manualTransaction->raw_return['admin_user_id'])->toBe($admin->id);
+        ->and($manualTransaction->raw_return['admin_user_id'])->toBe($admin->id)
+        ->and($manualTransaction->receipt_message_id)->toBe('MANUAL-RECEIPT-001')
+        ->and($manualTransaction->receipt_notified_at)->not->toBeNull();
 
     expect($manualTransaction->allocations()->where('status', PaymentAllocation::STATUS_PAID)->exists())->toBeTrue()
         ->and($pendingTransaction->fresh()->status)->toBe('superseded')
