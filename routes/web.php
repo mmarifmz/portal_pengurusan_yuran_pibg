@@ -241,6 +241,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/teacher/records/students/{student}/status', [TeacherRecordsController::class, 'updateStudentStatus'])
         ->middleware('role:system_admin')
         ->name('teacher.records.students.status.update');
+    Route::patch('/teacher/records/students/{student}/class', [TeacherRecordsController::class, 'updateStudentClass'])
+        ->middleware('role:system_admin')
+        ->name('teacher.records.students.class.update');
     Route::patch('/teacher/records/students/{student}/name', [TeacherRecordsController::class, 'updateStudentName'])
         ->middleware('role:system_admin,super_teacher')
         ->name('teacher.records.students.name.update');

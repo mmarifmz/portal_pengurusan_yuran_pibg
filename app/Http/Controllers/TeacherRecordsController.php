@@ -10,6 +10,7 @@ use App\Models\ParentLoginOtp;
 use App\Models\SiteSetting;
 use App\Models\SocialTag;
 use App\Models\Student;
+use App\Models\StudentClassChange;
 use App\Models\StudentNameChange;
 use App\Models\User;
 use App\Services\ParentProfileSyncFromPaymentsService;
@@ -846,6 +847,25 @@ class TeacherRecordsController extends Controller
                 ->get()
                 ->groupBy('student_id')
             : collect();
+        $studentClassChangesByStudentId = StudentClassChange::tableIsAvailable()
+            ? StudentClassChange::query()
+                ->with('changedBy:id,name,email')
+                ->whereIn('student_id', $studentIds->all())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('student_id')
+            : collect();
+        $availableClasses = Student::query()
+            ->whereNotNull('class_name')
+            ->where('class_name', '!=', '')
+            ->distinct()
+            ->orderBy('class_name')
+            ->pluck('class_name')
+            ->map(fn ($className): string => trim((string) $className))
+            ->filter()
+            ->unique()
+            ->values();
         $studentNames = $students
             ->pluck('full_name')
             ->map(fn ($name) => $this->normalizeNameForLegacyMatch((string) $name))
@@ -943,6 +963,8 @@ class TeacherRecordsController extends Controller
             'currentFamilySocialTags' => $currentFamilySocialTags,
             'socialTagLabels' => $this->enabledSocialTagLabels(),
             'studentNameChangesByStudentId' => $studentNameChangesByStudentId,
+            'studentClassChangesByStudentId' => $studentClassChangesByStudentId,
+            'availableClasses' => $availableClasses,
             'studentStatusOptions' => Student::statusOptions(),
         ]);
     }
@@ -1223,6 +1245,60 @@ class TeacherRecordsController extends Controller
             ->with('status', 'Nama murid berjaya dikemaskini.');
     }
 
+    public function updateStudentClass(Request $request, Student $student): RedirectResponse
+    {
+        Gate::authorize('manageStudentRecords');
+
+        if (! StudentClassChange::tableIsAvailable()) {
+            return redirect()
+                ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-class-'.$student->id)
+                ->withInput([
+                    'class_student_id' => $student->id,
+                    'class_name' => $request->input('class_name'),
+                    'reason' => $request->input('reason'),
+                ])
+                ->withErrors(['class_name' => 'Jadual audit pertukaran kelas belum tersedia. Sila jalankan migrasi pangkalan data.']);
+        }
+
+        $validated = $request->validate([
+            'class_name' => ['required', 'string', 'max:255'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $oldClassName = $this->normalizeClassName((string) $student->getRawOriginal('class_name'));
+        $newClassName = $this->normalizeClassName((string) $validated['class_name']);
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        if ($oldClassName === $newClassName) {
+            return redirect()
+                ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-class-'.$student->id)
+                ->withInput([
+                    'class_student_id' => $student->id,
+                    'class_name' => $newClassName,
+                    'reason' => $reason,
+                ])
+                ->withErrors(['class_name' => 'Kelas baharu sama seperti kelas semasa.']);
+        }
+
+        DB::transaction(function () use ($student, $oldClassName, $newClassName, $reason, $request): void {
+            $student->update([
+                'class_name' => $newClassName,
+            ]);
+
+            StudentClassChange::query()->create([
+                'student_id' => $student->id,
+                'old_class_name' => $oldClassName !== '' ? $oldClassName : null,
+                'new_class_name' => $newClassName,
+                'reason' => $reason !== '' ? $reason : null,
+                'changed_by_user_id' => $request->user()?->id,
+            ]);
+        });
+
+        return redirect()
+            ->to(route('teacher.records.family', ['familyCode' => (string) $student->family_code]).'#student-class-'.$student->id)
+            ->with('status', 'Kelas murid berjaya dikemaskini dan direkodkan.');
+    }
+
     public function exportFamilyPayments(Request $request, string $familyCode): StreamedResponse
     {
         $students = Student::query()
@@ -1462,6 +1538,13 @@ class TeacherRecordsController extends Controller
     {
         $value = mb_strtoupper(trim($name));
         $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim((string) $value);
+    }
+
+    private function normalizeClassName(string $className): string
+    {
+        $value = preg_replace('/\s+/', ' ', trim($className)) ?? $className;
 
         return trim((string) $value);
     }

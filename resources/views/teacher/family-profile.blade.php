@@ -439,6 +439,127 @@
             </section>
         @endcan
 
+        @can('manageStudentRecords')
+            <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-zinc-900">Pertukaran Kelas Murid</h2>
+                        <p class="text-xs text-zinc-500">Kelas baharu digunakan serta-merta dalam statistik, laporan kelas dan senarai WhatsApp. Setiap perubahan disimpan dalam rekod sejarah.</p>
+                    </div>
+                </div>
+
+                <datalist id="student-class-options">
+                    @foreach ($availableClasses as $classOption)
+                        <option value="{{ $classOption }}"></option>
+                    @endforeach
+                </datalist>
+
+                <div class="mt-4 grid gap-4">
+                    @foreach ($students as $student)
+                        @php
+                            $classFormHasOldInput = (string) old('class_student_id') === (string) $student->id;
+                            $classHistory = $studentClassChangesByStudentId->get($student->id, collect());
+                        @endphp
+                        <form
+                            id="student-class-{{ $student->id }}"
+                            method="POST"
+                            action="{{ route('teacher.records.students.class.update', $student) }}"
+                            class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+                            onsubmit="return confirm('Sahkan pertukaran kelas murid ini? Statistik dan laporan kelas akan dikemaskini serta-merta.')"
+                        >
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="class_student_id" value="{{ $student->id }}">
+
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-zinc-900">{{ $student->full_name }}</h3>
+                                    <p class="text-xs text-zinc-500">{{ $student->student_no ?: '-' }} | Kelas semasa: {{ $student->class_name ?: 'Belum ditetapkan' }}</p>
+                                </div>
+                                <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                                    {{ $student->class_name ?: 'Tiada kelas' }}
+                                </span>
+                            </div>
+
+                            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                                <label class="text-xs font-semibold text-zinc-600">
+                                    Kelas Baharu
+                                    <input
+                                        type="text"
+                                        name="class_name"
+                                        list="student-class-options"
+                                        value="{{ $classFormHasOldInput ? old('class_name') : '' }}"
+                                        required
+                                        maxlength="255"
+                                        placeholder="Contoh: 4 AKASIA"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                    @if ($classFormHasOldInput)
+                                        @error('class_name')
+                                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                                        @enderror
+                                    @endif
+                                </label>
+
+                                <label class="text-xs font-semibold text-zinc-600">
+                                    Sebab / Catatan (Pilihan)
+                                    <input
+                                        type="text"
+                                        name="reason"
+                                        value="{{ $classFormHasOldInput ? old('reason') : '' }}"
+                                        maxlength="2000"
+                                        placeholder="Contoh: Pertukaran kelas diluluskan pihak sekolah"
+                                        class="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                    @if ($classFormHasOldInput)
+                                        @error('reason')
+                                            <span class="mt-1 block text-[11px] text-rose-600">{{ $message }}</span>
+                                        @enderror
+                                    @endif
+                                </label>
+                            </div>
+
+                            <div class="mt-3">
+                                <button type="submit" class="inline-flex items-center rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700">
+                                    Simpan Pertukaran Kelas
+                                </button>
+                            </div>
+
+                            <div class="mt-5 overflow-x-auto">
+                                <h4 class="mb-2 text-sm font-semibold text-zinc-900">Sejarah Pertukaran Kelas</h4>
+                                <table class="min-w-full divide-y divide-zinc-200 text-sm">
+                                    <thead class="bg-white text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                                        <tr>
+                                            <th class="px-4 py-3">Tarikh</th>
+                                            <th class="px-4 py-3">Kelas Lama</th>
+                                            <th class="px-4 py-3">Kelas Baharu</th>
+                                            <th class="px-4 py-3">Sebab / Catatan</th>
+                                            <th class="px-4 py-3">Dikemaskini Oleh</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-zinc-200 bg-white">
+                                        @forelse ($classHistory as $change)
+                                            <tr>
+                                                <td class="px-4 py-3 text-zinc-700">{{ $change->created_at?->format('d M Y H:i') ?: '-' }}</td>
+                                                <td class="px-4 py-3 font-semibold text-zinc-800">{{ $change->old_class_name ?: 'Belum ditetapkan' }}</td>
+                                                <td class="px-4 py-3 font-semibold text-zinc-900">{{ $change->new_class_name }}</td>
+                                                <td class="px-4 py-3 text-zinc-700">{{ $change->reason ?: '-' }}</td>
+                                                <td class="px-4 py-3 text-zinc-700">{{ $change->changedBy?->name ?: '-' }}</td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="px-4 py-4 text-center text-zinc-500">Belum ada pertukaran kelas.</td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    @endforeach
+                </div>
+            </section>
+        @endcan
+
         @can('manageStudentIdentity')
             <section class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
