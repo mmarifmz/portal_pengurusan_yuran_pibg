@@ -76,9 +76,10 @@
 
         .summary-grid {
             width: 100%;
-            margin-bottom: 5mm;
+            margin-bottom: 4mm;
             border-collapse: separate;
-            border-spacing: 2mm 0;
+            border-spacing: 1.5mm 0;
+            table-layout: fixed;
         }
 
         .summary-grid td {
@@ -86,7 +87,7 @@
             border: 1px solid #d4d4d8;
             border-radius: 7px;
             background: #fafafa;
-            padding: 3mm;
+            padding: 2.4mm;
             vertical-align: top;
         }
 
@@ -110,8 +111,8 @@
             background: #f0f9ff;
         }
 
-        .summary-grid .money .metric-value {
-            font-size: 12px;
+        .summary-grid .currency .metric-label,
+        .summary-grid .currency .metric-value {
             white-space: nowrap;
         }
 
@@ -125,15 +126,21 @@
         }
 
         .metric-value {
-            margin: 1.2mm 0 0;
+            margin: .8mm 0 0;
             color: #18181b;
-            font-size: 15px;
+            font-size: 13px;
             font-weight: bold;
+            line-height: 1.15;
         }
 
         .section {
             margin-top: 4mm;
             page-break-inside: auto;
+        }
+
+        .section-unpaid {
+            margin-top: 0;
+            page-break-before: always;
         }
 
         .section-header {
@@ -296,15 +303,15 @@
                 <p class="metric-label">Kadar Selesai</p>
                 <p class="metric-value">{{ number_format((float) $summary['completion_percent'], 2) }}%</p>
             </td>
-            <td class="money">
+            <td class="money currency">
                 <p class="metric-label">Sumbangan PIBG</p>
                 <p class="metric-value">RM {{ number_format((float) $summary['yuran_collected'], 2) }}</p>
             </td>
-            <td class="money">
+            <td class="money currency">
                 <p class="metric-label">Jumlah Kutipan</p>
                 <p class="metric-value">RM {{ number_format((float) $summary['jumlah_kutipan'], 2) }}</p>
             </td>
-            <td class="unpaid">
+            <td class="unpaid currency">
                 <p class="metric-label">Baki Tertunggak</p>
                 <p class="metric-value">RM {{ number_format((float) $summary['baki_tertunggak'], 2) }}</p>
             </td>
@@ -363,7 +370,7 @@
         @endif
     </section>
 
-    <section class="section">
+    <section class="section section-unpaid">
         <table class="section-header">
             <tr>
                 <td><h2 class="section-title">Belum Bayar</h2></td>
