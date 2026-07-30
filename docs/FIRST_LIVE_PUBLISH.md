@@ -2,11 +2,11 @@
 
 ## 1) Server prerequisites
 - Ubuntu 22.04+ (or equivalent)
-- PHP 8.3 + extensions: `bcmath`, `ctype`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `pdo_mysql`, `tokenizer`, `xml`, `curl`, `gd`, `zip`
+- PHP 8.4+ + extensions: `bcmath`, `ctype`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `pdo_mysql`, `tokenizer`, `xml`, `curl`, `gd`, `zip`
 - Composer 2.x
-- Node 20+ and npm
+- Node 22+ and npm
 - MySQL 8+
-- Nginx + PHP-FPM (`php8.3-fpm`)
+- Nginx + PHP-FPM (`php8.4-fpm` or the installed PHP 8.4+ service)
 - Supervisor (for queue worker)
 
 ## 2) Domain & SSL
