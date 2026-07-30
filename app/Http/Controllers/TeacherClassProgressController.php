@@ -2,27 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SiteSetting;
 use App\Services\ClassProgressService;
 use App\Services\ClassTeacherWhatsAppReportService;
 use App\Services\WhatsAppMessageQueueService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use InvalidArgumentException;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
+use ZipArchive;
 
 class TeacherClassProgressController extends Controller
 {
     private const SINGLE_PREVIEW_SESSION_KEY = 'class_progress_whatsapp_preview_tokens';
+
     private const BATCH_PREVIEW_SESSION_KEY = 'class_progress_whatsapp_batch_tokens';
 
     public function __construct(
         private readonly ClassProgressService $classProgressService,
         private readonly ClassTeacherWhatsAppReportService $classTeacherWhatsAppReportService,
         private readonly WhatsAppMessageQueueService $whatsAppMessageQueueService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -72,6 +79,124 @@ class TeacherClassProgressController extends Controller
         }
 
         return response()->json($details);
+    }
+
+    public function classPdf(Request $request, string $class): Response
+    {
+        $billingYear = (int) $request->integer('billing_year', (int) now()->year);
+        $className = trim(urldecode($class));
+
+        try {
+            $report = $this->classProgressService->getClassPaymentDetails($className, $billingYear, $request->user());
+        } catch (InvalidArgumentException $exception) {
+            abort(404, $exception->getMessage());
+        }
+
+        abort_unless((bool) $report['can_view_full_details'], 403);
+
+        $generatedAt = now();
+        $filename = sprintf(
+            'laporan-kutipan-pibg-%s-%d.pdf',
+            Str::slug($className),
+            $billingYear,
+        );
+
+        return Pdf::loadView('teacher.class-progress-pdf', [
+            'report' => $report,
+            'generatedAt' => $generatedAt,
+            'schoolLogoSource' => SiteSetting::schoolLogoPdfSource(),
+        ])
+            ->setPaper('a4', 'landscape')
+            ->download($filename);
+    }
+
+    public function allClassesPdfZip(Request $request): BinaryFileResponse
+    {
+        $billingYear = (int) $request->integer('billing_year', (int) now()->year);
+        $viewer = $request->user();
+        $generatedAt = now();
+        $schoolLogoSource = SiteSetting::schoolLogoPdfSource();
+        $classRows = $this->classProgressService
+            ->leaderboardRows($billingYear, $viewer)
+            ->sortBy(
+                fn (array $row): string => (string) $row['class_name'],
+                SORT_NATURAL | SORT_FLAG_CASE,
+            )
+            ->values();
+
+        abort_if($classRows->isEmpty(), 404, 'Tiada data kelas untuk sesi ini.');
+
+        $zipPath = tempnam(sys_get_temp_dir(), 'pibg-class-reports-');
+        if ($zipPath === false) {
+            throw new RuntimeException('Fail ZIP sementara tidak dapat disediakan.');
+        }
+
+        $zip = new ZipArchive;
+        $zipIsOpen = false;
+
+        try {
+            $openResult = $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+            if ($openResult !== true) {
+                throw new RuntimeException("Arkib ZIP tidak dapat dibuka. Kod: {$openResult}");
+            }
+            $zipIsOpen = true;
+
+            foreach ($classRows as $index => $row) {
+                $className = (string) $row['class_name'];
+                $report = $this->classProgressService->getClassPaymentDetails($className, $billingYear, $viewer);
+
+                if (! (bool) $report['can_view_full_details']) {
+                    continue;
+                }
+
+                $pdfContent = Pdf::loadView('teacher.class-progress-pdf', [
+                    'report' => $report,
+                    'generatedAt' => $generatedAt,
+                    'schoolLogoSource' => $schoolLogoSource,
+                ])
+                    ->setPaper('a4', 'landscape')
+                    ->output();
+
+                $classSlug = Str::slug($className) ?: 'kelas-'.($index + 1);
+                $pdfFilename = sprintf(
+                    '%02d-laporan-kutipan-pibg-%s-%d.pdf',
+                    $index + 1,
+                    $classSlug,
+                    $billingYear,
+                );
+
+                if (! $zip->addFromString($pdfFilename, $pdfContent)) {
+                    throw new RuntimeException("Laporan PDF untuk kelas {$className} tidak dapat ditambah ke arkib.");
+                }
+            }
+
+            if (! $zip->close()) {
+                $zipIsOpen = false;
+
+                throw new RuntimeException('Arkib ZIP tidak dapat dimuktamadkan.');
+            }
+            $zipIsOpen = false;
+        } catch (Throwable $exception) {
+            if ($zipIsOpen) {
+                $zip->close();
+            }
+
+            if (is_file($zipPath)) {
+                unlink($zipPath);
+            }
+
+            throw $exception;
+        }
+
+        $archiveFilename = sprintf(
+            'laporan-kutipan-pibg-semua-kelas-%d-%s.zip',
+            $billingYear,
+            $generatedAt->format('Ymd-His'),
+        );
+
+        return response()
+            ->download($zipPath, $archiveFilename, ['Content-Type' => 'application/zip'])
+            ->deleteFileAfterSend(true);
     }
 
     public function whatsappPreview(Request $request, string $class): JsonResponse

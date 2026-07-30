@@ -59,6 +59,12 @@
 
                     @if ($canManageWhatsapp)
                         <div class="flex flex-wrap gap-2">
+                            <a
+                                href="{{ route('admin.classes.pdf-archive', ['billing_year' => $billingYear]) }}"
+                                class="inline-flex items-center rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                            >
+                                ZIP Semua Kelas
+                            </a>
                             <a href="{{ $queueDashboardUrl }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
                                 View WhatsApp Queue
                             </a>
@@ -183,6 +189,15 @@
                                             </div>
 
                                             <div class="flex flex-wrap gap-2">
+                                                @if ($row['can_view_full_details'])
+                                                    <a
+                                                        href="{{ route('teacher.class-progress.pdf', ['class' => $row['class_name'], 'billing_year' => $billingYear]) }}"
+                                                        class="inline-flex items-center rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                                                    >
+                                                        Jana PDF
+                                                    </a>
+                                                @endif
+
                                                 <button
                                                     type="button"
                                                     data-toggle-details="{{ $row['class_name'] }}"
