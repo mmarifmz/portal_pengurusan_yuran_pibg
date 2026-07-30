@@ -78,7 +78,7 @@ it('allows teacher roles to access class progress page', function () {
     $response->assertSee('Kelas Saya');
     $response->assertSee('Senarai Kelas Lain');
     $response->assertSeeInOrder(['Kelas Saya', '1 Angsana', 'Senarai Kelas Lain', '1 Alamanda']);
-    $response->assertSee('Jana PDF');
+    $response->assertSee('Laporan PDF Kelas');
     $response->assertSee(route('teacher.class-progress.pdf', [
         'class' => '1 Angsana',
         'billing_year' => $billingYear,
@@ -86,7 +86,7 @@ it('allows teacher roles to access class progress page', function () {
     $response->assertDontSee('Blast WhatsApp Report to All Class Teachers');
     $response->assertDontSee('WhatsApp Guru');
     $response->assertDontSee('View WhatsApp Queue');
-    $response->assertDontSee('ZIP Semua Kelas');
+    $response->assertDontSee('Himpunan PDF Semua Kelas');
 });
 
 it('allows system admin to see whatsapp actions on class progress page', function () {
@@ -127,7 +127,7 @@ it('allows system admin to see whatsapp actions on class progress page', functio
     $response->assertSee('Blast WhatsApp Report to All Class Teachers');
     $response->assertSee('WhatsApp Guru');
     $response->assertSee('View WhatsApp Queue');
-    $response->assertSee('ZIP Semua Kelas');
+    $response->assertSee('Himpunan PDF Semua Kelas');
     $response->assertSee(route('admin.classes.pdf-archive', [
         'billing_year' => (int) now()->year,
     ]), false);

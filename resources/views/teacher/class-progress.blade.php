@@ -61,9 +61,13 @@
                         <div class="flex flex-wrap gap-2">
                             <a
                                 href="{{ route('admin.classes.pdf-archive', ['billing_year' => $billingYear]) }}"
-                                class="inline-flex items-center rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                                class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             >
-                                ZIP Semua Kelas
+                                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="h-4 w-4 shrink-0" stroke="currentColor" stroke-width="1.8">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 3.75H6.75A1.5 1.5 0 0 0 5.25 5.25v13.5a1.5 1.5 0 0 0 1.5 1.5h10.5a1.5 1.5 0 0 0 1.5-1.5V8.25l-4.5-4.5Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 3.75v4.5h4.5M8.25 12h7.5M8.25 15h7.5" />
+                                </svg>
+                                Himpunan PDF Semua Kelas
                             </a>
                             <a href="{{ $queueDashboardUrl }}" class="inline-flex items-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
                                 View WhatsApp Queue
@@ -192,9 +196,13 @@
                                                 @if ($row['can_view_full_details'])
                                                     <a
                                                         href="{{ route('teacher.class-progress.pdf', ['class' => $row['class_name'], 'billing_year' => $billingYear]) }}"
-                                                        class="inline-flex items-center rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                                                        class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                                     >
-                                                        Jana PDF
+                                                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="h-4 w-4 shrink-0" stroke="currentColor" stroke-width="1.8">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 3.75H6.75A1.5 1.5 0 0 0 5.25 5.25v13.5a1.5 1.5 0 0 0 1.5 1.5h10.5a1.5 1.5 0 0 0 1.5-1.5V8.25l-4.5-4.5Z" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 3.75v4.5h4.5M8.25 12h7.5M8.25 15h7.5" />
+                                                        </svg>
+                                                        Laporan PDF Kelas
                                                     </a>
                                                 @endif
 
