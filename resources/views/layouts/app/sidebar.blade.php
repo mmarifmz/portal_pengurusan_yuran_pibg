@@ -213,6 +213,9 @@
                             <flux:sidebar.item icon="credit-card" :href="route('system.payment-campaign-settings.index')" :current="request()->routeIs('system.payment-campaign-settings.*')" wire:navigate>
                                 {{ __('Kempen') }}
                             </flux:sidebar.item>
+                            <flux:sidebar.item icon="qr-code" :href="route('system.qr-campaigns.index')" :current="request()->routeIs('system.qr-campaigns.*')" wire:navigate>
+                                {{ __('QR Kempen & Analitik') }}
+                            </flux:sidebar.item>
                             <flux:sidebar.item icon="beaker" :href="route('system.payment-testers.index')" :current="request()->routeIs('system.payment-testers.*')" wire:navigate>
                                 {{ __('Ujian') }}
                             </flux:sidebar.item>

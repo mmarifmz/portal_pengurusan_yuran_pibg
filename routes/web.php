@@ -17,6 +17,8 @@ use App\Http\Controllers\PortalSeoSettingsController;
 use App\Http\Controllers\PortalSpaceController;
 use App\Http\Controllers\PtaDashboardController;
 use App\Http\Controllers\PublicParentSearchController;
+use App\Http\Controllers\QrCampaignController;
+use App\Http\Controllers\QrCampaignRedirectController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\SchoolCalendarEventController;
 use App\Http\Controllers\SchoolCalendarPageController;
@@ -169,6 +171,9 @@ Route::get('/', function () {
 Route::get('/parent/search', [PublicParentSearchController::class, 'index'])
     ->name('parent.search');
 Route::get('/receipts/{receiptUuid}', [ReceiptController::class, 'show'])->name('receipts.show');
+Route::get('/q/{qrCampaign:short_code}', QrCampaignRedirectController::class)
+    ->middleware('throttle:120,1')
+    ->name('qr-campaigns.redirect');
 
 Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group(function () {
     Route::get('/', [ParentOtpAuthController::class, 'showRequestForm'])->name('form');
@@ -472,6 +477,24 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-campaign-settings', [PaymentCampaignSettingController::class, 'save'])
         ->middleware('role:system_admin')
         ->name('system.payment-campaign-settings.save');
+    Route::get('/system/qr-campaigns', [QrCampaignController::class, 'index'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.index');
+    Route::post('/system/qr-campaigns', [QrCampaignController::class, 'store'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.store');
+    Route::patch('/system/qr-campaigns/{qrCampaign}', [QrCampaignController::class, 'update'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.update');
+    Route::patch('/system/qr-campaigns/{qrCampaign}/toggle', [QrCampaignController::class, 'toggle'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.toggle');
+    Route::get('/system/qr-campaigns/{qrCampaign}/qr.png', [QrCampaignController::class, 'qrImage'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.qr-image');
+    Route::get('/system/qr-campaigns/{qrCampaign}/poster.pdf', [QrCampaignController::class, 'posterPdf'])
+        ->middleware('role:system_admin')
+        ->name('system.qr-campaigns.poster');
     Route::get('/system/payment-gateway-settings', [PaymentGatewaySettingController::class, 'index'])
         ->middleware('role:system_admin')
         ->name('system.payment-gateway-settings.index');

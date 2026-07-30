@@ -15,6 +15,7 @@ class FamilyPaymentTransaction extends Model
         'family_billing_id',
         'family_payment_installment_id',
         'user_id',
+        'qr_campaign_id',
         'payment_provider',
         'external_order_id',
         'receipt_uuid',
@@ -128,6 +129,11 @@ class FamilyPaymentTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function qrCampaign(): BelongsTo
+    {
+        return $this->belongsTo(QrCampaign::class);
     }
 
     public function allocations(): HasMany

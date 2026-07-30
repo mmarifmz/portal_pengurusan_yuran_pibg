@@ -18,6 +18,7 @@ use App\Services\ParentAccessLogService;
 use App\Services\ParentAccountService;
 use App\Services\ParentPaymentNotificationService;
 use App\Services\PaymentCampaignService;
+use App\Services\QrAttributionService;
 use App\Services\TeacherPaymentNotificationService;
 use App\Services\ToyyibPayService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -41,7 +42,8 @@ class ParentPaymentController extends Controller
         private readonly ParentPaymentNotificationService $paymentNotificationService,
         private readonly TeacherPaymentNotificationService $teacherPaymentNotificationService,
         private readonly ParentAccountService $parentAccountService,
-        private readonly ParentAccessLogService $parentAccessLogService
+        private readonly ParentAccessLogService $parentAccessLogService,
+        private readonly QrAttributionService $qrAttributionService,
     ) {}
 
     public function checkout(Request $request, FamilyBilling $familyBilling): View|RedirectResponse
@@ -373,6 +375,7 @@ class ParentPaymentController extends Controller
         $transaction = FamilyPaymentTransaction::query()->create([
             'family_billing_id' => $familyBilling->id,
             'user_id' => $request->user()?->id,
+            'qr_campaign_id' => $this->qrAttributionService->campaignId($request),
             'payment_provider' => 'toyyibpay',
             'external_order_id' => $externalOrderId,
             'provider_bill_code' => $billCode,
@@ -553,6 +556,7 @@ class ParentPaymentController extends Controller
             'family_billing_id' => $familyBilling->id,
             'family_payment_installment_id' => $installment->id,
             'user_id' => $request->user()?->id,
+            'qr_campaign_id' => $this->qrAttributionService->campaignId($request),
             'payment_provider' => 'toyyibpay',
             'external_order_id' => $externalOrderId,
             'provider_bill_code' => $billCode,
