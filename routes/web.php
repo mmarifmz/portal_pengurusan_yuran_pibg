@@ -316,6 +316,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/class-progress/{class}/details', [TeacherClassProgressController::class, 'classDetails'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.class-progress.details');
+    Route::get('/teacher/class-progress/{class}/pdf', [TeacherClassProgressController::class, 'classPdf'])
+        ->middleware('role:teacher,super_teacher,system_admin')
+        ->name('teacher.class-progress.pdf');
+    Route::get('/admin/classes/reports/pdf-archive', [TeacherClassProgressController::class, 'allClassesPdfZip'])
+        ->middleware('role:system_admin')
+        ->name('admin.classes.pdf-archive');
     Route::get('/admin/classes/{class}/whatsapp-preview', [TeacherClassProgressController::class, 'whatsappPreview'])
         ->middleware('role:system_admin')
         ->name('admin.classes.whatsapp-preview');

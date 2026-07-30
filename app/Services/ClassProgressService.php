@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\FamilyBilling;
 use App\Models\LegacyStudentPayment;
-use App\Models\Student;
 use App\Models\User;
 use App\Support\MalaysianPhone;
 use Illuminate\Support\Collection;
@@ -15,8 +14,7 @@ class ClassProgressService
     public function __construct(
         private readonly PaymentReportingService $paymentReportingService,
         private readonly WhatsAppMessageQueueService $whatsAppMessageQueueService
-    ) {
-    }
+    ) {}
 
     /**
      * @return Collection<int, array<string, mixed>>
@@ -116,6 +114,8 @@ class ClassProgressService
                 'fully_paid_families' => (int) $summary['fully_paid_families'],
                 'partial_paid_families' => (int) $summary['partial_paid_families'],
                 'unpaid_families' => (int) $summary['unpaid_families'],
+                'yuran_collected' => (float) $summary['yuran_collected'],
+                'sumbangan_tambahan_collected' => (float) $summary['sumbangan_tambahan_collected'],
                 'jumlah_kutipan' => (float) $summary['jumlah_kutipan'],
                 'baki_tertunggak' => (float) $summary['baki_tertunggak'],
                 'is_my_class' => $this->isOwnClassViewer($viewer, $className),
@@ -211,6 +211,9 @@ class ClassProgressService
                     'family_code' => $entry['family_code'],
                     'parent_name' => $entry['parent_name'],
                     'parent_phone' => $showPhone ? $entry['parent_phone'] : null,
+                    'balance_amount' => (float) $entry['balance_amount'],
+                    'status_key' => $entry['status_key'],
+                    'status_label' => $entry['status_key'] === 'pending' ? 'Dalam proses' : 'Belum bayar',
                     'has_previous_year_payment' => (bool) $entry['previous_year_paid'],
                     'previous_year_paid' => (bool) $entry['previous_year_paid'],
                     'previous_paid_year' => $entry['previous_paid_year'],
