@@ -209,6 +209,8 @@ class DashboardController extends Controller
 
         $totalStudents = $students->count();
         $dashboardStats = $this->paymentReportingService->dashboardStats($selectedDashboardYear);
+        $previousPayerCohort = $this->paymentReportingService->previousYearPayerCohort($currentYear);
+        $collectionWindowComparison = $this->paymentReportingService->collectionWindowComparison($currentYear);
         $totalFamilies = (int) ($dashboardStats['total_families'] ?? $familyBillings->count());
         $familiesPaid = (int) ($dashboardStats['fully_paid_families'] ?? 0);
         $familiesPartial = (int) ($dashboardStats['partial_paid_families'] ?? 0);
@@ -616,6 +618,8 @@ class DashboardController extends Controller
             'familiesPaid' => $familiesPaid,
             'familiesPartial' => $familiesPartial,
             'familiesUnpaid' => $familiesUnpaid,
+            'previousPayerCohort' => $previousPayerCohort,
+            'collectionWindowComparison' => $collectionWindowComparison,
             'totalStudents' => $totalStudents,
             'tuitionCollected' => $tuitionCollected,
             'donationCollected' => $donationCollected,

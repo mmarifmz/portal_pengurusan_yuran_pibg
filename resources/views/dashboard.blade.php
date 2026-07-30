@@ -121,6 +121,117 @@
         </div>
 
         <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-zinc-500">Petunjuk pembayar berulang</p>
+                    <h3 class="text-lg font-semibold text-zinc-900">
+                        Status keluarga yang membayar {{ $previousPayerCohort['previous_year'] }} pada {{ $previousPayerCohort['current_year'] }}
+                    </h3>
+                    <p class="mt-1 text-xs text-zinc-500">
+                        Dipadankan melalui kod keluarga dan terhad kepada keluarga yang masih aktif tahun ini.
+                    </p>
+                </div>
+                <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-right">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-rose-700">Belum membuat bayaran</p>
+                    <p class="mt-1 text-3xl font-bold text-rose-700">{{ number_format((int) $previousPayerCohort['unpaid_families']) }}</p>
+                    <p class="text-xs text-rose-600">{{ number_format((float) $previousPayerCohort['unpaid_percentage'], 1) }}% daripada rekod bil semasa</p>
+                </div>
+            </div>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <p class="text-xs text-zinc-500">Pembayar {{ $previousPayerCohort['previous_year'] }}</p>
+                    <p class="mt-1 text-xl font-bold text-zinc-900">{{ number_format((int) $previousPayerCohort['previous_paid_families']) }}</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p class="text-xs text-emerald-700">Masih aktif {{ $previousPayerCohort['current_year'] }}</p>
+                    <p class="mt-1 text-xl font-bold text-emerald-800">{{ number_format((int) $previousPayerCohort['active_current_year_families']) }}</p>
+                </div>
+                <div class="rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                    <p class="text-xs text-zinc-500">Tidak aktif / telah keluar</p>
+                    <p class="mt-1 text-xl font-bold text-zinc-700">{{ number_format((int) $previousPayerCohort['inactive_or_departed_families']) }}</p>
+                    <p class="text-xs text-zinc-500">Tidak dikira sebagai belum bayar</p>
+                </div>
+            </div>
+
+            @if ((int) $previousPayerCohort['missing_billing_families'] > 0)
+                <p class="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                    {{ number_format((int) $previousPayerCohort['missing_billing_families']) }} keluarga aktif belum mempunyai rekod bil {{ $previousPayerCohort['current_year'] }} dan dipaparkan berasingan daripada “belum bayar”.
+                </p>
+            @endif
+
+            <div class="mt-5 h-64">
+                <canvas
+                    id="previousPayerCohortChart"
+                    class="h-full w-full"
+                    role="img"
+                    aria-label="Status bayaran {{ $previousPayerCohort['current_year'] }} bagi keluarga yang membayar pada {{ $previousPayerCohort['previous_year'] }}"
+                ></canvas>
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-zinc-500">Perbandingan tempoh kutipan</p>
+                    <h3 class="text-lg font-semibold text-zinc-900">
+                        Kutipan 30, 60 dan 90 hari: {{ $collectionWindowComparison['previous_year']['year'] }} vs {{ $collectionWindowComparison['current_year']['year'] }}
+                    </h3>
+                    <p class="mt-1 text-xs text-zinc-500">
+                        Kutipan kumulatif pada tempoh kempen yang sama. Hari pertama bermula daripada tarikh bayaran berjaya paling awal bagi setiap tahun.
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 font-semibold text-sky-800">
+                        {{ $collectionWindowComparison['previous_year']['year'] }} mula {{ $collectionWindowComparison['previous_year']['start_date_label'] }}
+                    </span>
+                    <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 font-semibold text-amber-800">
+                        {{ $collectionWindowComparison['current_year']['year'] }} mula {{ $collectionWindowComparison['current_year']['start_date_label'] }}
+                    </span>
+                </div>
+            </div>
+
+            @if (! $collectionWindowComparison['all_windows_complete'])
+                <p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Sekurang-kurangnya satu tempoh belum lengkap. Nilai semasa dipaparkan setakat hari ini dan perlu dibaca sebagai kemajuan sementara.
+                </p>
+            @endif
+
+            <div class="mt-5 h-72">
+                <canvas
+                    id="collectionWindowComparisonChart"
+                    class="h-full w-full"
+                    role="img"
+                    aria-label="Perbandingan kutipan kumulatif 30, 60 dan 90 hari antara {{ $collectionWindowComparison['previous_year']['year'] }} dan {{ $collectionWindowComparison['current_year']['year'] }}"
+                ></canvas>
+            </div>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                @foreach ($collectionWindowComparison['windows'] as $window)
+                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $window['label'] }}</p>
+                        <div class="mt-2 flex items-end justify-between gap-3">
+                            <div>
+                                <p class="text-xs text-sky-700">{{ $collectionWindowComparison['previous_year']['year'] }}</p>
+                                <p class="font-bold text-sky-900">RM {{ number_format((float) $window['previous_amount'], 2) }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-amber-700">{{ $collectionWindowComparison['current_year']['year'] }}</p>
+                                <p class="font-bold text-amber-900">RM {{ number_format((float) $window['current_amount'], 2) }}</p>
+                            </div>
+                        </div>
+                        <p class="mt-2 border-t border-zinc-200 pt-2 text-xs font-semibold text-zinc-700">
+                            Beza {{ $window['difference'] >= 0 ? '+' : '-' }}RM {{ number_format(abs((float) $window['difference']), 2) }}
+                            @if ($window['difference_percentage'] !== null)
+                                ({{ $window['difference_percentage'] >= 0 ? '+' : '' }}{{ number_format((float) $window['difference_percentage'], 1) }}%)
+                            @endif
+                        </p>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-xs uppercase tracking-wide text-zinc-500">Collection trend</p>
@@ -278,6 +389,8 @@
                 const dashboardState = (window.__portalDashboardCharts = window.__portalDashboardCharts || {
                     bar: null,
                     pie: null,
+                    cohort: null,
+                    windowComparison: null,
                     line: null,
                     initialized: false,
                 });
@@ -415,6 +528,170 @@
                         updateFamilyStatusPie();
                     } else {
                         destroyChart('pie');
+                    }
+
+                    const cohortCanvas = document.getElementById('previousPayerCohortChart');
+                    if (cohortCanvas) {
+                        destroyChart('cohort');
+
+                        const previousPayerCohort = @json($previousPayerCohort ?? []);
+                        const currentCohortYear = Number(previousPayerCohort.current_year || 0);
+                        const cohortValueLabels = {
+                            id: 'cohortValueLabels',
+                            afterDatasetsDraw(chart) {
+                                const ctx = chart.ctx;
+                                const values = chart.data.datasets[0]?.data || [];
+
+                                ctx.save();
+                                ctx.fillStyle = '#3f3f46';
+                                ctx.font = '600 12px sans-serif';
+                                ctx.textBaseline = 'middle';
+
+                                chart.getDatasetMeta(0).data.forEach((bar, index) => {
+                                    const value = Number(values[index] || 0);
+                                    const nearRightEdge = bar.x > chart.chartArea.right - 28;
+                                    ctx.textAlign = nearRightEdge ? 'right' : 'left';
+                                    ctx.fillText(
+                                        String(value),
+                                        nearRightEdge ? chart.chartArea.right - 4 : bar.x + 7,
+                                        bar.y
+                                    );
+                                });
+
+                                ctx.restore();
+                            },
+                        };
+
+                        dashboardState.cohort = new Chart(cohortCanvas, {
+                            type: 'bar',
+                            plugins: [cohortValueLabels],
+                            data: {
+                                labels: [
+                                    `Selesai dibayar ${currentCohortYear}`,
+                                    'Bayaran sebahagian',
+                                    'Belum membuat bayaran',
+                                    'Tiada rekod bil semasa',
+                                ],
+                                datasets: [{
+                                    data: [
+                                        Number(previousPayerCohort.fully_paid_families || 0),
+                                        Number(previousPayerCohort.partial_paid_families || 0),
+                                        Number(previousPayerCohort.unpaid_families || 0),
+                                        Number(previousPayerCohort.missing_billing_families || 0),
+                                    ],
+                                    backgroundColor: [
+                                        'rgba(16, 185, 129, 0.82)',
+                                        'rgba(245, 158, 11, 0.82)',
+                                        'rgba(244, 63, 94, 0.82)',
+                                        'rgba(113, 113, 122, 0.72)',
+                                    ],
+                                    borderColor: [
+                                        'rgba(5, 150, 105, 1)',
+                                        'rgba(217, 119, 6, 1)',
+                                        'rgba(225, 29, 72, 1)',
+                                        'rgba(82, 82, 91, 1)',
+                                    ],
+                                    borderWidth: 1,
+                                    borderRadius: 7,
+                                }],
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                layout: { padding: { right: 22 } },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label(context) {
+                                                return `${Number(context.raw || 0)} keluarga`;
+                                            },
+                                        },
+                                    },
+                                },
+                                scales: {
+                                    x: {
+                                        beginAtZero: true,
+                                        ticks: { precision: 0 },
+                                        title: { display: true, text: 'Bilangan keluarga' },
+                                    },
+                                    y: { grid: { display: false } },
+                                },
+                            },
+                        });
+                    } else {
+                        destroyChart('cohort');
+                    }
+
+                    const comparisonCanvas = document.getElementById('collectionWindowComparisonChart');
+                    if (comparisonCanvas) {
+                        destroyChart('windowComparison');
+
+                        const collectionWindowComparison = @json($collectionWindowComparison ?? []);
+                        const comparisonWindows = Array.isArray(collectionWindowComparison.windows)
+                            ? collectionWindowComparison.windows
+                            : [];
+                        const previousComparisonYear = Number(collectionWindowComparison.previous_year?.year || 0);
+                        const currentComparisonYear = Number(collectionWindowComparison.current_year?.year || 0);
+
+                        dashboardState.windowComparison = new Chart(comparisonCanvas, {
+                            type: 'bar',
+                            data: {
+                                labels: comparisonWindows.map((window) => window.label),
+                                datasets: [
+                                    {
+                                        label: String(previousComparisonYear),
+                                        data: comparisonWindows.map((window) => Number(window.previous_amount || 0)),
+                                        backgroundColor: 'rgba(14, 165, 233, 0.72)',
+                                        borderColor: 'rgba(2, 132, 199, 1)',
+                                        borderWidth: 1,
+                                        borderRadius: 7,
+                                    },
+                                    {
+                                        label: String(currentComparisonYear),
+                                        data: comparisonWindows.map((window) => Number(window.current_amount || 0)),
+                                        backgroundColor: 'rgba(245, 158, 11, 0.72)',
+                                        borderColor: 'rgba(217, 119, 6, 1)',
+                                        borderWidth: 1,
+                                        borderRadius: 7,
+                                    },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { intersect: false, mode: 'index' },
+                                plugins: {
+                                    legend: { position: 'top' },
+                                    tooltip: {
+                                        callbacks: {
+                                            label(context) {
+                                                const amount = Number(context.raw || 0).toLocaleString('en-MY', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                });
+
+                                                return `${context.dataset.label}: RM ${amount}`;
+                                            },
+                                        },
+                                    },
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            callback(value) {
+                                                return `RM ${Number(value).toLocaleString('en-MY')}`;
+                                            },
+                                        },
+                                    },
+                                    x: { grid: { display: false } },
+                                },
+                            },
+                        });
+                    } else {
+                        destroyChart('windowComparison');
                     }
 
                     const lineCanvas = document.getElementById('dailyCollectionChart');
