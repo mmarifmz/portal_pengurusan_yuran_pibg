@@ -2,35 +2,56 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FamilyBilling;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class StudentImportController extends Controller
 {
+    private const SCHOOL_CODE = 'SSP';
+
     public function create(): View
     {
-        return view('students.import');
+        return view('students.import', [
+            'nextFamilyCode' => $this->formatFamilyCode($this->nextFamilySequence()),
+            'existingFamilies' => $this->existingFamilyOptions(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'bulk_rows' => ['required', 'string'],
-            'school_code' => ['nullable', 'string', 'max:6'],
             'delimiter' => ['nullable', 'in:comma,pipe'],
+            'import_mode' => ['required', 'in:new,existing'],
+            'existing_family_code' => ['nullable', 'required_if:import_mode,existing', 'string', 'max:255'],
         ]);
 
-        $schoolCode = strtoupper(trim($validated['school_code'] ?? 'SSP'));
-        $schoolCode = preg_replace('/[^A-Z0-9]/', '', $schoolCode) ?: 'SSP';
         $delimiter = $this->resolveDelimiter($validated['delimiter'] ?? 'comma');
+        $importMode = $validated['import_mode'];
+        $existingFamilyCode = $importMode === 'existing'
+            ? strtoupper(trim((string) ($validated['existing_family_code'] ?? '')))
+            : null;
+
+        if ($existingFamilyCode !== null && ! $this->familyExists($existingFamilyCode)) {
+            throw ValidationException::withMessages([
+                'existing_family_code' => 'Select an existing family code from the list.',
+            ]);
+        }
+
+        $nextFamilySequence = $this->nextFamilySequence();
 
         $lines = preg_split('/\r\n|\r|\n/', trim($validated['bulk_rows']) ?: '');
 
         $report = [
             'processed' => 0,
             'created' => 0,
+            'first_family_code' => null,
+            'last_family_code' => null,
             'duplicates' => [],
             'errors' => [],
         ];
@@ -45,27 +66,28 @@ class StudentImportController extends Controller
             $report['processed']++;
             $segments = $this->splitRow($trimmed, $delimiter);
 
-            if (count($segments) < 3) {
-                $report['errors'][] = "Skipped line because it needs kode keluarga, kelas, and nama: {$trimmed}";
+            if (count($segments) < 2) {
+                $report['errors'][] = "Skipped line because it needs nama murid and kelas: {$trimmed}";
+
                 continue;
             }
 
-            [$familyRaw, $className, $fullName] = array_slice($segments, 0, 3);
+            [$fullName, $className] = array_slice($segments, 0, 2);
 
-            $familyCode = $this->normalizeFamilyCode($schoolCode, $familyRaw);
+            $familyCode = $existingFamilyCode ?? $this->formatFamilyCode($nextFamilySequence);
             $className = $this->normalizeClassName($className);
             $fullName = $this->normalizeFullName($fullName);
             $isDuplicate = $this->hasDuplicateNameAndClass($fullName, $className);
 
-            $status = 'active';
             $existing = $this->findExistingStudent($familyCode, $fullName);
 
             if ($existing) {
-                $status = "duplicate (family {$familyCode})";
                 $report['duplicates'][] = "{$familyCode} / {$fullName}";
+
+                continue;
             }
 
-            $studentNo = $this->generateStudentNo($schoolCode, $className, $existing?->student_no ?? null);
+            $studentNo = $this->generateStudentNo(self::SCHOOL_CODE, $className);
 
             Student::create([
                 'student_no' => $studentNo,
@@ -73,7 +95,7 @@ class StudentImportController extends Controller
                 'class_name' => $className,
                 'full_name' => $fullName,
                 'is_duplicate' => $isDuplicate,
-                'status' => $status,
+                'status' => 'active',
                 'total_fee' => 0,
                 'paid_amount' => 0,
                 'parent_name' => null,
@@ -90,16 +112,26 @@ class StudentImportController extends Controller
             }
 
             $report['created']++;
+            $report['first_family_code'] ??= $familyCode;
+            $report['last_family_code'] = $familyCode;
+            if ($importMode === 'new') {
+                $nextFamilySequence++;
+            }
         }
 
         $message = "Processed {$report['processed']} lines.";
 
         if ($report['created'] > 0) {
             $message .= " Added {$report['created']} students.";
+            $message .= $importMode === 'existing'
+                ? " Linked them to existing family {$report['first_family_code']}."
+                : ($report['first_family_code'] === $report['last_family_code']
+                ? " Assigned family code {$report['first_family_code']}."
+                : " Assigned family codes {$report['first_family_code']} to {$report['last_family_code']}.");
         }
 
         if ($report['duplicates']) {
-            $message .= ' Duplicates: ' . implode(', ', array_slice($report['duplicates'], 0, 5));
+            $message .= ' Duplicates: '.implode(', ', array_slice($report['duplicates'], 0, 5));
         }
 
         if ($report['errors']) {
@@ -114,15 +146,69 @@ class StudentImportController extends Controller
     private function splitRow(string $line, string $delimiter): array
     {
         $segments = str_getcsv($line, $delimiter);
+
         return array_values(array_filter(array_map('trim', $segments), fn ($value) => $value !== ''));
     }
 
-    private function normalizeFamilyCode(string $schoolCode, string $family): string
+    private function nextFamilySequence(): int
     {
-        $numeric = preg_replace('/[^0-9]/', '', $family);
-        $numeric = $numeric ?: '0';
+        $pattern = '/^'.preg_quote(self::SCHOOL_CODE, '/').'-(\d+)$/';
+        $codes = Student::query()
+            ->where('family_code', 'like', self::SCHOOL_CODE.'-%')
+            ->pluck('family_code')
+            ->merge(
+                FamilyBilling::query()
+                    ->where('family_code', 'like', self::SCHOOL_CODE.'-%')
+                    ->pluck('family_code')
+            );
 
-        return sprintf('%s-%04d', $schoolCode, (int) $numeric);
+        $highestSequence = $codes
+            ->map(function ($familyCode) use ($pattern): ?int {
+                return preg_match($pattern, trim((string) $familyCode), $matches)
+                    ? (int) $matches[1]
+                    : null;
+            })
+            ->filter(fn (?int $sequence): bool => $sequence !== null)
+            ->max();
+
+        return ((int) $highestSequence) + 1;
+    }
+
+    private function formatFamilyCode(int $sequence): string
+    {
+        return sprintf('%s-%04d', self::SCHOOL_CODE, $sequence);
+    }
+
+    /**
+     * @return Collection<int, array{family_code: string, students: string}>
+     */
+    private function existingFamilyOptions(): Collection
+    {
+        return Student::query()
+            ->whereNotNull('family_code')
+            ->where('family_code', '!=', '')
+            ->orderBy('family_code')
+            ->orderBy('full_name')
+            ->get(['family_code', 'full_name', 'class_name'])
+            ->groupBy(fn (Student $student): string => trim((string) $student->family_code))
+            ->map(function (Collection $students, string $familyCode): array {
+                $studentSummary = $students
+                    ->map(fn (Student $student): string => trim($student->full_name.' · '.($student->class_name ?: 'No class')))
+                    ->implode('; ');
+
+                return [
+                    'family_code' => $familyCode,
+                    'students' => $studentSummary,
+                ];
+            })
+            ->values();
+    }
+
+    private function familyExists(string $familyCode): bool
+    {
+        return Student::query()
+            ->where('family_code', $familyCode)
+            ->exists();
     }
 
     private function normalizeClassName(string $value): string
@@ -150,12 +236,8 @@ class StudentImportController extends Controller
         };
     }
 
-    private function generateStudentNo(string $schoolCode, string $className, ?string $fallback): string
+    private function generateStudentNo(string $schoolCode, string $className): string
     {
-        if ($fallback) {
-            return $fallback;
-        }
-
         $yearDigit = (int) filter_var($className, FILTER_SANITIZE_NUMBER_INT);
         $yearDigit = $yearDigit > 0 ? $yearDigit : 0;
         $try = 0;
