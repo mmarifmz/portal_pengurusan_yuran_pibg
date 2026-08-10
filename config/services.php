@@ -65,6 +65,12 @@ return [
         'payment_channel' => env('TOYYIBPAY_PAYMENT_CHANNEL', '0'),
         'charge_to_customer' => env('TOYYIBPAY_CHARGE_TO_CUSTOMER', ''),
     ],
+
+    'jogathon_toyyibpay' => [
+        'base_url' => env('JOGATHON_TOYYIBPAY_BASE_URL', 'https://toyyibpay.com'),
+        'user_secret_key' => env('JOGATHON_TOYYIBPAY_USER_SECRET_KEY'),
+        'category_code' => env('JOGATHON_TOYYIBPAY_CATEGORY_CODE'),
+    ],
     'parent_tester_phones' => array_values(array_filter(array_map(
         static fn ($phone) => trim((string) $phone),
         explode(',', (string) env('PARENT_TESTER_PHONES', '60136454001'))

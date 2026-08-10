@@ -118,6 +118,11 @@ class Student extends Model
         return $this->hasMany(StudentClassChange::class);
     }
 
+    public function jogathonParticipants(): HasMany
+    {
+        return $this->hasMany(JogathonParticipant::class);
+    }
+
     public function socialTags(): BelongsToMany
     {
         return $this->belongsToMany(SocialTag::class, 'student_social_tags')

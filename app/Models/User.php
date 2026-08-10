@@ -4,9 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -124,6 +124,16 @@ class User extends Authenticatable
     public function changeAuditsReceived(): HasMany
     {
         return $this->hasMany(UserChangeAudit::class, 'affected_user_id');
+    }
+
+    public function jogathonCampaignsCreated(): HasMany
+    {
+        return $this->hasMany(JogathonCampaign::class, 'created_by_user_id');
+    }
+
+    public function jogathonAuditsAuthored(): HasMany
+    {
+        return $this->hasMany(JogathonAudit::class, 'actor_user_id');
     }
 
     public function scopeWithRole(Builder $query, string $role): Builder

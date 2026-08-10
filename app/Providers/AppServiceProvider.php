@@ -71,6 +71,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageImports', fn (User $user): bool => $user->isSystemAdmin());
         Gate::define('managePortalSettings', fn (User $user): bool => $user->isSystemAdmin());
         Gate::define('manageSchoolCalendar', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('manageJogathonCampaigns', fn (User $user): bool => $user->isSystemAdmin());
+        Gate::define('viewJogathonClassWorkspace', fn (User $user): bool => $user->hasAnyRole(['teacher', 'super_teacher', 'system_admin', 'pta']));
+        Gate::define('enterJogathonPhysicalCollections', fn (User $user): bool => $user->hasAnyRole(['teacher', 'super_teacher', 'system_admin']));
     }
 
     protected function registerGlobalToasterData(): void

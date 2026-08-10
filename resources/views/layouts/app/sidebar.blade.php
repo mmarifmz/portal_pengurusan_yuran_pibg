@@ -136,6 +136,11 @@
                         <flux:sidebar.item icon="trophy" :href="route('teacher.contribution-leaderboard')" :current="request()->routeIs('teacher.contribution-leaderboard')" wire:navigate>
                             {{ __('Leaderboard Sumbangan') }}
                         </flux:sidebar.item>
+                        @can('enterJogathonPhysicalCollections')
+                            <flux:sidebar.item icon="qr-code" :href="route('teacher.jogathon.cards.index')" :current="request()->routeIs('teacher.jogathon.cards.*')" wire:navigate>
+                                {{ __('Kad Jogathon') }}
+                            </flux:sidebar.item>
+                        @endcan
                     @endif
 
                     @if ($showStaffNavigation && auth()->user()->isSystemAdmin())
@@ -204,6 +209,11 @@
                 @if ($showStaffNavigation && ! auth()->user()->isParentOnly() && (auth()->user()->isSystemAdmin() || auth()->user()->canManageTeacherUsers()))
                     <flux:sidebar.group :heading="__('Platform Config')" class="grid gap-1 mt-2">
                         @if (auth()->user()->isSystemAdmin())
+                            @if (\Illuminate\Support\Facades\Schema::hasTable('jogathon_campaigns'))
+                                <flux:sidebar.item icon="flag" :href="route('system.jogathon.campaigns.index')" :current="request()->routeIs('system.jogathon.*')" wire:navigate>
+                                    {{ __('Jogathon Digital') }}
+                                </flux:sidebar.item>
+                            @endif
                             <flux:sidebar.item icon="globe-alt" :href="route('system.portal-seo.index')" :current="request()->routeIs('system.portal-seo.*')" wire:navigate>
                                 {{ __('Portal') }}
                             </flux:sidebar.item>
