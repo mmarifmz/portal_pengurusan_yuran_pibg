@@ -7,6 +7,7 @@
     $whatsAppUrl = $participantUrl.(str_contains($participantUrl, '?') ? '&' : '?').'src=whatsapp';
     $copyUrl = $participantUrl.(str_contains($participantUrl, '?') ? '&' : '?').'src=copy';
     $whatsAppText = rawurlencode('Jom sokong perjalanan Jogathon Digital '.$participant->public_display_name.' di '.$whatsAppUrl);
+    $supportDisplayName = $participant->student?->full_name ?: $participant->public_display_name;
 @endphp
 
 @extends('layouts.jogathon-public')
@@ -74,7 +75,7 @@
     <section class="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[1.1fr_.9fr]">
         <div class="rounded-3xl border border-emerald-950/10 bg-white p-5 shadow-sm sm:p-7">
             <p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-700">Sumbangan peserta</p>
-            <h2 class="mt-1 text-2xl font-black text-emerald-950">Sokong perjalanan {{ $participant->public_display_name }}</h2>
+            <h2 class="mt-1 text-2xl font-black text-emerald-950">Sokong perjalanan {{ $supportDisplayName }}</h2>
             <p class="mt-2 text-sm leading-6 text-slate-600">Halaman sumbangan khas disediakan untuk peserta ini. Penyumbang boleh memilih amaun, bucket kempen dan mesej sokongan sebelum diteruskan ke ToyyibPay.</p>
 
             <div class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5">

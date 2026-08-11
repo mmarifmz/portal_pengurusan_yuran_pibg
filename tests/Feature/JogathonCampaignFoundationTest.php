@@ -3,6 +3,7 @@
 use App\Models\JogathonAudit;
 use App\Models\JogathonCampaign;
 use App\Models\JogathonCause;
+use App\Models\JogathonClassTeacher;
 use App\Models\JogathonContribution;
 use App\Models\JogathonParticipant;
 use App\Models\Student;
@@ -11,6 +12,7 @@ use App\Services\JogathonCampaignFoundationService;
 use App\Services\JogathonParticipantProvisioningService;
 use App\Support\JogathonAmount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
 
@@ -107,6 +109,47 @@ test('only system admin may administer Jogathon campaigns', function () {
 
     $this->actingAs($admin)->get(route('system.jogathon.campaigns.index'))->assertOk();
     $this->actingAs($teacher)->get(route('system.jogathon.campaigns.index'))->assertForbidden();
+});
+
+test('backend navigation and direct routes are restricted to jogathon mini app', function () {
+    $admin = User::factory()->create(['role' => 'system_admin']);
+
+    $this->actingAs($admin)
+        ->get(route('dashboard'))
+        ->assertRedirect(route('system.jogathon.campaigns.index'));
+
+    $this->actingAs($admin)
+        ->get(route('system.jogathon.campaigns.index'))
+        ->assertOk()
+        ->assertSee('Laman Kempen')
+        ->assertSee('Kad Jogathon')
+        ->assertSee('Admin Jogathon')
+        ->assertDontSee('School Calendar')
+        ->assertDontSee('Class Progress')
+        ->assertDontSee('Student Directory')
+        ->assertDontSee('Finance Accounting')
+        ->assertDontSee('Payment Funnel')
+        ->assertDontSee('Parent Management')
+        ->assertDontSee('API Access')
+        ->assertDontSee('WhatsApp Queue')
+        ->assertDontSee('Backup DB');
+
+    foreach ([
+        '/school-calendar',
+        '/teacher/class-progress',
+        '/teacher/records',
+        '/teacher/api-access/docs',
+        '/teacher/finance-accounting',
+        '/teacher/parent-management',
+        '/students/import',
+        '/system/portal-seo',
+        '/system/payment-gateway-settings',
+        '/system/payment-funnel-monitor',
+        '/system/visitor-logs',
+        '/admin/whatsapp-queue/teacher-payment-notifications',
+    ] as $legacyPath) {
+        $this->actingAs($admin)->get($legacyPath)->assertNotFound();
+    }
 });
 
 test('campaign target conversion stores exact integer sen and centimetres', function () {
@@ -343,6 +386,228 @@ test('teacher can register only own class physical card number and duplicate num
 
     expect($ownParticipant->fresh()->physical_card_number)->toBe('ssp-0007')
         ->and(JogathonAudit::query()->where('action', 'participant.physical_card_number_registered')->count())->toBe(1);
+});
+
+test('system admin imports minimal jogathon roster from external school api', function () {
+    Http::fake([
+        'https://source.example.test/api/v1/payment-status/search*' => Http::response([
+            'success' => true,
+            'count' => 1,
+            'data' => [
+                [
+                    'family_code' => 'SSP-SECRET',
+                    'guardian_name' => 'PARENT PRIVATE',
+                    'students' => [
+                        [
+                            'name' => 'Murid Jogathon Satu',
+                            'class' => '6 Alamanda',
+                            'status' => 'Aktif',
+                        ],
+                        [
+                            'name' => 'Murid Kelas Lain',
+                            'class' => '5 Azalea',
+                            'status' => 'Aktif',
+                        ],
+                    ],
+                    'payment' => [
+                        'receipt_url' => 'https://source.example.test/receipts/private',
+                        'total_paid' => '100.00',
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $admin = User::factory()->create(['role' => 'system_admin']);
+    $campaign = JogathonCampaign::factory()->create(['status' => JogathonCampaign::STATUS_ACTIVE]);
+
+    $this->actingAs($admin)->post(route('system.jogathon.campaigns.roster-import.store', $campaign), [
+        'endpoint' => 'https://source.example.test/api/v1/payment-status/search',
+        'api_key' => 'source_live_secret_key',
+        'year' => 2026,
+        'class_names' => '6 ALAMANDA',
+        'keywords' => 'murid',
+        'teacher_mappings' => '6 ALAMANDA=Cikgu Jogathon',
+        'provision_participants' => '1',
+    ])->assertRedirect(route('system.jogathon.campaigns.index', ['campaign' => $campaign->id]));
+
+    Http::assertSent(fn ($request): bool => $request->hasHeader('Authorization', 'Bearer source_live_secret_key')
+        && $request['q'] === 'murid'
+        && $request['year'] === 2026
+        && $request['class'] === '6 ALAMANDA');
+
+    $student = Student::query()->where('full_name', 'MURID JOGATHON SATU')->firstOrFail();
+
+    expect($student->student_no)->toStartWith('JOG-')
+        ->and($student->class_name)->toBe('6 ALAMANDA')
+        ->and($student->getRawOriginal('family_code'))->toBeNull()
+        ->and($student->getRawOriginal('parent_name'))->toBeNull()
+        ->and($student->getRawOriginal('parent_phone'))->toBeNull()
+        ->and($student->getRawOriginal('parent_email'))->toBeNull()
+        ->and(Student::query()->where('full_name', 'MURID KELAS LAIN')->exists())->toBeFalse()
+        ->and(JogathonClassTeacher::query()->where('class_name', '6 ALAMANDA')->value('teacher_name'))->toBe('CIKGU JOGATHON')
+        ->and(JogathonParticipant::query()->where('student_id', $student->id)->exists())->toBeTrue();
+});
+
+test('roster import updates matching existing student by name and class instead of duplicating', function () {
+    Http::fake([
+        'https://source.example.test/api/v1/payment-status/search*' => Http::response([
+            'success' => true,
+            'data' => [
+                [
+                    'students' => [
+                        [
+                            'name' => 'Murid Sedia Ada',
+                            'class' => '2 Akasia',
+                            'status' => 'Aktif',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $admin = User::factory()->create(['role' => 'system_admin']);
+    $campaign = JogathonCampaign::factory()->create(['status' => JogathonCampaign::STATUS_ACTIVE]);
+    $existingStudent = createJogathonStudent('PIBG-EXISTING-001', 'MURID SEDIA ADA', '2 AKASIA');
+
+    $this->actingAs($admin)->post(route('system.jogathon.campaigns.roster-import.store', $campaign), [
+        'endpoint' => 'https://source.example.test/api/v1/payment-status/search',
+        'api_key' => 'source_live_secret_key',
+        'year' => 2026,
+        'class_names' => '2 AKASIA',
+        'keywords' => 'murid',
+        'provision_participants' => '1',
+    ])->assertRedirect();
+
+    expect(Student::query()->where('full_name', 'MURID SEDIA ADA')->where('class_name', '2 AKASIA')->count())->toBe(1)
+        ->and($existingStudent->fresh()->student_no)->toBe('PIBG-EXISTING-001')
+        ->and(JogathonParticipant::query()->where('student_id', $existingStudent->id)->exists())->toBeTrue();
+});
+
+test('admin login import publish and teacher login card registration simulation', function () {
+    Http::fake([
+        'https://source.example.test/api/v1/payment-status/search*' => Http::response([
+            'success' => true,
+            'data' => [
+                [
+                    'family_code' => 'SOURCE-FAMILY-SHOULD-NOT-BE-STORED',
+                    'guardian_name' => 'SOURCE GUARDIAN SHOULD NOT BE STORED',
+                    'students' => [
+                        [
+                            'name' => 'Murid Simulasi Admin Teacher',
+                            'class' => '6 Alamanda',
+                            'status' => 'Aktif',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $admin = User::factory()->create([
+        'role' => 'system_admin',
+        'email' => 'admin.simulation@example.test',
+    ]);
+    $teacher = User::factory()->create([
+        'role' => 'teacher',
+        'email' => 'teacher.6alamanda@example.test',
+        'class_name' => '6 ALAMANDA',
+    ]);
+    $otherTeacher = User::factory()->create([
+        'role' => 'teacher',
+        'email' => 'teacher.other@example.test',
+        'class_name' => '5 AZALEA',
+    ]);
+    $campaign = JogathonCampaign::factory()->create([
+        'name' => 'Larian Sihat Jogathon 2026',
+        'status' => JogathonCampaign::STATUS_ACTIVE,
+    ]);
+
+    $this->get(route('login'))
+        ->assertOk()
+        ->assertSee('Jogathon Digital SK Sri Petaling')
+        ->assertDontSee('Sumbangan PIBG');
+
+    $this->post(route('login.store'), [
+        'email' => $admin->email,
+        'password' => 'password',
+    ])->assertRedirect();
+    $this->assertAuthenticatedAs($admin);
+
+    $this->get(route('system.jogathon.campaigns.index', ['campaign' => $campaign->id]))
+        ->assertOk()
+        ->assertSee('Import Roster Jogathon');
+
+    $this->post(route('system.jogathon.campaigns.roster-import.store', $campaign), [
+        'endpoint' => 'https://source.example.test/api/v1/payment-status/search',
+        'api_key' => 'source_live_secret_key',
+        'year' => 2026,
+        'class_names' => '6 ALAMANDA',
+        'keywords' => 'murid',
+        'teacher_mappings' => '6 ALAMANDA=Cikgu Simulasi',
+        'provision_participants' => '1',
+    ])->assertRedirect(route('system.jogathon.campaigns.index', ['campaign' => $campaign->id]));
+
+    $student = Student::query()->where('full_name', 'MURID SIMULASI ADMIN TEACHER')->firstOrFail();
+    $participant = JogathonParticipant::query()->where('student_id', $student->id)->firstOrFail();
+
+    expect($student->class_name)->toBe('6 ALAMANDA')
+        ->and($student->getRawOriginal('family_code'))->toBeNull()
+        ->and($student->getRawOriginal('parent_name'))->toBeNull()
+        ->and(JogathonClassTeacher::query()->where('class_name', '6 ALAMANDA')->value('teacher_name'))->toBe('CIKGU SIMULASI')
+        ->and($participant->physical_card_number)->toBeNull();
+
+    $this->post(route('system.jogathon.campaigns.publish-participants', $campaign), [
+        'class_name' => '6 ALAMANDA',
+    ])->assertRedirect();
+
+    $participant->refresh();
+    expect($participant->is_published)->toBeTrue()
+        ->and($participant->public_display_name)->toBe('Pelari 6 ALAMANDA 001');
+
+    $this->post(route('logout'))->assertRedirect('/');
+
+    $this->post(route('login.store'), [
+        'email' => $teacher->email,
+        'password' => 'password',
+    ])->assertRedirect();
+    $this->assertAuthenticatedAs($teacher);
+
+    $this->get(route('teacher.jogathon.cards.index'))
+        ->assertOk()
+        ->assertSee('Daftar Nombor Kad Peserta')
+        ->assertSee('MURID SIMULASI ADMIN TEACHER')
+        ->assertSee('6 ALAMANDA');
+
+    $this->patch(route('system.jogathon.participants.physical-card-number.update', $participant), [
+        'physical_card_number' => 'SSP 0101',
+    ])->assertRedirect();
+
+    $participant->refresh();
+    expect($participant->physical_card_number)->toBe('ssp-0101');
+
+    $this->get(route('teacher.jogathon.cards.index'))
+        ->assertOk()
+        ->assertSee('/ssp-0101');
+
+    $this->post(route('logout'))->assertRedirect('/');
+
+    $this->post(route('login.store'), [
+        'email' => $otherTeacher->email,
+        'password' => 'password',
+    ])->assertRedirect();
+    $this->assertAuthenticatedAs($otherTeacher);
+
+    $this->get(route('teacher.jogathon.cards.index'))
+        ->assertOk()
+        ->assertDontSee('MURID SIMULASI ADMIN TEACHER');
+
+    $this->patch(route('system.jogathon.participants.physical-card-number.update', $participant), [
+        'physical_card_number' => 'ssp-0102',
+    ])->assertForbidden();
+
+    $this->get('/ssp-0101')->assertOk();
 });
 
 test('physical card collection cannot be entered for inactive participant states', function (array $participantState) {

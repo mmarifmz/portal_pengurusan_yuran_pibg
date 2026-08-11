@@ -320,6 +320,11 @@ test('campaign landing shows rm150k bucket plan leaderboard motivation prize and
         ->assertSee('Kelas 3 AKASIA')
         ->assertSee('Kelas 4 BESTARI')
         ->assertSee('Nama penuh murid tidak dipaparkan')
+        ->assertSee('Contoh: ssp-0001')
+        ->assertSee('name="physical_card_number"', false)
+        ->assertDontSee('w-[200%]', false)
+        ->assertDontSee('overflow-x-auto')
+        ->assertDontSee('Cari nama murid')
         ->assertDontSee('Nama Murid Kedua Peribadi')
         ->assertDontSee('PRIVATE-STUDENT-992')
         ->assertDontSee('PRIVATE-FAMILY-772')
@@ -348,8 +353,10 @@ test('home page is the digital jogathon landing instead of the legacy pibg payme
         ->assertSee('24 Okt 2026')
         ->assertSee('Kutipan: 5 Ogos - 24 Oktober 2026')
         ->assertSee('Minima: RM50 seorang')
+        ->assertSee('Contoh: ssp-0001')
         ->assertDontSee('Semakan &amp; Bayaran', false)
-        ->assertDontSee('Semak Nama Murid');
+        ->assertDontSee('Semak Nama Murid')
+        ->assertDontSee('Cari nama murid');
 });
 
 test('participant qr is generated only for a public participant', function () {
@@ -364,7 +371,7 @@ test('participant qr is generated only for a public participant', function () {
         ->assertHeader('x-robots-tag', 'noindex, nofollow');
 });
 
-test('individual participant has a dedicated donation page with no private student details', function () {
+test('individual participant page uses full student name in support section without exposing identifiers', function () {
     $participant = publicJogathonParticipant(campaignOverrides: [
         'show_class_publicly' => true,
     ]);
@@ -383,7 +390,12 @@ test('individual participant has a dedicated donation page with no private stude
             $participant->campaign,
             $participant->public_slug,
         ]), false)
-        ->assertSee('Sumbang untuk peserta ini');
+        ->assertSee('Sokong perjalanan NAMA MURID PERIBADI')
+        ->assertSee('Sumbang untuk peserta ini')
+        ->assertDontSee('PRIVATE-STUDENT-991')
+        ->assertDontSee('PRIVATE-FAMILY-771')
+        ->assertDontSee('private-parent-')
+        ->assertDontSee('60123456789');
 
     $this->get(route('jogathon.public.participants.donations.create', [
         $participant->campaign,
@@ -405,22 +417,24 @@ test('individual participant has a dedicated donation page with no private stude
         ->assertDontSee('60123456789');
 });
 
-test('campaign search can use private student name but redirects only to public donation page', function () {
-    $participant = publicJogathonParticipant(campaignOverrides: [
+test('campaign search opens participant by physical card number only', function () {
+    $participant = publicJogathonParticipant([
+        'physical_card_number' => 'ssp-0789',
+    ], campaignOverrides: [
         'show_class_publicly' => true,
     ]);
     JogathonCause::factory()->create(['campaign_id' => $participant->campaign_id]);
 
     $this->post(route('jogathon.public.participants.search', $participant->campaign), [
-        'student_name' => 'Nama Murid Peribadi',
+        'physical_card_number' => 'SSP 0789',
     ])->assertRedirect(route('jogathon.public.participants.donations.create', [
         $participant->campaign,
-        $participant->public_slug,
+        'ssp-0789',
     ]));
 
     $this->followingRedirects()
         ->post(route('jogathon.public.participants.search', $participant->campaign), [
-            'student_name' => 'Nama Murid Peribadi',
+            'physical_card_number' => 'ssp-0789',
         ])
         ->assertOk()
         ->assertSee('Halaman sumbangan peserta')
@@ -428,6 +442,10 @@ test('campaign search can use private student name but redirects only to public 
         ->assertDontSee('Nama Murid Peribadi')
         ->assertDontSee('PRIVATE-STUDENT-991')
         ->assertDontSee('PRIVATE-FAMILY-771');
+
+    $this->post(route('jogathon.public.participants.search', $participant->campaign), [
+        'student_name' => 'Nama Murid Peribadi',
+    ])->assertSessionHasErrors('physical_card_number');
 });
 
 test('public donor can create a separate jogathon toyyibpay bill without touching pibg payment tables', function () {

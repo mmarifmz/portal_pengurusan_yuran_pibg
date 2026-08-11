@@ -2,7 +2,10 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     @php
-        $title = 'Log Masuk Guru / Admin | Portal Sumbangan PIBG SK Sri Petaling';
+        $title = 'Log Masuk Guru / Admin | Jogathon Digital SK Sri Petaling';
+        $metaDescription = 'Log masuk pengurusan Jogathon Digital SK Sri Petaling untuk peserta, kad kutipan dan analitik kempen.';
+        $metaKeywords = 'Jogathon Digital, SK Sri Petaling, admin jogathon, kad kutipan digital';
+        $metaOgSiteName = 'Jogathon Digital SK Sri Petaling';
     @endphp
     @include('partials.head')
 
@@ -15,7 +18,7 @@
             --brand-soft: #f3f8f3;
         }
 
-        .portal-bg {
+        .jogathon-bg {
             background:
                 radial-gradient(70rem 34rem at 0% 0%, rgba(47, 122, 85, 0.14), transparent 58%),
                 radial-gradient(70rem 34rem at 100% 0%, rgba(229, 179, 56, 0.17), transparent 55%),
@@ -35,21 +38,20 @@
     </style>
 
 </head>
-<body class="portal-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
+<body class="jogathon-bg min-h-screen text-[color:var(--brand-ink)] antialiased">
     <header class="border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm">
         <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <a href="{{ route('home') }}" class="flex items-center gap-3">
                 <img src="{{ \App\Models\SiteSetting::schoolLogoUrl() }}" alt="Logo SK Sri Petaling" class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm sm:h-14 sm:w-14" />
                 <div>
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">Portal Rasmi</p>
-                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Sumbangan PIBG SK Sri Petaling</p>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500 sm:text-xs">Mini App Rasmi</p>
+                    <p class="text-sm font-bold text-[color:var(--brand-forest)] sm:text-base">Jogathon Digital SK Sri Petaling</p>
                 </div>
             </a>
 
             <div class="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:gap-2">
-                <a href="{{ route('home') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Back to portal</a>
-                <a href="{{ route('parent.search') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Carian Nama Murid</a>
-                <a href="{{ route('parent.login.form') }}" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Log Masuk Ibu Bapa</a>
+                <a href="{{ route('home') }}" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:text-sm">Laman kempen</a>
+                <a href="{{ route('home') }}#direktori" class="rounded-lg bg-[color:var(--brand-forest)] px-3 py-2 text-center text-xs font-semibold text-white transition hover:opacity-90 sm:text-sm">Direktori Peserta</a>
             </div>
         </div>
     </header>
@@ -65,7 +67,7 @@
                         {{ __('Log Masuk Guru / Admin') }}
                     </h1>
                     <p class="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-700 sm:text-base">
-                        {{ __('Masukkan email dan kata laluan untuk akses pengurusan portal sumbangan PIBG.') }}
+                        {{ __('Masukkan email dan kata laluan untuk akses pengurusan Jogathon Digital.') }}
                     </p>
                 </div>
 

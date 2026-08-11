@@ -55,17 +55,14 @@ class JogathonPublicController extends Controller
         $this->ensureCampaignIsPublic($jogathonCampaign);
 
         $request->merge([
-            'student_name' => app()->bound('jogathon.student_name_search')
-                ? (string) app('jogathon.student_name_search')
-                : (string) $request->input('student_name'),
+            'physical_card_number' => JogathonParticipant::normalizePhysicalCardNumber($request->input('physical_card_number')),
         ]);
 
         $validated = $request->validate([
-            'student_name' => ['required', 'string', 'max:120'],
+            'physical_card_number' => ['required', 'string', 'regex:/^ssp-[0-9]{4,8}$/'],
         ]);
 
-        $search = trim((string) $validated['student_name']);
-        $request->request->set('student_name', '[redacted]');
+        $cardNumber = (string) $validated['physical_card_number'];
 
         $participant = JogathonParticipant::query()
             ->select($this->participantSearchColumns())
@@ -74,18 +71,14 @@ class JogathonPublicController extends Controller
             ->where('is_published', true)
             ->where('participation_opt_out', false)
             ->whereNull('withdrawn_at')
-            ->where(function ($query) use ($search): void {
-                $query->where('public_display_name', 'like', '%'.$search.'%')
-                    ->orWhereHas('student', fn ($studentQuery) => $studentQuery->where('full_name', 'like', '%'.$search.'%'));
-            })
-            ->orderBy('public_display_name')
+            ->where('physical_card_number', $cardNumber)
             ->first();
 
         if (! $participant) {
             return redirect()
                 ->route('jogathon.public.campaigns.show', $jogathonCampaign)
                 ->withErrors([
-                    'student_name' => 'Nama murid tidak ditemui dalam senarai peserta awam Jogathon.',
+                    'physical_card_number' => 'Nombor kad peserta tidak ditemui. Sila semak nombor pada kad fizikal.',
                 ]);
         }
 
@@ -229,7 +222,7 @@ class JogathonPublicController extends Controller
         abort_unless($cardNumber !== null && JogathonParticipant::hasPhysicalCardNumberColumn(), 404);
 
         $participant = JogathonParticipant::query()
-            ->with('campaign')
+            ->with(['campaign', 'student:id,full_name'])
             ->where('physical_card_number', $cardNumber)
             ->firstOrFail($this->participantPublicColumns());
 
@@ -285,6 +278,7 @@ class JogathonPublicController extends Controller
         $normalizedCardNumber = JogathonParticipant::normalizePhysicalCardNumber($identifier);
 
         return JogathonParticipant::query()
+            ->with('student:id,full_name')
             ->where('campaign_id', $campaign->id)
             ->where(function ($query) use ($identifier, $normalizedCardNumber): void {
                 $query->where('public_slug', $identifier);
@@ -304,6 +298,7 @@ class JogathonPublicController extends Controller
         $columns = [
             'id',
             'campaign_id',
+            'student_id',
             'public_slug',
             'public_display_name',
             'class_name_snapshot',

@@ -9,6 +9,7 @@ use App\Http\Controllers\JogathonDonationController;
 use App\Http\Controllers\JogathonParticipantController;
 use App\Http\Controllers\JogathonPhysicalCollectionController;
 use App\Http\Controllers\JogathonPublicController;
+use App\Http\Controllers\JogathonRosterImportController;
 use App\Http\Controllers\JogathonTeacherCardController;
 use App\Http\Controllers\ParentDashboardController;
 use App\Http\Controllers\ParentInviteAuthController;
@@ -110,7 +111,19 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:parent')
         ->name('receipts.share-to-teacher');
 
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('dashboard', function () {
+        $user = auth()->user();
+
+        if ($user?->isSystemAdmin()) {
+            return redirect()->route('system.jogathon.campaigns.index');
+        }
+
+        if ($user?->hasAnyRole(['teacher', 'super_teacher'])) {
+            return redirect()->route('teacher.jogathon.cards.index');
+        }
+
+        return redirect()->route('home');
+    })->name('dashboard');
     Route::get('teacher/dashboard', [TeacherRecordsController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.dashboard');
@@ -412,6 +425,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/jogathon/campaigns/{jogathonCampaign}/publish-participants', [JogathonCampaignController::class, 'publishParticipants'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.publish-participants');
+    Route::post('/system/jogathon/campaigns/{jogathonCampaign}/roster-import', [JogathonRosterImportController::class, 'store'])
+        ->middleware('can:manageJogathonCampaigns')
+        ->name('system.jogathon.campaigns.roster-import.store');
     Route::post('/system/jogathon/campaigns/{jogathonCampaign}/causes', [JogathonCauseController::class, 'store'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.causes.store');

@@ -3,6 +3,7 @@
 
     $title = 'Sumbang untuk '.$participant->public_display_name.' | Jogathon SKSP 2026';
     $metaDescription = 'Halaman sumbangan khas untuk '.$participant->public_display_name.' dalam Larian Sihat Jogathon SK Sri Petaling 2026.';
+    $participantUrl = $participant->publicShortUrl() ?: route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]);
 @endphp
 
 @extends('layouts.jogathon-public')
@@ -11,7 +12,7 @@
     <section class="bg-gradient-to-b from-emerald-950 to-emerald-800 text-white">
         <div class="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[.9fr_1.1fr] lg:items-end">
             <div>
-                <a href="{{ route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]) }}" class="text-sm font-semibold text-emerald-100 hover:text-white">Kembali ke halaman peserta</a>
+                <a href="{{ $participantUrl }}" class="text-sm font-semibold text-emerald-100 hover:text-white">Kembali ke halaman peserta</a>
                 <p class="mt-8 text-xs font-bold uppercase tracking-[.16em] text-lime-300">Halaman sumbangan peserta</p>
                 <h1 class="mt-2 text-4xl font-black leading-tight sm:text-5xl">{{ $participant->public_display_name }}</h1>
                 @if ($campaign->show_class_publicly && filled($participant->class_name_snapshot))

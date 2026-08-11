@@ -9,9 +9,9 @@
 @extends('layouts.jogathon-public')
 
 @section('content')
-    <div id="campaign-directory-shell" class="overflow-hidden bg-[#f4f8f5]">
-        <div id="campaign-directory-slider" class="flex w-[200%] min-w-0 transition-transform duration-500 ease-out motion-reduce:transition-none">
-            <section id="kempen" class="w-1/2 min-w-0 shrink-0">
+    <div id="campaign-directory-shell" class="bg-[#f4f8f5]">
+        <div class="min-w-0">
+            <section id="kempen" class="min-w-0">
                 <div class="overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-800 to-teal-700 text-white">
                     <div class="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:py-16">
                         <div>
@@ -130,8 +130,9 @@
                                     @php
                                         $rankAmount = max(0, (int) ($participant->collected_amount_sen ?? 0));
                                         $rankPercent = round(($rankAmount / max(1, $participant->target_amount_sen)) * 100, 1);
+                                        $participantHref = $participant->publicShortUrl() ?: route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]);
                                     @endphp
-                                    <a href="{{ route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]) }}" class="grid grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-emerald-50">
+                                    <a href="{{ $participantHref }}" class="grid grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-emerald-50">
                                         <span class="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-sm font-black text-emerald-900">{{ $loop->iteration }}</span>
                                         <span>
                                             <span class="block font-bold text-slate-900">{{ $participant->public_display_name }}</span>
@@ -153,7 +154,7 @@
                 </section>
             </section>
 
-            <section id="direktori" class="min-h-[calc(100vh-4.5rem)] w-1/2 min-w-0 shrink-0 bg-[#f4f8f5]">
+            <section id="direktori" class="hidden min-w-0 bg-[#f4f8f5]">
                 <div class="sticky top-0 z-20 border-b border-emerald-950/10 bg-white/95 backdrop-blur">
                     <div class="mx-auto max-w-6xl px-4 py-4 sm:px-6">
                         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -166,23 +167,23 @@
                             </div>
                             <form method="POST" action="{{ route('jogathon.public.participants.search', $campaign) }}" class="grid w-full grid-cols-[1fr_auto] gap-2 lg:max-w-md" role="search">
                                 @csrf
-                                <label for="participant-search" class="sr-only">Nama murid atau nama paparan peserta</label>
-                                <input id="participant-search" name="student_name" maxlength="120" placeholder="Cari nama murid" class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                                <label for="participant-search" class="sr-only">Nombor kad peserta</label>
+                                <input id="participant-search" name="physical_card_number" maxlength="12" inputmode="numeric" placeholder="Contoh: ssp-0001" class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 font-mono text-sm lowercase shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200">
                                 <button class="rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-900">Buka</button>
                             </form>
                         </div>
-                        <div class="mt-4 flex touch-pan-x gap-2 overflow-x-auto pb-2" aria-label="Tapis kelas">
-                            <button type="button" data-class-filter="all" class="directory-class-pill whitespace-nowrap rounded-full bg-emerald-900 px-4 py-2 text-xs font-black text-white" aria-pressed="true">Semua kelas <span class="opacity-80">({{ $directoryCount }})</span></button>
+                        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" aria-label="Tapis kelas">
+                            <button type="button" data-class-filter="all" class="directory-class-pill rounded-full bg-emerald-900 px-3 py-2 text-xs font-black text-white" aria-pressed="true">Semua kelas <span class="opacity-80">({{ $directoryCount }})</span></button>
                             @foreach ($classDirectory as $className => $classParticipants)
-                                <button type="button" data-class-filter="{{ $className }}" class="directory-class-pill whitespace-nowrap rounded-full border border-emerald-700/20 bg-white px-4 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50" aria-pressed="false">{{ $className }} <span class="opacity-70">({{ $classParticipants->count() }})</span></button>
+                                <button type="button" data-class-filter="{{ $className }}" class="directory-class-pill rounded-full border border-emerald-700/20 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50" aria-pressed="false">{{ $className }} <span class="opacity-70">({{ $classParticipants->count() }})</span></button>
                             @endforeach
                         </div>
                     </div>
                 </div>
 
                 <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-                    <p class="max-w-3xl text-sm leading-6 text-slate-600">Nama penuh murid tidak dipaparkan. Direktori menggunakan nama paparan sahaja; nombor murid, kod keluarga dan maklumat penjaga kekal tertutup. Gunakan butang kelas di atas untuk menapis peserta.</p>
-                    @error('student_name')
+                    <p class="max-w-3xl text-sm leading-6 text-slate-600">Nama penuh murid tidak dipaparkan. Direktori menggunakan nama paparan sahaja; nombor murid, kod keluarga dan maklumat penjaga kekal tertutup. Untuk buka halaman peserta secara terus, masukkan nombor kad fizikal seperti <span class="font-mono font-semibold">ssp-0001</span>.</p>
+                    @error('physical_card_number')
                         <p class="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">{{ $message }}</p>
                     @enderror
 
@@ -202,8 +203,9 @@
                                             @php
                                                 $collected = max(0, (int) ($participant->collected_amount_sen ?? 0));
                                                 $percent = round(($collected / max(1, $participant->target_amount_sen)) * 100, 1);
+                                                $participantHref = $participant->publicShortUrl() ?: route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]);
                                             @endphp
-                                            <a href="{{ route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]) }}" class="group rounded-2xl border border-emerald-950/10 bg-[#f8fbf9] p-4 transition hover:-translate-y-0.5 hover:border-emerald-500 hover:bg-emerald-50">
+                                            <a href="{{ $participantHref }}" class="group rounded-2xl border border-emerald-950/10 bg-[#f8fbf9] p-4 transition hover:-translate-y-0.5 hover:border-emerald-500 hover:bg-emerald-50">
                                                 <div class="flex items-start justify-between gap-3">
                                                     <div>
                                                         <h4 class="font-extrabold text-emerald-950 group-hover:text-emerald-700">{{ $participant->public_display_name }}</h4>
@@ -232,22 +234,25 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const slider = document.getElementById('campaign-directory-slider');
             const shell = document.getElementById('campaign-directory-shell');
             const showDirectoryButtons = document.querySelectorAll('[data-show-directory]');
             const showCampaignButtons = document.querySelectorAll('[data-show-campaign]');
             const filterButtons = document.querySelectorAll('[data-class-filter]');
             const classSections = document.querySelectorAll('[data-directory-class]');
+            const campaignPanel = document.getElementById('kempen');
+            const directoryPanel = document.getElementById('direktori');
 
             const showDirectory = () => {
-                slider.style.transform = 'translateX(-50%)';
+                campaignPanel.classList.add('hidden');
+                directoryPanel.classList.remove('hidden');
                 shell.dataset.activePanel = 'directory';
                 history.replaceState(null, '', '#direktori');
-                document.getElementById('direktori').scrollIntoView({ block: 'start' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const showCampaign = () => {
-                slider.style.transform = 'translateX(0)';
+                directoryPanel.classList.add('hidden');
+                campaignPanel.classList.remove('hidden');
                 shell.dataset.activePanel = 'campaign';
                 history.replaceState(null, '', window.location.pathname + window.location.search);
                 window.scrollTo({ top: 0, behavior: 'smooth' });

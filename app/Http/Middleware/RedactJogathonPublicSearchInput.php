@@ -20,8 +20,7 @@ class RedactJogathonPublicSearchInput
                 Debugbar::disable();
             }
 
-            app()->instance('jogathon.student_name_search', trim((string) $request->input('student_name')));
-            $request->request->set('student_name', '[redacted]');
+            $request->request->remove('student_name');
         }
 
         return $next($request);

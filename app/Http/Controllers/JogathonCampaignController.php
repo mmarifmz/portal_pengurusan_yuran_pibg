@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\JogathonAudit;
 use App\Models\JogathonCampaign;
+use App\Models\JogathonClassTeacher;
 use App\Models\JogathonParticipant;
 use App\Models\JogathonParticipantVisit;
 use App\Models\User;
@@ -59,6 +60,13 @@ class JogathonCampaignController extends Controller
             ->get(['name', 'class_name'])
             ->groupBy(fn (User $user): string => mb_strtoupper(trim((string) $user->class_name)));
 
+        $jogathonClassTeachers = JogathonClassTeacher::query()
+            ->whereIn('class_name', $classNames)
+            ->pluck('teacher_name', 'class_name')
+            ->mapWithKeys(fn (?string $teacherName, string $className): array => [
+                mb_strtoupper(trim($className)) => $teacherName,
+            ]);
+
         $publishStats = $selectedCampaign
             ? [
                 'eligible' => JogathonParticipant::query()
@@ -91,6 +99,7 @@ class JogathonCampaignController extends Controller
             'publishStats' => $publishStats,
             'visitStats' => $visitStats,
             'teachersByClass' => $teachersByClass,
+            'jogathonClassTeachers' => $jogathonClassTeachers,
             'statusOptions' => JogathonCampaign::statusOptions(),
         ]);
     }

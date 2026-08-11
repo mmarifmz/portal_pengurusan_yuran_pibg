@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'app_name' => env('WHATSAPP_APP_NAME', env('APP_NAME', 'Portal Sumbangan PIBG')),
+    'app_name' => env('WHATSAPP_APP_NAME', env('APP_NAME', 'Jogathon Digital SK Sri Petaling')),
     'send_interval_seconds' => (int) env('WHATSAPP_SEND_INTERVAL_SECONDS', 20),
     'class_gap_seconds' => (int) env('WHATSAPP_CLASS_GAP_SECONDS', 30),
     'max_pending_before_warning' => (int) env('WHATSAPP_MAX_PENDING_BEFORE_WARNING', 10),

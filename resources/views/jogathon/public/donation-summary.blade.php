@@ -6,6 +6,9 @@
     $metaDescription = 'Ringkasan transaksi sumbangan Jogathon Digital SK Sri Petaling.';
     $participant = $contribution->participant;
     $isSuccessful = $contribution->status === JogathonContribution::STATUS_SUCCESSFUL;
+    $participantUrl = $participant
+        ? ($participant->publicShortUrl() ?: route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]))
+        : null;
 @endphp
 
 @extends('layouts.jogathon-public')
@@ -54,7 +57,7 @@
 
             <div class="mt-6 flex flex-col gap-3 sm:flex-row">
                 @if ($participant)
-                    <a href="{{ route('jogathon.public.participants.show', [$campaign, $participant->publicUrlIdentifier()]) }}" class="rounded-xl bg-emerald-800 px-5 py-3 text-center text-sm font-extrabold text-white hover:bg-emerald-900">Kembali ke peserta</a>
+                    <a href="{{ $participantUrl }}" class="rounded-xl bg-emerald-800 px-5 py-3 text-center text-sm font-extrabold text-white hover:bg-emerald-900">Kembali ke peserta</a>
                 @endif
                 <a href="{{ route('home') }}" class="rounded-xl border border-emerald-700/20 px-5 py-3 text-center text-sm font-bold text-emerald-800 hover:bg-emerald-50">Laman kempen</a>
             </div>

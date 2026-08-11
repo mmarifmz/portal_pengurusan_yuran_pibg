@@ -4,7 +4,7 @@
             <p class="text-xs font-bold uppercase tracking-[0.28em] text-sky-200">System Admin · Phase 2</p>
             <h1 class="mt-2 text-3xl font-black tracking-tight">Jogathon Digital</h1>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-sky-50/90">
-                Urus kempen, tujuan, sasaran dan penyertaan murid. Kutipan Jogathon kekal berasingan daripada lejar bayaran keluarga PIBG.
+                Urus kempen, tujuan, sasaran dan penyertaan murid untuk mini app Jogathon Digital.
             </p>
         </header>
 
@@ -109,6 +109,50 @@
                 </div>
             </section>
 
+            <section class="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
+                <div class="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Import Roster Jogathon</p>
+                        <h2 class="mt-1 text-lg font-black text-sky-950">Baca data murid daripada API sekolah</h2>
+                        <p class="mt-2 text-sm leading-6 text-sky-900/80">
+                            Import ini hanya menyimpan nama murid, kelas dan nama guru kelas. Data keluarga, penjaga, telefon, bayaran dan resit daripada API tidak disimpan ke dalam mini app Jogathon.
+                        </p>
+                        <p class="mt-3 rounded-xl bg-white/80 p-3 text-xs leading-5 text-sky-900 ring-1 ring-sky-200">
+                            Endpoint API memerlukan kata carian. Untuk elak rate limit, import satu atau beberapa kelas dahulu dengan kata carian yang munasabah seperti <span class="font-mono">a,e,i,o,u,bin,binti</span>.
+                        </p>
+                    </div>
+
+                    <form method="POST" action="{{ route('system.jogathon.campaigns.roster-import.store', $selectedCampaign) }}" class="grid gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-sky-200">
+                        @csrf
+                        <label class="text-sm font-semibold text-zinc-700">Endpoint API
+                            <input name="endpoint" required value="{{ old('endpoint', 'https://sumbangan-pibg.sripetaling.edu.my/api/v1/payment-status/search') }}" class="mt-1 w-full rounded-xl border-zinc-300 text-sm">
+                        </label>
+                        <label class="text-sm font-semibold text-zinc-700">API Key
+                            <input name="api_key" required type="password" autocomplete="off" placeholder="Bearer key daripada portal sekolah" class="mt-1 w-full rounded-xl border-zinc-300 text-sm">
+                        </label>
+                        <div class="grid gap-3 md:grid-cols-[8rem_1fr]">
+                            <label class="text-sm font-semibold text-zinc-700">Tahun
+                                <input type="number" name="year" required value="{{ old('year', now()->year) }}" class="mt-1 w-full rounded-xl border-zinc-300 text-sm">
+                            </label>
+                            <label class="text-sm font-semibold text-zinc-700">Kelas
+                                <textarea name="class_names" required rows="2" placeholder="6 ALAMANDA&#10;5 AZALEA" class="mt-1 w-full rounded-xl border-zinc-300 text-sm">{{ old('class_names') }}</textarea>
+                            </label>
+                        </div>
+                        <label class="text-sm font-semibold text-zinc-700">Kata carian
+                            <textarea name="keywords" required rows="2" class="mt-1 w-full rounded-xl border-zinc-300 font-mono text-sm">{{ old('keywords', 'a,e,i,o,u,bin,binti') }}</textarea>
+                        </label>
+                        <label class="text-sm font-semibold text-zinc-700">Guru kelas, pilihan
+                            <textarea name="teacher_mappings" rows="2" placeholder="6 ALAMANDA=Cikgu Aina&#10;5 AZALEA=Cikgu Farid" class="mt-1 w-full rounded-xl border-zinc-300 text-sm">{{ old('teacher_mappings') }}</textarea>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+                            <input type="checkbox" name="provision_participants" value="1" @checked(old('provision_participants', true))>
+                            Terus segarkan peserta Jogathon selepas import
+                        </label>
+                        <button class="rounded-xl bg-sky-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-900">Import roster minimal</button>
+                    </form>
+                </div>
+            </section>
+
             <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-lg font-bold text-zinc-900">Tujuan Kempen</h2>
                 <div class="mt-4 space-y-3">
@@ -159,7 +203,7 @@
                     <div class="overflow-x-auto"><table class="min-w-full divide-y divide-zinc-200 text-sm"><thead class="bg-zinc-50 text-left text-xs uppercase text-zinc-500"><tr><th class="px-4 py-3">Murid</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">Guru Kelas</th><th class="px-4 py-3">Nombor Kad</th><th class="px-4 py-3">Slug Awam</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Kutipan Kad Fizikal</th></tr></thead><tbody class="divide-y divide-zinc-100">
                         @foreach ($participants as $participant)
                             @php($classKey = mb_strtoupper(trim((string) $participant->class_name_snapshot)))
-                            <tr><td class="px-4 py-3 font-semibold text-zinc-900">{{ $participant->public_display_name }}</td><td class="px-4 py-3">{{ $participant->class_name_snapshot ?: '—' }}</td><td class="px-4 py-3">{{ $teachersByClass->get($classKey)?->pluck('name')->join(', ') ?: 'Belum dipadankan' }}</td><td class="px-4 py-3">
+                            <tr><td class="px-4 py-3 font-semibold text-zinc-900">{{ $participant->public_display_name }}</td><td class="px-4 py-3">{{ $participant->class_name_snapshot ?: '—' }}</td><td class="px-4 py-3">{{ $jogathonClassTeachers->get($classKey) ?: ($teachersByClass->get($classKey)?->pluck('name')->join(', ') ?: 'Belum dipadankan') }}</td><td class="px-4 py-3">
                                 @can('enterJogathonPhysicalCollections')
                                     <form method="POST" action="{{ route('system.jogathon.participants.physical-card-number.update', $participant) }}" class="flex min-w-[14rem] gap-2">
                                         @csrf @method('PATCH')
@@ -172,7 +216,7 @@
                                 @else
                                     <span class="font-mono text-xs">{{ $participant->physical_card_number ?: '—' }}</span>
                                 @endcan
-                            </td><td class="px-4 py-3 font-mono text-xs">@if ($selectedCampaign->isPubliclyAvailable() && $participant->isPubliclyVisible())<a href="{{ route('jogathon.public.participants.show', [$selectedCampaign, $participant->publicUrlIdentifier()]) }}" target="_blank" rel="noopener" class="text-sky-700 underline">{{ $participant->publicUrlIdentifier() }}</a>@else{{ $participant->public_slug }}@endif</td><td class="px-4 py-3">{{ $participant->is_eligible ? 'Layak' : 'Tidak layak' }} · {{ $participant->is_published ? 'Diterbitkan' : 'Peribadi' }}</td><td class="px-4 py-3">
+                            </td><td class="px-4 py-3 font-mono text-xs">@if ($selectedCampaign->isPubliclyAvailable() && $participant->isPubliclyVisible())<a href="{{ $participant->publicShortUrl() ?: route('jogathon.public.participants.show', [$selectedCampaign, $participant->publicUrlIdentifier()]) }}" target="_blank" rel="noopener" class="text-sky-700 underline">{{ $participant->publicUrlIdentifier() }}</a>@else{{ $participant->public_slug }}@endif</td><td class="px-4 py-3">{{ $participant->is_eligible ? 'Layak' : 'Tidak layak' }} · {{ $participant->is_published ? 'Diterbitkan' : 'Peribadi' }}</td><td class="px-4 py-3">
                                 @can('enterJogathonPhysicalCollections')
                                     @if ($participant->is_eligible && ! $participant->participation_opt_out && $participant->withdrawn_at === null && $activeCauses->isNotEmpty())
                                         <form method="POST" action="{{ route('system.jogathon.participants.physical-contributions.store', $participant) }}" class="grid min-w-[28rem] gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 md:grid-cols-[6rem_1fr_8rem_auto]">

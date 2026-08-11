@@ -14,7 +14,7 @@
                             class="h-12 w-12 rounded-full border border-zinc-200 bg-white p-1 shadow-sm" />
                     </div> 
 
-                    <span class="sr-only">{{ config('app.name', 'Portal PIBG') }}</span>
+                    <span class="sr-only">{{ config('app.name', 'Jogathon Digital') }}</span>
                 </a>
 
                 <div class="flex flex-col gap-6">

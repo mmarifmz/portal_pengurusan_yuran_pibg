@@ -177,7 +177,9 @@ class JogathonParticipantProvisioningService
                 'is_published' => true,
             ];
 
-            if ($studentName !== '' && strcasecmp($displayName, $studentName) === 0) {
+            if (($studentName !== '' && strcasecmp($displayName, $studentName) === 0)
+                || preg_match('/^Pelari [A-Z0-9]{6}$/', $displayName) === 1
+            ) {
                 $updates['public_display_name'] = $this->generatePublicDisplayName(
                     $participant->class_name_snapshot,
                     $classSequences[$classKey],
