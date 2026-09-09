@@ -43,9 +43,138 @@ use App\Http\Controllers\TeacherRecordsController;
 use App\Http\Controllers\TeacherSocialTagController;
 use App\Http\Controllers\TeacherUserManagementController;
 use App\Http\Controllers\VisitorLogController;
+use App\Models\FamilyBilling;
+use App\Models\FamilyPaymentTransaction;
+use App\Models\Student;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [JogathonPublicController::class, 'home'])->name('home');
+Route::get('/', function () {
+    $classOptions = Student::query()
+        ->whereNotNull('class_name')
+        ->where('class_name', '!=', '')
+        ->distinct()
+        ->orderBy('class_name')
+        ->pluck('class_name')
+        ->values();
+
+    $recentTransactions = FamilyPaymentTransaction::query()
+        ->with('familyBilling:id,family_code,billing_year')
+        ->where('status', 'success')
+        ->whereNotNull('paid_at')
+        ->orderByDesc('paid_at')
+        ->limit(20)
+        ->get();
+
+    $familyCodes = $recentTransactions
+        ->pluck('familyBilling.family_code')
+        ->filter()
+        ->unique()
+        ->values();
+
+    $dominantClassByFamily = Student::query()
+        ->whereIn('family_code', $familyCodes)
+        ->select(['family_code', 'class_name'])
+        ->get()
+        ->groupBy('family_code')
+        ->map(function ($familyStudents): string {
+            return (string) ($familyStudents
+                ->pluck('class_name')
+                ->map(fn ($className) => trim((string) $className))
+                ->filter()
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first() ?? 'Unknown Class');
+        });
+
+    $recentPaymentToasts = $recentTransactions
+        ->map(function (FamilyPaymentTransaction $transaction) use ($dominantClassByFamily): ?string {
+            $familyCode = (string) ($transaction->familyBilling?->family_code ?? '');
+            if ($familyCode === '') {
+                return null;
+            }
+
+            $className = (string) ($dominantClassByFamily->get($familyCode) ?: 'Unknown Class');
+            $donation = (float) ($transaction->donation_amount ?? 0);
+
+            if ($donation <= 0) {
+                $donation = max(0, (float) $transaction->amount - (float) ($transaction->fee_amount_paid ?? 0));
+            }
+
+            if ($donation > 0) {
+                return "Parent in {$className} just paid Sumbangan PIBG + Sumbangan Tambahan";
+            }
+
+            return "Parent in {$className} just paid Sumbangan PIBG";
+        })
+        ->filter()
+        ->unique()
+        ->take(10)
+        ->values();
+
+    $billingYear = (int) now()->year;
+
+    $competitionStudents = Student::query()
+        ->where('billing_year', $billingYear)
+        ->whereNotNull('class_name')
+        ->where('class_name', '!=', '')
+        ->get(['family_code', 'class_name']);
+
+    $familyCodesForRanking = $competitionStudents
+        ->pluck('family_code')
+        ->map(fn ($familyCode): string => trim((string) $familyCode))
+        ->filter()
+        ->unique()
+        ->values();
+
+    $paidFamilyMap = FamilyBilling::query()
+        ->where('billing_year', $billingYear)
+        ->whereIn('family_code', $familyCodesForRanking->all())
+        ->get(['family_code', 'status', 'fee_amount', 'paid_amount'])
+        ->mapWithKeys(function (FamilyBilling $billing): array {
+            $feeAmount = (float) $billing->fee_amount;
+            $paidAmount = (float) $billing->paid_amount;
+            $isPaid = $billing->status === 'paid' || ($feeAmount > 0 && $paidAmount >= $feeAmount);
+
+            return [(string) $billing->family_code => $isPaid];
+        });
+
+    $welcomeClassCompetition = $competitionStudents
+        ->groupBy(fn (Student $student): string => trim((string) $student->class_name))
+        ->map(function ($classGroup, string $className) use ($paidFamilyMap): array {
+            $totalStudents = $classGroup->count();
+            $paidStudents = $classGroup
+                ->filter(fn (Student $student): bool => (bool) $paidFamilyMap->get(trim((string) $student->family_code), false))
+                ->count();
+
+            $firstChar = mb_substr(trim($className), 0, 1);
+            $year = (int) preg_replace('/\D/', '', $firstChar);
+
+            return [
+                'class_name' => $className,
+                'percentage' => $totalStudents > 0 ? round(($paidStudents / $totalStudents) * 100, 2) : 0.0,
+                'paid_students' => $paidStudents,
+                'total_students' => $totalStudents,
+                'tahap' => $year >= 4 ? 'Tahap 2' : 'Tahap 1',
+            ];
+        })
+        ->sortBy([
+            ['percentage', 'desc'],
+            ['class_name', 'asc'],
+        ])
+        ->values();
+
+    $welcomeClassCompetitionByTahap = collect([
+        'Tahap 1' => $welcomeClassCompetition->where('tahap', 'Tahap 1')->take(6)->values(),
+        'Tahap 2' => $welcomeClassCompetition->where('tahap', 'Tahap 2')->take(6)->values(),
+    ]);
+
+    return view('welcome', [
+        'classOptions' => $classOptions,
+        'recentPaymentToasts' => $recentPaymentToasts,
+        'welcomeClassCompetitionByTahap' => $welcomeClassCompetitionByTahap,
+    ]);
+})->name('home');
 
 Route::get('/parent/search', [PublicParentSearchController::class, 'index'])
     ->name('parent.search');
@@ -54,35 +183,33 @@ Route::get('/q/{qrCampaign:short_code}', QrCampaignRedirectController::class)
     ->middleware('throttle:120,1')
     ->name('qr-campaigns.redirect');
 
-Route::get('/jogathon/sumbangan/return', [JogathonDonationController::class, 'handleReturn'])
-    ->name('jogathon.donations.return');
-Route::post('/jogathon/sumbangan/callback', [JogathonDonationController::class, 'handleCallback'])
-    ->name('jogathon.donations.callback');
-Route::get('/jogathon/sumbangan/{externalOrderId}', [JogathonDonationController::class, 'summary'])
-    ->name('jogathon.donations.summary');
+Route::prefix('jogathon')->name('jogathon.')->group(function (): void {
+    Route::get('/sumbangan/return', [JogathonDonationController::class, 'handleReturn'])->name('donations.return');
+    Route::post('/sumbangan/callback', [JogathonDonationController::class, 'handleCallback'])->name('donations.callback');
+    Route::get('/sumbangan/{externalOrderId}', [JogathonDonationController::class, 'summary'])->name('donations.summary');
+    Route::get('/kad/{physicalCardNumber}', [JogathonPublicController::class, 'participantByPhysicalCard'])
+        ->where('physicalCardNumber', '[sS][sS][pP]-[0-9]{4,8}')
+        ->middleware('throttle:120,1')
+        ->name('public.card.show');
 
-Route::prefix('jogathon/{jogathonCampaign:slug}')
-    ->middleware('throttle:120,1')
-    ->name('jogathon.public.')
-    ->group(function (): void {
-        Route::get('/', [JogathonPublicController::class, 'campaign'])->name('campaigns.show');
-        Route::post('/cari-peserta', [JogathonPublicController::class, 'searchParticipant'])
-            ->middleware('throttle:30,1')
-            ->name('participants.search');
-        Route::get('/peserta/{publicSlug}/sumbangan', [JogathonDonationController::class, 'create'])
-            ->middleware('throttle:120,1')
-            ->name('participants.donations.create');
-        Route::post('/peserta/{publicSlug}/sumbangan', [JogathonDonationController::class, 'store'])
-            ->middleware('throttle:30,1')
-            ->name('participants.donations.store');
-        Route::get('/peserta/{publicSlug}', [JogathonPublicController::class, 'participant'])->name('participants.show');
-        Route::get('/peserta/{publicSlug}/qr', [JogathonPublicController::class, 'qr'])->name('participants.qr');
-    });
-
-Route::get('/{physicalCardNumber}', [JogathonPublicController::class, 'participantByPhysicalCard'])
-    ->where('physicalCardNumber', '[sS][sS][pP]-[0-9]{4,8}')
-    ->middleware('throttle:120,1')
-    ->name('jogathon.public.card.show');
+    Route::prefix('{jogathonCampaign:slug}')
+        ->middleware('throttle:120,1')
+        ->name('public.')
+        ->group(function (): void {
+            Route::get('/', [JogathonPublicController::class, 'campaign'])->name('campaigns.show');
+            Route::post('/cari-peserta', [JogathonPublicController::class, 'searchParticipant'])
+                ->middleware('throttle:30,1')
+                ->name('participants.search');
+            Route::get('/peserta/{publicSlug}/sumbangan', [JogathonDonationController::class, 'create'])
+                ->middleware('throttle:120,1')
+                ->name('participants.donations.create');
+            Route::post('/peserta/{publicSlug}/sumbangan', [JogathonDonationController::class, 'store'])
+                ->middleware('throttle:30,1')
+                ->name('participants.donations.store');
+            Route::get('/peserta/{publicSlug}', [JogathonPublicController::class, 'participant'])->name('participants.show');
+            Route::get('/peserta/{publicSlug}/qr', [JogathonPublicController::class, 'qr'])->name('participants.qr');
+        });
+});
 
 Route::middleware('guest')->prefix('parent/login')->name('parent.login.')->group(function () {
     Route::get('/', [ParentOtpAuthController::class, 'showRequestForm'])->name('form');
@@ -111,19 +238,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:parent')
         ->name('receipts.share-to-teacher');
 
-    Route::get('dashboard', function () {
-        $user = auth()->user();
-
-        if ($user?->isSystemAdmin()) {
-            return redirect()->route('system.jogathon.campaigns.index');
-        }
-
-        if ($user?->hasAnyRole(['teacher', 'super_teacher'])) {
-            return redirect()->route('teacher.jogathon.cards.index');
-        }
-
-        return redirect()->route('home');
-    })->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('teacher/dashboard', [TeacherRecordsController::class, 'index'])
         ->middleware('role:teacher,super_teacher,system_admin,pta')
         ->name('teacher.dashboard');
@@ -225,7 +340,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/teacher/api-access/stats', [TeacherApiAccessController::class, 'stats'])
         ->middleware('role:teacher,super_teacher,system_admin')
         ->name('teacher.api-access.stats');
-    Route::get('/teacher/jogathon/cards', [JogathonTeacherCardController::class, 'index'])
+    Route::get('/jogathon/teacher/cards', [JogathonTeacherCardController::class, 'index'])
         ->middleware('can:enterJogathonPhysicalCollections')
         ->name('teacher.jogathon.cards.index');
     Route::post('/teacher/api-access/generate', [TeacherApiAccessController::class, 'generate'])
@@ -410,40 +525,40 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/system/payment-campaign-settings', [PaymentCampaignSettingController::class, 'save'])
         ->middleware('role:system_admin')
         ->name('system.payment-campaign-settings.save');
-    Route::get('/system/jogathon/campaigns', [JogathonCampaignController::class, 'index'])
+    Route::get('/jogathon/system/campaigns', [JogathonCampaignController::class, 'index'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.index');
-    Route::post('/system/jogathon/campaigns', [JogathonCampaignController::class, 'store'])
+    Route::post('/jogathon/system/campaigns', [JogathonCampaignController::class, 'store'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.store');
-    Route::patch('/system/jogathon/campaigns/{jogathonCampaign}', [JogathonCampaignController::class, 'update'])
+    Route::patch('/jogathon/system/campaigns/{jogathonCampaign}', [JogathonCampaignController::class, 'update'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.update');
-    Route::post('/system/jogathon/campaigns/{jogathonCampaign}/provision', [JogathonCampaignController::class, 'provision'])
+    Route::post('/jogathon/system/campaigns/{jogathonCampaign}/provision', [JogathonCampaignController::class, 'provision'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.provision');
-    Route::post('/system/jogathon/campaigns/{jogathonCampaign}/publish-participants', [JogathonCampaignController::class, 'publishParticipants'])
+    Route::post('/jogathon/system/campaigns/{jogathonCampaign}/publish-participants', [JogathonCampaignController::class, 'publishParticipants'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.publish-participants');
-    Route::post('/system/jogathon/campaigns/{jogathonCampaign}/roster-import', [JogathonRosterImportController::class, 'store'])
+    Route::post('/jogathon/system/campaigns/{jogathonCampaign}/roster-import', [JogathonRosterImportController::class, 'store'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.campaigns.roster-import.store');
-    Route::post('/system/jogathon/campaigns/{jogathonCampaign}/causes', [JogathonCauseController::class, 'store'])
+    Route::post('/jogathon/system/campaigns/{jogathonCampaign}/causes', [JogathonCauseController::class, 'store'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.causes.store');
-    Route::patch('/system/jogathon/causes/{jogathonCause}', [JogathonCauseController::class, 'update'])
+    Route::patch('/jogathon/system/causes/{jogathonCause}', [JogathonCauseController::class, 'update'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.causes.update');
-    Route::post('/system/jogathon/causes/{jogathonCause}/archive', [JogathonCauseController::class, 'archive'])
+    Route::post('/jogathon/system/causes/{jogathonCause}/archive', [JogathonCauseController::class, 'archive'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.causes.archive');
-    Route::patch('/system/jogathon/participants/{jogathonParticipant}', [JogathonParticipantController::class, 'update'])
+    Route::patch('/jogathon/system/participants/{jogathonParticipant}', [JogathonParticipantController::class, 'update'])
         ->middleware('can:manageJogathonCampaigns')
         ->name('system.jogathon.participants.update');
-    Route::post('/system/jogathon/participants/{jogathonParticipant}/physical-contributions', [JogathonPhysicalCollectionController::class, 'store'])
+    Route::post('/jogathon/system/participants/{jogathonParticipant}/physical-contributions', [JogathonPhysicalCollectionController::class, 'store'])
         ->middleware('can:enterJogathonPhysicalCollections')
         ->name('system.jogathon.participants.physical-contributions.store');
-    Route::patch('/system/jogathon/participants/{jogathonParticipant}/physical-card-number', [JogathonPhysicalCollectionController::class, 'updateCardNumber'])
+    Route::patch('/jogathon/system/participants/{jogathonParticipant}/physical-card-number', [JogathonPhysicalCollectionController::class, 'updateCardNumber'])
         ->middleware('can:enterJogathonPhysicalCollections')
         ->name('system.jogathon.participants.physical-card-number.update');
     Route::get('/system/qr-campaigns', [QrCampaignController::class, 'index'])

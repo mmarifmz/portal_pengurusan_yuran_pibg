@@ -3,10 +3,10 @@
 
 @php
     $seoDefaults = [
-        'seo_site_title' => 'Jogathon Digital SK Sri Petaling',
-        'seo_description' => 'Mini app Jogathon Digital SK Sri Petaling untuk pengurusan peserta, kad kutipan digital dan analitik kempen.',
-        'seo_keywords' => 'Jogathon Digital, SK Sri Petaling, Larian Sihat Jogathon, kad kutipan digital, peserta jogathon',
-        'seo_og_site_name' => 'Jogathon Digital SK Sri Petaling',
+        'seo_site_title' => 'Portal Sumbangan PIBG SK Sri Petaling',
+        'seo_description' => 'Portal rasmi semakan dan pembayaran Sumbangan PIBG SK Sri Petaling, didukung oleh Avante Intelligence dan Arif.my sebagai inisiatif pendigitalan pendidikan sekolah.',
+        'seo_keywords' => 'Portal Sumbangan PIBG, SK Sri Petaling, Avante Intelligence, Arif.my, digitalisasi pendidikan, pendigitalan sekolah, semakan sumbangan, pembayaran PIBG, portal ibu bapa, inisiatif pendidikan digital',
+        'seo_og_site_name' => 'Portal Sumbangan PIBG SK Sri Petaling',
         'seo_favicon_url' => \App\Models\SiteSetting::faviconUrl(),
     ];
 
@@ -28,7 +28,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{{ $seoTitle }}">
 <meta name="twitter:description" content="{{ $seoDescription }}">
-<meta name="jogathon-school-logo" content="{{ \App\Models\SiteSetting::schoolLogoUrl() }}">
+<meta name="portal-school-logo" content="{{ \App\Models\SiteSetting::schoolLogoUrl() }}">
 
 <link rel="icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">
 <link rel="shortcut icon" type="image/png" href="{{ $seoFaviconUrl }}?v=5">

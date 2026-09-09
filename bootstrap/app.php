@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\AuthenticateTeacherApiKey;
-use App\Http\Middleware\EnsureJogathonMiniAppRoute;
 use App\Http\Middleware\EnsureUserRole;
 use App\Http\Middleware\RedactJogathonPublicSearchInput;
 use Illuminate\Foundation\Application;
@@ -19,7 +18,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(prepend: [
             RedactJogathonPublicSearchInput::class,
-            EnsureJogathonMiniAppRoute::class,
         ]);
 
         $middleware->web(append: [

@@ -111,45 +111,35 @@ test('only system admin may administer Jogathon campaigns', function () {
     $this->actingAs($teacher)->get(route('system.jogathon.campaigns.index'))->assertForbidden();
 });
 
-test('backend navigation and direct routes are restricted to jogathon mini app', function () {
+test('PIBG portal navigation remains available with Jogathon as a module', function () {
     $admin = User::factory()->create(['role' => 'system_admin']);
 
     $this->actingAs($admin)
         ->get(route('dashboard'))
-        ->assertRedirect(route('system.jogathon.campaigns.index'));
+        ->assertOk()
+        ->assertSee('School Calendar')
+        ->assertSee('Class Progress')
+        ->assertSee('Student Directory')
+        ->assertSee('Finance Accounting')
+        ->assertSee('Payment Funnel')
+        ->assertSee('Parent Management')
+        ->assertSee('API Access')
+        ->assertSee('WhatsApp Queue')
+        ->assertSee('Backup DB')
+        ->assertSee('Kad Jogathon')
+        ->assertSee('Kempen Jogathon');
 
     $this->actingAs($admin)
         ->get(route('system.jogathon.campaigns.index'))
         ->assertOk()
-        ->assertSee('Laman Kempen')
-        ->assertSee('Kad Jogathon')
-        ->assertSee('Admin Jogathon')
-        ->assertDontSee('School Calendar')
-        ->assertDontSee('Class Progress')
-        ->assertDontSee('Student Directory')
-        ->assertDontSee('Finance Accounting')
-        ->assertDontSee('Payment Funnel')
-        ->assertDontSee('Parent Management')
-        ->assertDontSee('API Access')
-        ->assertDontSee('WhatsApp Queue')
-        ->assertDontSee('Backup DB');
+        ->assertSee('Jogathon Digital');
 
-    foreach ([
-        '/school-calendar',
-        '/teacher/class-progress',
-        '/teacher/records',
-        '/teacher/api-access/docs',
-        '/teacher/finance-accounting',
-        '/teacher/parent-management',
-        '/students/import',
-        '/system/portal-seo',
-        '/system/payment-gateway-settings',
-        '/system/payment-funnel-monitor',
-        '/system/visitor-logs',
-        '/admin/whatsapp-queue/teacher-payment-notifications',
-    ] as $legacyPath) {
-        $this->actingAs($admin)->get($legacyPath)->assertNotFound();
-    }
+    $this->actingAs($admin)->get(route('school-calendar'))->assertOk();
+    $this->actingAs($admin)->get(route('teacher.class-progress'))->assertOk();
+    $this->actingAs($admin)->get(route('teacher.records'))->assertOk();
+    $this->actingAs($admin)->get(route('teacher.api-access.docs'))->assertOk();
+    $this->actingAs($admin)->get(route('teacher.finance-accounting'))->assertOk();
+    $this->actingAs($admin)->get(route('teacher.parent-management.index'))->assertOk();
 });
 
 test('campaign target conversion stores exact integer sen and centimetres', function () {
@@ -526,8 +516,8 @@ test('admin login import publish and teacher login card registration simulation'
 
     $this->get(route('login'))
         ->assertOk()
-        ->assertSee('Jogathon Digital SK Sri Petaling')
-        ->assertDontSee('Sumbangan PIBG');
+        ->assertSee('Portal Sumbangan PIBG SK Sri Petaling')
+        ->assertSee('Sumbangan PIBG');
 
     $this->post(route('login.store'), [
         'email' => $admin->email,
@@ -607,7 +597,7 @@ test('admin login import publish and teacher login card registration simulation'
         'physical_card_number' => 'ssp-0102',
     ])->assertForbidden();
 
-    $this->get('/ssp-0101')->assertOk();
+    $this->get(route('jogathon.public.card.show', 'ssp-0101'))->assertOk();
 });
 
 test('physical card collection cannot be entered for inactive participant states', function (array $participantState) {

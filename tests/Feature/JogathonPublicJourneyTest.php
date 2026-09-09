@@ -332,7 +332,7 @@ test('campaign landing shows rm150k bucket plan leaderboard motivation prize and
         ->assertDontSee('60122222222');
 });
 
-test('home page is the digital jogathon landing instead of the legacy pibg payment search page', function () {
+test('Jogathon campaign remains available beneath the jogathon prefix', function () {
     $participant = publicJogathonParticipant(campaignOverrides: [
         'show_class_publicly' => true,
     ]);
@@ -344,7 +344,7 @@ test('home page is the digital jogathon landing instead of the legacy pibg payme
         'sort_order' => $index + 1,
     ]));
 
-    $this->get(route('home'))
+    $this->get(route('jogathon.public.campaigns.show', $participant->campaign))
         ->assertOk()
         ->assertSee('Kad kutipan digital')
         ->assertSee('Larian Sihat Jogathon 2026')
@@ -354,9 +354,16 @@ test('home page is the digital jogathon landing instead of the legacy pibg payme
         ->assertSee('Kutipan: 5 Ogos - 24 Oktober 2026')
         ->assertSee('Minima: RM50 seorang')
         ->assertSee('Contoh: ssp-0001')
-        ->assertDontSee('Semakan &amp; Bayaran', false)
-        ->assertDontSee('Semak Nama Murid')
         ->assertDontSee('Cari nama murid');
+});
+
+test('home page remains the PIBG payment portal', function () {
+    $this->get(route('home'))
+        ->assertOk()
+        ->assertSee('Portal Sumbangan PIBG SK Sri Petaling')
+        ->assertSeeText('Semakan & Bayaran')
+        ->assertSee('Semak Nama Murid')
+        ->assertDontSee('Kad kutipan digital');
 });
 
 test('participant qr is generated only for a public participant', function () {
